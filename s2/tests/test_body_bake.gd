@@ -486,6 +486,226 @@ func test_a_keyed_value_eases_from_key_to_key_and_holds_past_the_ends() -> void:
 	assert_eq(BodyBake._value(keys, TAU * 0.9), 3.0)
 
 
+
+const OnehandSwingKeys = preload("res://tests/game/test_onehand_swing_keys.gd")
+const ONEHAND_GUARD_PHASE: float = 0.7826
+const ONEHAND_HIT_BASELINE: Dictionary = {
+	"p_swing_one": [
+		{"phase": 0.45, "layer": {"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -1, 0.5]],
+			["aim", "shin.L", "foot.L", [0.1, -1, -0.3]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1, 0.05000000000000002]],
+			["aim", "shin.R", "foot.R", [-0.1, -1, -0.35]],
+			["turn", "hips", "y", 0.1627575],
+			["turn", "spine", "x", 0.3400000000000001],
+			["turn", "neck", "x", 0.020000000000000004],
+			["turn", "chest", "y", 0.4618075801749271],
+			["aim", "upper_arm.R", "forearm.R", [0.30000000000000004, -0.45000000000000007, 1]],
+			["aim", "forearm.R", "hand.R", [0.21999999999999997, -0.07999999999999996, 1]],
+		], "sink": 0.12}},
+		{"phase": 0.43478260869565216, "layer": {"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -1, 0.49231471024778295]],
+			["aim", "shin.L", "foot.L", [0.1, -1, -0.29547924132222525]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1, 0.043896975785004094]],
+			["aim", "shin.R", "foot.R", [-0.1, -1, -0.34547924132222524]],
+			["turn", "hips", "y", 0.15944635818196762],
+			["turn", "spine", "x", 0.3300543309088956],
+			["turn", "neck", "x", 0.01728754479333515],
+			["turn", "chest", "y", 0.45310932812815624],
+			["aim", "upper_arm.R", "forearm.R", [0.27513582727223884, -0.43756791363611947, 0.9660943099166894]],
+			["aim", "forearm.R", "hand.R", [0.2093762171072293, -0.060108661817791065, 0.967224499586133]],
+		], "sink": 0.1185307534297232}},
+		{"phase": 0.4782608695652174, "layer": {"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -1, 0.4868717819264176]],
+			["aim", "shin.L", "foot.L", [0.1, -1, -0.2967179454816044]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1, 0.0450769182224066]],
+			["aim", "shin.R", "foot.R", [-0.1, -1, -0.34179486370401096]],
+			["turn", "hips", "y", 0.16906302621845976],
+			["turn", "spine", "x", 0.3252307546672198],
+			["turn", "neck", "x", 0.013435890963208796],
+			["turn", "chest", "y", 0.48754027107208936],
+			["aim", "upper_arm.R", "forearm.R", [0.38205136295989006, -0.425384591112033, 0.91794863704011]],
+			["aim", "forearm.R", "hand.R", [0.29056417214550545, -0.0832820545183956, 0.934358909632088]],
+		], "sink": 0.1167179454816044}},
+	],
+	"p_swing_back": [
+		{"phase": 0.33, "layer": {"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -1, 0.5]],
+			["aim", "shin.L", "foot.L", [0.1, -1, -0.3]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1, 0.05000000000000002]],
+			["aim", "shin.R", "foot.R", [-0.1, -1, -0.35]],
+			["turn", "hips", "y", -0.15332116937963836],
+			["turn", "spine", "x", 0.3400000000000001],
+			["turn", "neck", "x", 0.020000000000000004],
+			["turn", "chest", "y", -0.45181760000000004],
+			["aim", "upper_arm.R", "forearm.R", [0.3, -0.45, 1]],
+			["aim", "forearm.R", "hand.R", [0.21999999999999997, -0.07999999999999996, 1]],
+		], "sink": 0.12}},
+		{"phase": 0.30434782608695654, "layer": {"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -1, 0.4328818636571544]],
+			["aim", "shin.L", "foot.L", [0.1, -1, -0.26051874332773794]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1, -0.0032996965075537954]],
+			["aim", "shin.R", "foot.R", [-0.1, -1, -0.3105187433277379]],
+			["turn", "hips", "y", -0.1511628488581807],
+			["turn", "spine", "x", 0.2531412353210235],
+			["turn", "neck", "x", -0.0036887540033572475],
+			["turn", "chest", "y", -0.44634437187936626],
+			["aim", "upper_arm.R", "forearm.R", [0.3888328275125897, -0.3512968583193448, 0.8420749733109518]],
+			["aim", "forearm.R", "hand.R", [0.2752737593411669, 0.06410658685375659, 0.7433718316302964]],
+		], "sink": 0.10716859158151482}},
+		{"phase": 0.34782608695652173, "layer": {"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -1, 0.49863281531683173]],
+			["aim", "shin.L", "foot.L", [0.1, -1, -0.29965820382920794]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1, 0.049487305743811896]],
+			["aim", "shin.R", "foot.R", [-0.1, -1, -0.3491455095730198]],
+			["turn", "hips", "y", -0.15532215328154744],
+			["turn", "spine", "x", 0.3384619172314357],
+			["turn", "neck", "x", 0.01931640765841586],
+			["turn", "chest", "y", -0.456175139442755],
+			["aim", "upper_arm.R", "forearm.R", [0.28120121060643616, -0.4474365287190595, 0.9914550957301983]],
+			["aim", "forearm.R", "hand.R", [0.20513186657054497, -0.08034179617079207, 0.9931640765841586]],
+		], "sink": 0.11965820382920793}},
+	],
+}
+
+
+func _onehand_stick_snapshot(body: Skeleton3D, layer: Dictionary, phase: float) -> Dictionary:
+	body.reset_bone_poses()
+	BodyBake.apply_layer(body, layer, phase)
+	var result := {}
+	for id in body.get_bone_count():
+		result[body.get_bone_name(id)] = body.get_bone_global_pose(id)
+	return result
+
+
+func test_onehand_guard_matches_both_hands_torso_and_legs() -> void:
+	var root := _stick_body()
+	add_child_autofree(root)
+	var body := BodyBake.first_of(root, "Skeleton3D") as Skeleton3D
+	var ready := _onehand_stick_snapshot(body, BodyBake.LAYERS["p_ready_one"], 0.0)
+	for clip: String in ["p_swing_one", "p_swing_back"]:
+		for phase: float in [0.0, ONEHAND_GUARD_PHASE, 18.0 / 23.0, 1.0]:
+			var posed := _onehand_stick_snapshot(body, BodyBake.LAYERS[clip], phase)
+			for bone: String in ready:
+				var gap := (posed[bone] as Transform3D).origin.distance_to((ready[bone] as Transform3D).origin)
+				assert_lt(gap, 0.01, "%s phase %.8f bone %s guard gap %.8f m" % [clip, phase, bone, gap])
+	for frame in 24:
+		var phase := float(frame) / 24.0
+		var posed := _onehand_stick_snapshot(body, BodyBake.LAYERS["p_ready_one"], phase)
+		for bone: String in ready:
+			assert_lt((posed[bone] as Transform3D).origin.distance_to((ready[bone] as Transform3D).origin), 0.01,
+				"p_ready_one frame %d bone %s guard" % [frame, bone])
+
+
+func test_onehand_hit_keeps_gripping_arm_torso_and_legs() -> void:
+	var root := _stick_body()
+	add_child_autofree(root)
+	var body := BodyBake.first_of(root, "Skeleton3D") as Skeleton3D
+	for clip: String in ONEHAND_HIT_BASELINE:
+		for row: Dictionary in ONEHAND_HIT_BASELINE[clip]:
+			var phase: float = row["phase"]
+			var expected := _onehand_stick_snapshot(body, row["layer"], 0.0)
+			var actual := _onehand_stick_snapshot(body, BodyBake.LAYERS[clip], phase)
+			for bone: String in expected:
+				if bone in ["upper_arm.L", "forearm.L", "hand.L"]:
+					continue
+				var a: Transform3D = actual[bone]
+				var b: Transform3D = expected[bone]
+				var label := "%s phase %.8f bone %s" % [clip, phase, bone]
+				assert_lt(a.origin.distance_to(b.origin), 0.00001, label + " hit position")
+				assert_lt(a.basis.x.distance_to(b.basis.x), 0.00001, label + " hit basis x")
+				assert_lt(a.basis.y.distance_to(b.basis.y), 0.00001, label + " hit basis y")
+				assert_lt(a.basis.z.distance_to(b.basis.z), 0.00001, label + " hit basis z")
+
+
+func test_onehand_free_fist_is_in_front_of_chest_until_hit() -> void:
+	var root := _stick_body()
+	add_child_autofree(root)
+	var body := BodyBake.first_of(root, "Skeleton3D") as Skeleton3D
+	for row: Array in [["p_swing_one", 0.28, 0.45], ["p_swing_back", 0.24, 0.33]]:
+		for phase: float in [0.0, row[1], row[2], ONEHAND_GUARD_PHASE]:
+			var posed := _onehand_stick_snapshot(body, BodyBake.LAYERS[row[0]], phase)
+			var hand: Vector3 = (posed["hand.L"] as Transform3D).origin
+			var elbow: Vector3 = (posed["forearm.L"] as Transform3D).origin
+			var shoulder: Vector3 = (posed["upper_arm.L"] as Transform3D).origin
+			var delta := hand - (posed["chest"] as Transform3D).origin
+			var angle := rad_to_deg((shoulder - elbow).angle_to(hand - elbow))
+			var label := "%s phase %.8f hand relative to chest %s elbow %.3f deg" % [row[0], phase, delta, angle]
+			assert_true(delta.x >= -0.10 and delta.x <= 0.45, label + " x in [-0.10, 0.45] m")
+			assert_true(delta.y >= -0.20 and delta.y <= 0.25, label + " y in [-0.20, 0.25] m")
+			assert_true(delta.z >= 0.10 and delta.z <= 0.60, label + " z in [0.10, 0.60] m")
+			assert_true(angle >= 70.0 and angle <= 110.0, label + " elbow in [70, 110] deg")
+
+
+func test_onehand_free_arm_opens_sideways_during_sag() -> void:
+	var root := _stick_body()
+	add_child_autofree(root)
+	var body := BodyBake.first_of(root, "Skeleton3D") as Skeleton3D
+	for row: Array in [["p_swing_one", 0.52, 0.62, 0.70], ["p_swing_back", 0.4252549019607843, 0.5613333333333334, 0.6701960784313725]]:
+		for phase: float in [row[1], row[2], row[3]]:
+			var posed := _onehand_stick_snapshot(body, BodyBake.LAYERS[row[0]], phase)
+			var hand: Vector3 = (posed["hand.L"] as Transform3D).origin
+			var hips: Vector3 = (posed["hips"] as Transform3D).origin
+			var chest: Vector3 = (posed["chest"] as Transform3D).origin
+			var label := "%s phase %.8f free hand %s hips %s" % [row[0], phase, hand, hips]
+			assert_gt(hand.x - hips.x, 0.10, label + " on left side > 0.10 m")
+			assert_lt(hand.y, chest.y, label + " below chest")
+
+
+func test_onehand_torso_surface_keeps_front_fist_and_rejects_axis() -> void:
+	var root := _stick_body()
+	add_child_autofree(root)
+	var body := BodyBake.first_of(root, "Skeleton3D") as Skeleton3D
+	var hips := body.get_bone_global_pose(body.find_bone("hips")).origin
+	var chest := body.get_bone_global_pose(body.find_bone("chest")).origin
+	var torso := PackedVector3Array()
+	# 가로 반지름 0.36 m, 앞뒤 반지름 0.12 m인 막대 몸통 표면.
+	for row in 10:
+		for sector in 12:
+			var angle := TAU * float(sector) / 12.0
+			var radius := 1.0 / sqrt(pow(sin(angle) / 0.36, 2.0) + pow(cos(angle) / 0.12, 2.0))
+			torso.append(hips + Vector3(sin(angle) * radius, 0.02 + 0.04 * float(row), cos(angle) * radius))
+	var surface := OnehandSwingKeys.torso_surface(torso, hips, chest)
+	assert_true(bool(surface["valid"]), "surface exists")
+	var fist := hips + Vector3(0.0, 0.30, 0.20)
+	var front := OnehandSwingKeys.surface_clearance(surface, fist)
+	assert_true(bool(front["valid"]), "front fist has a surface")
+	assert_false(bool(front["inside"]), "front fist is outside the local front surface")
+	assert_lt(0.20 - 0.36, -0.01, "the old maximum-radius capsule rejected this front fist")
+	var center := OnehandSwingKeys.surface_clearance(surface, hips + Vector3(0.0, 0.30, 0.0))
+	assert_true(bool(center["inside"]), "a hand on the torso axis penetrates")
+	var near_skin := OnehandSwingKeys.surface_clearance(surface, hips + Vector3(0.0, 0.30, 0.115))
+	assert_false(bool(near_skin["inside"]), "five millimetres inside uses the one centimetre margin")
+	var deep := OnehandSwingKeys.surface_clearance(surface, hips + Vector3(0.0, 0.30, 0.10))
+	assert_true(bool(deep["inside"]), "two centimetres inside fails")
+	var missing: Dictionary = surface.duplicate(true)
+	(missing["cells"] as Dictionary).erase(Vector2i(7, 0))
+	var neighbour := OnehandSwingKeys.surface_clearance(missing, fist)
+	assert_true(bool(neighbour["fallback"]), "an empty cell uses the nearest occupied bins")
+	assert_false(bool(neighbour["inside"]), "neighbour fill keeps the front fist outside")
+	var above := OnehandSwingKeys.surface_clearance(surface, hips + Vector3(0.0, 0.60, 0.0))
+	assert_false(bool(above["inside"]), "outside the measured torso height range")
+	assert_false(bool(OnehandSwingKeys.torso_surface(torso, hips, hips)["valid"]), "a zero length axis is invalid")
+
+
+func test_onehand_keys_keep_twenty_four_frames_and_guard_as_last_key() -> void:
+	for clip: String in ["p_swing_one", "p_swing_back"]:
+		var found := false
+		for entry: Array in BodyBake.PERSON_CLIPS:
+			if entry[0] == clip:
+				found = true
+				assert_eq(int(entry[2]), 24, clip + " frame count")
+				assert_false(bool(entry[3]), clip + " one shot")
+		assert_true(found, clip + " clip exists")
+		var tracks: Array = []
+		_collect_key_tracks(BodyBake.LAYERS[clip], tracks)
+		assert_false(tracks.is_empty(), clip + " keyed tracks")
+		for keys: Array in tracks:
+			assert_almost_eq(float(keys[-1][0]), ONEHAND_GUARD_PHASE, 0.00000001, clip + " last key")
+			assert_almost_eq(float(keys[-1][1]), float(keys[0][1]), 0.00000001, clip + " closes at guard")
+			assert_eq(BodyBake._key_ease_error(keys, clip), "", clip + " supported easing")
+
+
 func _legacy_keyed(keys: Array, u: float) -> float:
 	if u <= float(keys[0][0]):
 		return float(keys[0][1])
@@ -767,3 +987,287 @@ func test_the_hands_are_marked_for_the_shader_and_the_rest_left_as_it_was() -> v
 	assert_eq(BodyBake.mark_hands(root), marks)
 	var colours = (BodyBake.first_of(root, "MeshInstance3D") as MeshInstance3D).mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
 	assert_eq(colours, marks, "the body to bake has them")
+
+
+
+func test_hand_failure_is_retained_after_the_failure_list_is_reset() -> void:
+	var ctx := {"hand_target_cache": {"p_swing_one": {"ok": false, "reason": "no feasible point"}}, "fit_failures": []}
+	BodyBake._apply_hand_clip(ctx, "p_swing_one", 0.62)
+	assert_eq((ctx["fit_failures"] as Array).size(), 1)
+	ctx["fit_failures"] = []
+	BodyBake._apply_hand_clip(ctx, "p_swing_one", 0.62)
+	assert_eq((ctx["fit_failures"] as Array).size(), 1, "a new bake cannot lose a cached failure")
+
+
+func test_hand_target_failure_refuses_save_before_creating_a_directory() -> void:
+	var folder := "user://onehand_target_failure_should_not_save_%d" % Time.get_ticks_usec()
+	assert_false(DirAccess.dir_exists_absolute(folder))
+	BodyBake.save({"fit_failures": ["HAND_TARGET_UNFIT p_swing_one no feasible point"]}, folder)
+	assert_push_error("HAND_TARGET_UNFIT p_swing_one no feasible point")
+	assert_false(DirAccess.dir_exists_absolute(folder))
+
+
+func test_hand_target_missing_mesh_groups_refuses_save() -> void:
+	var root := _stick_body()
+	add_child_autofree(root)
+	var entries: Array = []
+	for entry: Array in BodyBake.PERSON_CLIPS:
+		if entry[0] == "p_swing_one":
+			entries.append(entry)
+	assert_eq(entries.size(), 1)
+	var assets := BodyBake.bake_own(root, entries, [])
+	var failures: Array = assets.get("fit_failures", [])
+	assert_false(failures.is_empty(), "missing hand vertices fail preparation")
+	if failures.is_empty():
+		return
+	assert_true(String(failures[0]).begins_with("HAND_TARGET_UNFIT"))
+	var folder := "user://onehand_missing_groups_%d" % Time.get_ticks_usec()
+	BodyBake.save(assets, folder)
+	assert_push_error(String(failures[0]))
+	assert_false(DirAccess.dir_exists_absolute(folder))
+
+
+func _hand_target_test_frame(length: float) -> Dictionary:
+	var shoulder := Vector3(-0.10, 0.35, 0.0)
+	var elbow := shoulder + Vector3(0.0, -length, 0.0)
+	var wrist := elbow + Vector3(0.0, -length, 0.0)
+	var torso: Array = []
+	for height: float in [0.02, 0.15, 0.30]:
+		for sector in 12:
+			var angle := TAU * float(sector) / 12.0
+			torso.append([[0, 1.0, Vector3(0.01 * sin(angle), height, 0.01 * cos(angle))]])
+	return {"s": shoulder, "e": elbow, "w": wrist, "pole": Vector3.BACK,
+		"hand_basis": Basis(), "upper_basis": Basis(), "lower_basis": Basis(), "c": Vector3.ZERO,
+		"hips": Vector3.ZERO, "chest": Vector3(0.0, 0.30, 0.0), "phase": 0.62, "drift": 0.0,
+		"points": {"hand": [[[2, 1.0, wrist]]], "arm": [[[2, 1.0, wrist]]],
+			"free": [[[0, 1.0, Vector3(0.7, 0.4, 0.1)]]], "torso": torso}}
+
+
+func test_hand_two_bone_reaches_without_changing_lengths() -> void:
+	var frame := _hand_target_test_frame(0.30)
+	var target := Vector3(0.08, -0.14, 0.10)
+	var got := BodyBake.hand_two_bone(frame["s"], frame["e"], frame["w"], target, Vector3.BACK, 8.0, 80.0)
+	assert_true(bool(got["ok"]), str(got))
+	if not bool(got["ok"]):
+		return
+	assert_false(bool(got["clipped"]))
+	assert_lt((got["wrist"] as Vector3).distance_to(target), 0.00001)
+	assert_almost_eq((got["elbow"] as Vector3).distance_to(frame["s"]), 0.30, 0.00001)
+	assert_almost_eq((got["wrist"] as Vector3).distance_to(got["elbow"]), 0.30, 0.00001)
+	assert_true(float(got["bend_degrees"]) >= 8.0)
+
+
+func test_hand_two_bone_keeps_a_stable_pole_near_extension() -> void:
+	var first := Vector3.ZERO
+	for offset: float in [-0.0000001, 0.0, 0.0000001]:
+		var got := BodyBake.hand_two_bone(Vector3.ZERO, Vector3(0, -0.3, 0), Vector3(0, -0.6, 0),
+			Vector3(offset, -0.5999, 0), Vector3.BACK, 1.0, 80.0)
+		assert_true(bool(got["ok"]), str(got))
+		if not bool(got["ok"]):
+			continue
+		var elbow: Vector3 = got["elbow"]
+		assert_gt(elbow.z, 0.0, "the bend keeps its side at the straight-arm pole")
+		assert_true(is_finite(elbow.length_squared()))
+		if first != Vector3.ZERO:
+			assert_lt(elbow.distance_to(first), 0.00001, "no bend-plane flip")
+		first = elbow
+
+
+func test_hand_two_bone_rejects_an_unreachable_final_target() -> void:
+	var got := BodyBake.hand_two_bone(Vector3.ZERO, Vector3(0, -0.2, 0), Vector3(0, -0.4, 0),
+		Vector3(0.0, -0.7, 0.0), Vector3.BACK, 8.0, 80.0)
+	assert_false(bool(got["ok"]))
+	assert_true(bool(got["clipped"]), "a final target outside safe reach is a failure")
+
+
+func test_hand_target_picker_raises_short_arms_and_prefers_low_for_long_arms() -> void:
+	var spec := {"preferred_y": -0.175, "max_y": 0.0, "y_step": 0.005, "grid": 3,
+		"x_range": [0.02, 0.12], "z_range": [0.06, 0.14], "sag_drift": [0.0, 0.0, 0.0],
+		"min_elbow_degrees": 8.0, "max_shoulder_degrees": 80.0, "minimum_gap": 0.25}
+	var long_arm := BodyBake.hand_select_target([_hand_target_test_frame(0.30)], spec)
+	var short_arm := BodyBake.hand_select_target([_hand_target_test_frame(0.20)], spec)
+	assert_true(bool(long_arm["ok"]), str(long_arm))
+	assert_true(bool(short_arm["ok"]), str(short_arm))
+	if not bool(long_arm["ok"]) or not bool(short_arm["ok"]):
+		return
+	assert_almost_eq((long_arm["offset"] as Vector3).y, -0.175, 0.00001)
+	assert_gt((short_arm["offset"] as Vector3).y, (long_arm["offset"] as Vector3).y)
+	assert_true((short_arm["offset"] as Vector3).y <= 0.0)
+	assert_false(bool(short_arm["clipped"]))
+
+
+func test_hand_reference_reaches_when_initial_wrist_guess_is_outside() -> void:
+	var frame := _hand_target_test_frame(0.20)
+	frame["c"] = Vector3(0.08, 0.0, 0.0)
+	var goal := Vector3(-0.10, -0.06, 0.0)
+	var spec := {"min_elbow_degrees": 8.0, "max_shoulder_degrees": 80.0}
+	var got := BodyBake.hand_solve_reference(frame, goal, spec)
+	assert_true(bool(got["ok"]), str(got))
+	if not bool(got["ok"]):
+		return
+	assert_false(bool(got["clipped"]))
+	var rotation: Basis = Basis(got["lower_rotation"]) * Basis(got["upper_rotation"]) * (frame["hand_basis"] as Basis)
+	assert_lt(((got["wrist"] as Vector3) + rotation * (frame["c"] as Vector3)).distance_to(goal), 0.00001)
+	assert_almost_eq((got["elbow"] as Vector3).distance_to(frame["s"]), 0.20, 0.00001)
+	assert_almost_eq((got["wrist"] as Vector3).distance_to(got["elbow"]), 0.20, 0.00001)
+	assert_true(float(got["bend_degrees"]) >= 8.0)
+
+
+func test_hand_solvers_reject_empty_and_nonfinite_inputs() -> void:
+	assert_false(bool(BodyBake.hand_solve_reference({}, Vector3.ZERO, {})["ok"]))
+	assert_false(bool(BodyBake.hand_two_bone(Vector3.ZERO, Vector3.ZERO, Vector3.DOWN, Vector3.RIGHT, Vector3.BACK, 8.0, 80.0)["ok"]))
+	assert_false(bool(BodyBake.hand_two_bone(Vector3.ZERO, Vector3.DOWN, Vector3.DOWN * 2.0, Vector3.RIGHT, Vector3(NAN, 0, 0), 8.0, 80.0)["ok"]))
+	assert_false(bool(BodyBake.hand_select_target([], {})["ok"]))
+	assert_false(bool(BodyBake.hand_select_target([_hand_target_test_frame(0.30)], {})["ok"]))
+	var spec := {"x_range": [0.02, 0.12], "z_range": [0.06, 0.14], "y_step": 0.0}
+	assert_false(bool(BodyBake.hand_select_target([_hand_target_test_frame(0.30)], spec)["ok"]))
+	spec["y_step"] = 0.005
+	spec["x_range"] = [NAN, 0.12]
+	assert_false(bool(BodyBake.hand_select_target([_hand_target_test_frame(0.30)], spec)["ok"]))
+	spec["x_range"] = [0.02, 0.12]
+	assert_false(bool(BodyBake.hand_select_target([{}], spec)["ok"]))
+	var frame := _hand_target_test_frame(0.30)
+	frame["points"]["hand"] = []
+	assert_false(bool(BodyBake.hand_select_target([frame], spec)["ok"]))
+	frame = _hand_target_test_frame(0.30)
+	frame["points"]["hand"] = [[[2, 1.0, Vector3(NAN, 0.0, 0.0)]]]
+	assert_false(bool(BodyBake.hand_select_target([frame], spec)["ok"]))
+
+
+func test_hand_target_picker_checks_below_the_preferred_height() -> void:
+	var frame := _hand_target_test_frame(0.30)
+	var torso: Array = []
+	for height: float in [-0.177, 0.30]:
+		for sector in 12:
+			var angle := TAU * float(sector) / 12.0
+			torso.append([[0, 1.0, Vector3(0.25 * sin(angle), height, 0.25 * cos(angle))]])
+	frame["points"]["torso"] = torso
+	var spec := {"preferred_y": -0.175, "min_y": -0.25, "max_y": 0.0, "y_step": 0.005, "grid": 3,
+		"x_range": [0.02, 0.12], "z_range": [0.06, 0.14], "sag_drift": [0.0, 0.0, 0.0]}
+	var got := BodyBake.hand_select_target([frame], spec)
+	assert_true(bool(got["ok"]), str(got))
+	if bool(got["ok"]):
+		assert_almost_eq((got["offset"] as Vector3).y, -0.18, 0.00001)
+		assert_false(bool(got["clipped"]))
+
+
+
+func test_hand_torso_surface_matches_the_existing_surface_rule() -> void:
+	var torso := PackedVector3Array()
+	for height: float in [0.0, 0.2, 0.4]:
+		for sector in range(0, 12, 2):
+			var angle := TAU * float(sector) / 12.0
+			torso.append(Vector3(0.20 * sin(angle), height, 0.20 * cos(angle)))
+	var hips := Vector3.ZERO
+	var chest := Vector3(0.0, 0.4, 0.0)
+	var expected := OnehandSwingKeys.torso_surface(torso, hips, chest)
+	var actual := BodyBake.hand_torso_surface(torso, hips, chest)
+	for point: Vector3 in [Vector3(0.30, 0.2, 0.0), Vector3(0.03, 0.2, 0.0),
+		Vector3(0.13, 0.1, 0.17), Vector3(0.0, -0.1, 0.0), Vector3(NAN, 0.0, 0.0)]:
+		var old := OnehandSwingKeys.surface_clearance(expected, point)
+		var got := BodyBake.hand_surface_clearance(actual, point)
+		assert_eq(bool(got["valid"]), bool(old["valid"]), "surface validity")
+		assert_eq(bool(got["inside"]), bool(old["inside"]), "surface penetration rule")
+		if not bool(old["valid"]):
+			continue
+		assert_eq(got["cell"], old["cell"])
+		assert_eq(got["source_cell"], old["source_cell"])
+		assert_eq(bool(got["fallback"]), bool(old["fallback"]))
+		if is_finite(float(old["clearance"])):
+			assert_almost_eq(float(got["clearance"]), float(old["clearance"]), 0.000001)
+		else:
+			assert_eq(float(got["clearance"]), float(old["clearance"]))
+
+
+
+func test_hand_reference_keeps_pose_when_target_is_already_reached() -> void:
+	var frame := _hand_target_test_frame(0.20)
+	frame["e"] = Vector3(-0.10, 0.15, 0.08)
+	frame["c"] = Vector3(0.08, -0.05, 0.02)
+	var goal: Vector3 = frame["w"] + (frame["hand_basis"] as Basis) * (frame["c"] as Vector3)
+	var got := BodyBake.hand_solve_reference(frame, goal, {"min_elbow_degrees": 8.0, "max_shoulder_degrees": 80.0})
+	assert_true(bool(got["ok"]), str(got))
+	if not bool(got["ok"]):
+		return
+	assert_lt((got["elbow"] as Vector3).distance_to(frame["e"]), 0.00001, "the current elbow is preserved")
+	assert_lt((got["wrist"] as Vector3).distance_to(frame["w"]), 0.00001, "the current wrist is preserved")
+	var upper_basis := Basis(got["upper_rotation"])
+	var lower_basis := Basis(got["lower_rotation"])
+	for column in 3:
+		assert_lt(upper_basis[column].distance_to(Basis.IDENTITY[column]), 0.00001)
+		assert_lt(lower_basis[column].distance_to(Basis.IDENTITY[column]), 0.00001)
+
+
+func test_hand_reference_keeps_the_wrist_offset_separate_from_bone_lengths() -> void:
+	var frame := _hand_target_test_frame(0.20)
+	frame["c"] = Vector3(0.0, -0.08, 0.0)
+	var goal := Vector3(-0.10, -0.10, 0.0)
+	var spec := {"min_elbow_degrees": 8.0, "max_shoulder_degrees": 80.0}
+	var got := BodyBake.hand_solve_reference(frame, goal, spec)
+	assert_true(bool(got["ok"]), str(got))
+	if not bool(got["ok"]):
+		return
+	var rotation: Basis = Basis(got["lower_rotation"]) * Basis(got["upper_rotation"]) * (frame["hand_basis"] as Basis)
+	assert_lt(((got["wrist"] as Vector3) + rotation * (frame["c"] as Vector3)).distance_to(goal), 0.001)
+	assert_almost_eq((got["elbow"] as Vector3).distance_to(frame["s"]), 0.20, 0.00001)
+	assert_almost_eq((got["wrist"] as Vector3).distance_to(got["elbow"]), 0.20, 0.00001)
+
+
+func test_onehand_surface_scope_keeps_the_declared_followthrough_boundaries() -> void:
+	for clip: String in ["p_swing_one", "p_swing_back"]:
+		var band: Dictionary = BodyBake.LAYERS[clip]["hand_targets"][0]["separation"]
+		var start := float(band["complete"])
+		var finish := float(band["return_start"])
+		assert_false(OnehandSwingKeys.surface_is_in_followthrough(clip, 0.0))
+		assert_false(OnehandSwingKeys.surface_is_in_followthrough(clip, start - 0.000001))
+		assert_true(OnehandSwingKeys.surface_is_in_followthrough(clip, start))
+		assert_true(OnehandSwingKeys.surface_is_in_followthrough(clip, (start + finish) * 0.5))
+		assert_true(OnehandSwingKeys.surface_is_in_followthrough(clip, finish))
+		assert_false(OnehandSwingKeys.surface_is_in_followthrough(clip, finish + 0.000001))
+		assert_false(OnehandSwingKeys.surface_is_in_followthrough(clip, 18.0 / 23.0))
+	assert_false(OnehandSwingKeys.surface_is_in_followthrough("p_swing_one", NAN))
+	assert_false(OnehandSwingKeys.surface_is_in_followthrough("p_swing_axe", 0.62))
+
+
+func test_onehand_surface_controls_cross_the_unchanged_absolute_margin() -> void:
+	var torso := PackedVector3Array()
+	for height: float in [0.0, 0.2, 0.4]:
+		for sector in 12:
+			var angle := TAU * float(sector) / 12.0
+			torso.append(Vector3(0.146 * sin(angle), height, 0.146 * cos(angle)))
+	var surface := OnehandSwingKeys.torso_surface(torso, Vector3.ZERO, Vector3(0, 0.4, 0))
+	var arm := PackedVector3Array([Vector3(0.25, 0.2, 0)])
+	var relative := OnehandSwingKeys._pushed_arm(surface, arm, 0.95)
+	var shallow := OnehandSwingKeys.surface_clearance(surface, relative["points"][0])
+	assert_false(bool(shallow["inside"]), "5 percent of 0.146 m is only 0.0073 m")
+	assert_almost_eq(float(shallow["clearance"]), -0.0073, 0.000001)
+	var pushed := OnehandSwingKeys._pushed_arm(surface, arm, 1.0, -0.015)
+	var deep := OnehandSwingKeys.surface_clearance(surface, pushed["points"][0])
+	assert_true(bool(deep["inside"]), "15 mm remains a real failing penetration")
+	assert_lt(float(deep["clearance"]), -0.01)
+	var moved := OnehandSwingKeys._pushed_arm(surface, arm, 1.0, 0.015)
+	var outside := OnehandSwingKeys.surface_clearance(surface, moved["points"][0])
+	assert_false(bool(outside["inside"]))
+	assert_gt(float(outside["clearance"]), 0.01)
+	assert_eq(arm[0], Vector3(0.25, 0.2, 0), "source points are unchanged")
+
+
+func test_hand_reference_searches_safe_planes_without_relaxing_bend_or_reach() -> void:
+	for offset: float in [-0.08, 0.08]:
+		var frame := _hand_target_test_frame(0.20)
+		frame["c"] = Vector3(offset, 0.0, 0.0)
+		var goal := Vector3(-0.10, -0.06, 0.0)
+		var got := BodyBake.hand_solve_reference(frame, goal, {"min_elbow_degrees": 8.0, "max_shoulder_degrees": 80.0})
+		assert_true(bool(got["ok"]), str(got))
+		if bool(got["ok"]):
+			var rotation := Basis(got["lower_rotation"]) * Basis(got["upper_rotation"])
+			assert_lt(((got["wrist"] as Vector3) + rotation * (frame["c"] as Vector3)).distance_to(goal), 0.00001)
+			assert_true(float(got["bend_degrees"]) >= 8.0)
+			assert_almost_eq((got["elbow"] as Vector3).distance_to(frame["s"]), 0.20, 0.00001)
+			assert_almost_eq((got["wrist"] as Vector3).distance_to(got["elbow"]), 0.20, 0.00001)
+		var unsafe := BodyBake.hand_solve_reference(frame, goal, {"min_elbow_degrees": 90.0, "max_shoulder_degrees": 80.0})
+		assert_false(bool(unsafe["ok"]), "search cannot make an unsafe bend successful")
+		assert_true(bool(unsafe["clipped"]))
+		var unreachable := BodyBake.hand_solve_reference(frame, Vector3(-0.10, -0.70, 0.0), {"min_elbow_degrees": 8.0, "max_shoulder_degrees": 80.0})
+		assert_false(bool(unreachable["ok"]))
+		assert_true(bool(unreachable["clipped"]))

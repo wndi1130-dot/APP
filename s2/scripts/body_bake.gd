@@ -1286,40 +1286,42 @@ const LAYERS: Dictionary = {
 	# with the body twisted right, across in front to the left, back again.
 	"p_swing_one": {
 		"steps": [
-			["aim", "thigh.L", "shin.L", [0.12, -1, ["keys", [[0, 0.22], [0.28, 0.16], [0.45, 0.5], [0.56, 0.42], [0.8, 0.28], [1, 0.22]]]]],
-			["aim", "shin.L", "foot.L", [0.1, -1, ["keys", [[0, -0.12], [0.28, -0.1], [0.45, -0.3], [0.56, -0.28], [0.8, -0.16], [1, -0.12]]]]],
-			["aim", "thigh.R", "shin.R", [-0.14, -1, ["keys", [[0, -0.12], [0.28, -0.22], [0.45, 0.05], [0.56, 0.02], [0.8, -0.1], [1, -0.12]]]]],
-			["aim", "shin.R", "foot.R", [-0.1, -1, ["keys", [[0, -0.2], [0.28, -0.15], [0.45, -0.35], [0.56, -0.3], [0.8, -0.22], [1, -0.2]]]]],
-			["turn", "hips", "y", ["keys", [[0, 0.2], [0.14, -0.18], [0.36, 0.15], [0.56, 0.18], [0.8, 0.2], [1, 0.2]]]],
-			["turn", "spine", "x", ["keys", [[0, 0.14], [0.28, -0.1], [0.45, 0.34], [0.56, 0.25], [0.8, 0.16], [1, 0.14]]]],
-			["turn", "neck", "x", ["keys", [[0, -0.1], [0.28, -0.1], [0.45, 0.02], [0.56, -0.02], [0.8, -0.1], [1, -0.1]]]],
-			["turn", "chest", "y", ["keys", [[0, -0.2], [0.24, -0.6], [0.42, 0.45], [0.56, 0.55], [0.8, -0.2], [1, -0.2]]]],
-			["aim", "upper_arm.L", "forearm.L", [0.2, -0.45, 0.9]],
-			["aim", "forearm.L", "hand.L", [["keys", [[0, -0.25], [0.2, 0.6], [0.45, 0.6], [0.56, 0.6], [0.68, 0.6], [0.8, -0.25], [1, -0.25]]], ["keys", [[0, 0.45], [0.2, 0.5], [0.45, 0.5], [0.56, 0.5], [0.68, 0.5], [0.8, 0.45], [1, 0.45]]], ["keys", [[0, 0.9], [0.2, -0.7], [0.45, -0.7], [0.56, -0.7], [0.68, -0.7], [0.8, 0.9], [1, 0.9]]]]],
-			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.55], [0.28, -0.8], [0.45, 0.3], [0.56, 0.8], [0.8, -0.55], [1, -0.55]]], ["keys", [[0, -0.35], [0.28, 0.1], [0.45, -0.45], [0.56, -0.3], [0.8, -0.35], [1, -0.35]]], ["keys", [[0, -0.25], [0.28, -0.5], [0.45, 1], [0.56, 0.5], [0.8, -0.25], [1, -0.25]]]]],
-			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.05], [0.28, -0.25], [0.45, 0.22], [0.56, 0.65], [0.8, -0.05], [1, -0.05]]], ["keys", [[0, 1], [0.28, 0.8], [0.45, -0.08], [0.56, -0.1], [0.8, 1], [1, 1]]], ["keys", [[0, 0.3], [0.28, -0.45], [0.45, 1], [0.56, 0.6], [0.8, 0.3], [1, 0.3]]]]],
+			["aim", "thigh.L", "shin.L", [0.12, -1, ["keys", [[0, 0.22], [0.28, 0.16], [0.43478260869565216, 0.49231471024778295], [0.45, 0.5], [0.4782608695652174, 0.4868717819264176], [0.52, 0.48], [0.62, 0.56], [0.7, 0.54], [0.74, 0.34], [0.7826, 0.22]]]]],
+			["aim", "shin.L", "foot.L", [0.1, -1, ["keys", [[0, -0.12], [0.28, -0.1], [0.43478260869565216, -0.29547924132222525], [0.45, -0.3], [0.4782608695652174, -0.2967179454816044], [0.52, -0.31], [0.62, -0.4], [0.7, -0.38], [0.74, -0.2], [0.7826, -0.12]]]]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1, ["keys", [[0, -0.12], [0.28, -0.22], [0.43478260869565216, 0.043896975785004094], [0.45, 0.05], [0.4782608695652174, 0.0450769182224066], [0.52, 0.04], [0.62, 0.12], [0.7, 0.1], [0.74, -0.04], [0.7826, -0.12]]]]],
+			["aim", "shin.R", "foot.R", [-0.1, -1, ["keys", [[0, -0.2], [0.28, -0.15], [0.43478260869565216, -0.34547924132222524], [0.45, -0.35], [0.4782608695652174, -0.34179486370401096], [0.52, -0.34], [0.62, -0.44], [0.7, -0.42], [0.74, -0.26], [0.7826, -0.2]]]]],
+			["turn", "hips", "y", ["keys", [[0, 0.2], [0.14, -0.18], [0.36, 0.15], [0.43478260869565216, 0.15944635818196762], [0.45, 0.1627575], [0.4782608695652174, 0.16906302621845976], [0.52, 0.18], [0.62, 0.22], [0.7, 0.2], [0.74, 0.2], [0.7826, 0.2]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.14], [0.28, -0.1], [0.43478260869565216, 0.3300543309088956], [0.45, 0.34], [0.4782608695652174, 0.3252307546672198], [0.52, 0.3], [0.62, 0.4], [0.7, 0.42], [0.74, 0.22], [0.7826, 0.14]]]],
+			["turn", "neck", "x", ["keys", [[0, -0.1], [0.28, -0.1], [0.43478260869565216, 0.01728754479333515], [0.45, 0.02], [0.4782608695652174, 0.013435890963208796], [0.52, -0.02], [0.62, 0.04], [0.7, 0.06], [0.74, -0.06], [0.7826, -0.1]]]],
+			["turn", "chest", "y", ["keys", [[0, -0.2], [0.24, -0.6], [0.42, 0.45], [0.43478260869565216, 0.45310932812815624], [0.45, 0.4618075801749271], [0.4782608695652174, 0.48754027107208936], [0.52, 0.5], [0.62, 0.6], [0.7, 0.6], [0.74, 0.2], [0.7826, -0.2]]]],
+			["aim","upper_arm.L","forearm.L",[["keys",[[0,0.25],[0.28,0.25],[0.45,0.25],[0.4782608695652174,0.25],[0.52,0.1],[0.5652173913043478,0.1],[0.6086956521739131,0.9],[0.7,0.9],[0.7391304347826086,0.2497904167009123],[0.74,0.25],[0.7826,0.25]]],["keys",[[0,-0.8],[0.28,-0.8],[0.45,-0.8],[0.4782608695652174,-0.8],[0.52,-0.55],[0.5652173913043478,-0.55],[0.6086956521739131,-0.4],[0.7,-0.4],[0.7391304347826086,-0.7996506945015205],[0.74,-0.8],[0.7826,-0.8]]],["keys",[[0,0.45],[0.28,0.35],[0.45,0.45],[0.4782608695652174,0.45],[0.52,-0.2],[0.5652173913043478,-0.2],[0.6086956521739131,-0.2],[0.7,-0.2],[0.7391304347826086,0.4490918057039532],[0.74,0.45],[0.7826,0.45]]]]],
+			["aim","forearm.L","hand.L",[["keys",[[0,-0.45],[0.28,-0.45],[0.45,-0.45],[0.4782608695652174,-0.45],[0.52,0.6],[0.5652173913043478,0.6],[0.6086956521739131,0.75],[0.7,0.75],[0.7391304347826086,-0.44853291690638597],[0.74,-0.45],[0.7826,-0.45]]],["keys",[[0,0.35],[0.28,0.35],[0.45,0.35],[0.4782608695652174,0.35],[0.52,-0.3],[0.5652173913043478,-0.3],[0.6086956521739131,-0.5],[0.7,-0.5],[0.7391304347826086,0.3490918057039531],[0.74,0.35],[0.7826,0.35]]],["keys",[[0,0.8],[0.28,0.7000000000000001],[0.45,0.8],[0.4782608695652174,0.8],[0.52,0.3],[0.5652173913043478,0.3],[0.6086956521739131,0.4],[0.7,0.4],[0.7391304347826086,0.7993013890030409],[0.74,0.8],[0.7826,0.8]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.55], [0.28, -0.8], [0.43478260869565216, 0.27513582727223884], [0.45, 0.3], [0.4782608695652174, 0.38205136295989006], [0.52, 0.45], [0.62, 0.35], [0.7, 0.3], [0.74, -0.4], [0.7826, -0.55]]], ["keys", [[0, -0.35], [0.28, 0.1], [0.43478260869565216, -0.43756791363611947], [0.45, -0.45], [0.4782608695652174, -0.425384591112033], [0.52, -0.65], [0.62, -0.9], [0.7, -0.92], [0.74, -0.55], [0.7826, -0.35]]], ["keys", [[0, -0.25], [0.28, -0.5], [0.43478260869565216, 0.9660943099166894], [0.45, 1], [0.4782608695652174, 0.91794863704011], [0.52, 0.65], [0.62, 0.75], [0.7, 0.7], [0.74, 0.15], [0.7826, -0.25]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.05], [0.28, -0.25], [0.43478260869565216, 0.2093762171072293], [0.45, 0.22], [0.4782608695652174, 0.29056417214550545], [0.55, 0.4], [0.65, 0.3], [0.7, 0.25], [0.74, -0.2], [0.7826, -0.05]]], ["keys", [[0, 1], [0.28, 0.8], [0.43478260869565216, -0.060108661817791065], [0.45, -0.08], [0.4782608695652174, -0.0832820545183956], [0.55, -0.6], [0.65, -0.85], [0.7, -0.88], [0.74, 0.3], [0.7826, 1]]], ["keys", [[0, 0.3], [0.28, -0.45], [0.43478260869565216, 0.967224499586133], [0.45, 1], [0.4782608695652174, 0.934358909632088], [0.55, 0.7], [0.65, 0.2], [0.7, 0.18], [0.74, 0.6], [0.7826, 0.3]]]]],
 		],
-		"sink": ["keys", [[0, 0.07], [0.28, 0.05500000000000001], [0.45, 0.12], [0.56, 0.09999999999999999], [0.8, 0.07], [1, 0.07]]],
+		"sink": ["keys", [[0, 0.07], [0.28, 0.05500000000000001], [0.43478260869565216, 0.1185307534297232], [0.45, 0.12], [0.4782608695652174, 0.1167179454816044], [0.52, 0.115], [0.62, 0.14], [0.7, 0.145], [0.74, 0.09], [0.7826, 0.07]]],
+		"hand_targets": [{"side": "R", "anchor": "hips", "region": "left_thigh_front", "preferred_y": -0.175, "max_y": 0, "y_step": 0.005, "grid": 9, "x_range": [0.015, 0.3], "z_range": [0.06, 0.42], "min_elbow_degrees": 8, "max_shoulder_degrees": 80, "minimum_gap": 0.25, "follow": 0.62, "sag": 0.7, "sag_drift": [0, 0, -0.04], "weight": ["keys", [[0, 0], [0.45, 0], [0.4782608695652174, 0], [0.6086956521739131, 1], [0.62, 1], [0.7, 1], [0.7826, 0]]], "separation": {"start": 0.45, "complete": 0.6086956521739131, "return_start": 0.7, "guard": 0.7826}}],
 	},
 	# The one-handed swing back the other way (backhand): the right hand drawn
 	# across to the left shoulder with the body twisted left, out across in
 	# front to the right, back again.
 	"p_swing_back": {
 		"steps": [
-			["aim", "thigh.L", "shin.L", [0.12, -1, ["keys", [[0, 0.22], [0.24, 0.16], [0.33, 0.5], [0.56, 0.42], [0.8, 0.28], [1, 0.22]]]]],
-			["aim", "shin.L", "foot.L", [0.1, -1, ["keys", [[0, -0.12], [0.24, -0.1], [0.33, -0.3], [0.56, -0.28], [0.8, -0.16], [1, -0.12]]]]],
-			["aim", "thigh.R", "shin.R", [-0.14, -1, ["keys", [[0, -0.12], [0.24, -0.22], [0.33, 0.05], [0.56, 0.02], [0.8, -0.1], [1, -0.12]]]]],
-			["aim", "shin.R", "foot.R", [-0.1, -1, ["keys", [[0, -0.2], [0.24, -0.15], [0.33, -0.35], [0.56, -0.3], [0.8, -0.22], [1, -0.2]]]]],
-			["turn", "hips", "y", ["keys", [[0, 0.2], [0.1, 0.18], [0.27, -0.15], [0.56, -0.18], [0.8, 0.2], [1, 0.2]]]],
-			["turn", "spine", "x", ["keys", [[0, 0.14], [0.24, -0.1], [0.33, 0.34], [0.56, 0.25], [0.8, 0.16], [1, 0.14]]]],
-			["turn", "neck", "x", ["keys", [[0, -0.1], [0.24, -0.1], [0.33, 0.02], [0.56, -0.02], [0.8, -0.1], [1, -0.1]]]],
-			["turn", "chest", "y", ["keys", [[0, -0.2], [0.15, 0.55], [0.31, -0.45], [0.56, -0.55], [0.8, -0.2], [1, -0.2]]]],
-			["aim", "upper_arm.L", "forearm.L", [["keys", [[0, 0.2], [0.1, 1], [0.24, 1], [0.33, 1], [0.56, 1], [0.68, 1], [0.8, 0.2], [1, 0.2]]], ["keys", [[0, -0.45], [0.1, -0.15], [0.24, -0.15], [0.33, -0.15], [0.56, -0.15], [0.68, -0.15], [0.8, -0.45], [1, -0.45]]], ["keys", [[0, 0.9], [0.1, -0.3], [0.24, -0.3], [0.33, -0.3], [0.56, -0.3], [0.68, -0.3], [0.8, 0.9], [1, 0.9]]]]],
-			["aim", "forearm.L", "hand.L", [["keys", [[0, -0.25], [0.1, 0.6], [0.24, 0.6], [0.33, 0.6], [0.56, 0.6], [0.68, 0.6], [0.8, -0.25], [1, -0.25]]], ["keys", [[0, 0.45], [0.1, 0.5], [0.24, 0.5], [0.33, 0.5], [0.56, 0.5], [0.68, 0.5], [0.8, 0.45], [1, 0.45]]], ["keys", [[0, 0.9], [0.1, -0.7], [0.24, -0.7], [0.33, -0.7], [0.56, -0.7], [0.68, -0.7], [0.8, 0.9], [1, 0.9]]]]],
-			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.55], [0.24, 0.75], [0.33, 0.3], [0.56, -0.8], [0.8, -0.55], [1, -0.55]]], ["keys", [[0, -0.35], [0.24, 0.05], [0.33, -0.45], [0.56, -0.3], [0.8, -0.35], [1, -0.35]]], ["keys", [[0, -0.25], [0.24, 0.2], [0.33, 1], [0.56, 0.5], [0.8, -0.25], [1, -0.25]]]]],
-			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.05], [0.24, 0.5], [0.33, 0.22], [0.56, -0.65], [0.8, -0.05], [1, -0.05]]], ["keys", [[0, 1], [0.24, 0.65], [0.33, -0.08], [0.56, -0.1], [0.8, 1], [1, 1]]], ["keys", [[0, 0.3], [0.24, -0.3], [0.33, 1], [0.56, 0.6], [0.8, 0.3], [1, 0.3]]]]],
+			["aim", "thigh.L", "shin.L", [0.12, -1, ["keys", [[0, 0.22], [0.24, 0.16], [0.30434782608695654, 0.4328818636571544], [0.33, 0.5], [0.34782608695652173, 0.49863281531683173], [0.4252549019607843, 0.48], [0.5613333333333334, 0.56], [0.6701960784313725, 0.54], [0.7246274509803922, 0.34], [0.7826, 0.22]]]]],
+			["aim", "shin.L", "foot.L", [0.1, -1, ["keys", [[0, -0.12], [0.24, -0.1], [0.30434782608695654, -0.26051874332773794], [0.33, -0.3], [0.34782608695652173, -0.29965820382920794], [0.4252549019607843, -0.31], [0.5613333333333334, -0.4], [0.6701960784313725, -0.38], [0.7246274509803922, -0.2], [0.7826, -0.12]]]]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1, ["keys", [[0, -0.12], [0.24, -0.22], [0.30434782608695654, -0.0032996965075537954], [0.33, 0.05], [0.34782608695652173, 0.049487305743811896], [0.4252549019607843, 0.04], [0.5613333333333334, 0.12], [0.6701960784313725, 0.1], [0.7246274509803922, -0.04], [0.7826, -0.12]]]]],
+			["aim", "shin.R", "foot.R", [-0.1, -1, ["keys", [[0, -0.2], [0.24, -0.15], [0.30434782608695654, -0.3105187433277379], [0.33, -0.35], [0.34782608695652173, -0.3491455095730198], [0.4252549019607843, -0.34], [0.5613333333333334, -0.44], [0.6701960784313725, -0.42], [0.7246274509803922, -0.26], [0.7826, -0.2]]]]],
+			["turn", "hips", "y", ["keys", [[0, 0.2], [0.1, 0.18], [0.27, -0.15], [0.30434782608695654, -0.1511628488581807], [0.33, -0.15332116937963836], [0.34782608695652173, -0.15532215328154744], [0.4252549019607843, -0.14], [0.5613333333333334, -0.1], [0.6701960784313725, 0], [0.7246274509803922, 0.1], [0.7826, 0.2]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.14], [0.24, -0.1], [0.30434782608695654, 0.2531412353210235], [0.33, 0.34], [0.34782608695652173, 0.3384619172314357], [0.4252549019607843, 0.3], [0.5613333333333334, 0.4], [0.6701960784313725, 0.42], [0.7246274509803922, 0.22], [0.7826, 0.14]]]],
+			["turn", "neck", "x", ["keys", [[0, -0.1], [0.24, -0.1], [0.30434782608695654, -0.0036887540033572475], [0.33, 0.02], [0.34782608695652173, 0.01931640765841586], [0.4252549019607843, -0.02], [0.5613333333333334, 0.04], [0.6701960784313725, 0.06], [0.7246274509803922, -0.06], [0.7826, -0.1]]]],
+			["turn", "chest", "y", ["keys", [[0, -0.2], [0.15, 0.55], [0.30434782608695654, -0.44634437187936626], [0.31, -0.45], [0.33, -0.45181760000000004], [0.34782608695652173, -0.456175139442755], [0.4252549019607843, -0.5], [0.5613333333333334, -0.6], [0.6701960784313725, -0.62], [0.7246274509803922, -0.36], [0.7826, -0.2]]]],
+			["aim","upper_arm.L","forearm.L",[["keys",[[0,0.25],[0.24,0.25],[0.33,0.25],[0.34782608695652173,0.25],[0.4252549019607843,0.35],[0.5217391304347826,0.35],[0.5613333333333334,0.9],[0.6701960784313725,0.9],[0.6956521739130435,0.30484225998554654],[0.7246274509803922,0.25],[0.7826,0.25]]],["keys",[[0,-0.8],[0.24,-0.8],[0.33,-0.8],[0.34782608695652173,-0.8],[0.4252549019607843,-0.55],[0.5217391304347826,-0.55],[0.5613333333333334,-0.4],[0.6701960784313725,-0.4],[0.6956521739130435,-0.6628943500361337],[0.7246274509803922,-0.8],[0.7826,-0.8]]],["keys",[[0,0.45],[0.24,0.35],[0.33,0.45],[0.34782608695652173,0.45],[0.4252549019607843,-0.2],[0.5217391304347826,-0.2],[0.5613333333333334,-0.2],[0.6701960784313725,-0.2],[0.6956521739130435,0.09352531009394749],[0.7246274509803922,0.45],[0.7826,0.45]]]]],
+			["aim","forearm.L","hand.L",[["keys",[[0,-0.45],[0.24,-0.45],[0.33,-0.45],[0.34782608695652173,-0.45],[0.4252549019607843,0.6],[0.5217391304347826,0.6],[0.5613333333333334,0.75],[0.6701960784313725,0.75],[0.6956521739130435,0.12584372984823866],[0.7246274509803922,-0.45],[0.7826,-0.45]]],["keys",[[0,0.35],[0.24,0.35],[0.33,0.35],[0.34782608695652173,0.35],[0.4252549019607843,-0.3],[0.5217391304347826,-0.3],[0.5613333333333334,-0.5],[0.6701960784313725,-0.5],[0.6956521739130435,-0.006474689906052544],[0.7246274509803922,0.35],[0.7826,0.35]]],["keys",[[0,0.8],[0.24,0.7000000000000001],[0.33,0.8],[0.34782608695652173,0.8],[0.4252549019607843,0.3],[0.5217391304347826,0.3],[0.5613333333333334,0.4],[0.6701960784313725,0.4],[0.6956521739130435,0.5257887000722673],[0.7246274509803922,0.8],[0.7826,0.8]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.55], [0.24, 0.75], [0.30434782608695654, 0.3888328275125897], [0.33, 0.3], [0.34782608695652173, 0.28120121060643616], [0.4252549019607843, -0.45], [0.5613333333333334, -0.8], [0.6701960784313725, -0.7], [0.7246274509803922, -0.55], [0.7826, -0.55]]], ["keys", [[0, -0.35], [0.24, 0.05], [0.30434782608695654, -0.3512968583193448], [0.33, -0.45], [0.34782608695652173, -0.4474365287190595], [0.4252549019607843, -0.65], [0.5613333333333334, -0.9], [0.6701960784313725, -0.92], [0.7246274509803922, -0.55], [0.7826, -0.35]]], ["keys", [[0, -0.25], [0.24, 0.2], [0.30434782608695654, 0.8420749733109518], [0.33, 1], [0.34782608695652173, 0.9914550957301983], [0.4252549019607843, 0.35], [0.5613333333333334, -0.18], [0.6701960784313725, -0.22], [0.7246274509803922, -0.1], [0.7826, -0.25]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.05], [0.24, 0.5], [0.30434782608695654, 0.2752737593411669], [0.33, 0.22], [0.34782608695652173, 0.20513186657054497], [0.4660784313725491, -0.4], [0.602156862745098, -0.1], [0.6701960784313725, -0.1], [0.7246274509803922, -0.15], [0.7826, -0.05]]], ["keys", [[0, 1], [0.24, 0.65], [0.30434782608695654, 0.06410658685375659], [0.33, -0.08], [0.34782608695652173, -0.08034179617079207], [0.4660784313725491, -0.6], [0.602156862745098, -0.88], [0.6701960784313725, -0.91], [0.7246274509803922, 0.3], [0.7826, 1]]], ["keys", [[0, 0.3], [0.24, -0.3], [0.30434782608695654, 0.7433718316302964], [0.33, 1], [0.34782608695652173, 0.9931640765841586], [0.4660784313725491, 0.4], [0.602156862745098, -0.12], [0.6701960784313725, -0.18], [0.7246274509803922, 0.45], [0.7826, 0.3]]]]],
 		],
-		"sink": ["keys", [[0, 0.07], [0.24, 0.05500000000000001], [0.33, 0.12], [0.56, 0.09999999999999999], [0.8, 0.07], [1, 0.07]]],
+		"sink": ["keys", [[0, 0.07], [0.24, 0.05500000000000001], [0.30434782608695654, 0.10716859158151482], [0.33, 0.12], [0.34782608695652173, 0.11965820382920793], [0.4252549019607843, 0.115], [0.5613333333333334, 0.14], [0.6701960784313725, 0.145], [0.7246274509803922, 0.09], [0.7826, 0.07]]],
+		"hand_targets": [{"side": "R", "anchor": "hips", "region": "right_hip_back", "preferred_y": -0.175, "max_y": 0, "y_step": 0.005, "grid": 10, "x_range": [-0.6, -0.06], "z_range": [-0.3, -0.02], "min_elbow_degrees": 8, "max_shoulder_degrees": 80, "minimum_gap": 0.25, "follow": 0.5613333333333334, "sag": 0.6701960784313725, "sag_drift": [0, 0, -0.04], "weight": ["keys", [[0, 0], [0.33, 0], [0.34782608695652173, 0], [0.5217391304347826, 1], [0.5613333333333334, 1], [0.6701960784313725, 1], [0.7826, 0]]], "separation": {"start": 0.33, "complete": 0.5613333333333334, "return_start": 0.6701960784313725, "guard": 0.7826}}],
 	},
 	# Two-handed axe: both hands up over and behind the head, chopped down in
 	# front with the knees giving, lifted back.
@@ -2037,20 +2039,20 @@ const LAYERS: Dictionary = {
 	# forward, the right fist up by the shoulder with the head of the weapon back, the left hand out.
 	"p_ready_one": {
 		"steps": [
-			["aim", "thigh.L", "shin.L", [0.12, -1.0, 0.22]],
-			["aim", "shin.L", "foot.L", [0.1, -1.0, -0.12]],
-			["aim", "thigh.R", "shin.R", [-0.14, -1.0, -0.12]],
-			["aim", "shin.R", "foot.R", [-0.1, -1.0, -0.2]],
+			["aim", "thigh.L", "shin.L", [0.12, -1, 0.22]],
+			["aim", "shin.L", "foot.L", [0.1, -1, -0.12]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1, -0.12]],
+			["aim", "shin.R", "foot.R", [-0.1, -1, -0.2]],
 			["turn", "hips", "y", 0.2],
-			["turn", "spine", "x", [0.14, 0.015, 0.0]],
+			["turn", "spine", "x", 0.14],
 			["turn", "neck", "x", -0.1],
-			["turn", "chest", "y", [-0.2, 0.02, 0.0]],
+			["turn", "chest", "y", -0.2],
 			["aim", "upper_arm.R", "forearm.R", [-0.55, -0.35, -0.25]],
-			["aim", "forearm.R", "hand.R", [-0.05, 1.0, [0.3, 0.03, 0.0]]],
-			["aim", "upper_arm.L", "forearm.L", [0.2, -0.45, 0.9]],
-			["aim", "forearm.L", "hand.L", [-0.25, 0.45, 0.9]],
+			["aim", "forearm.R", "hand.R", [-0.05, 1, 0.3]],
+			["aim", "upper_arm.L", "forearm.L", [0.25, -0.8, 0.45]],
+			["aim", "forearm.L", "hand.L", [-0.45, 0.35, 0.8]],
 		],
-		"sink": [0.07, 0.01, 0.0],
+		"sink": 0.07,
 	},
 	# On guard with a two-handed weapon (decision 422, second set): knees bent, both fists
 	# together by the right shoulder, the weapon up and back over it, ready to swing.
@@ -2499,6 +2501,534 @@ static func _record_stand_failures(ctx: Dictionary, clip: String, samples: Array
 		failures[int(worst["index"])] = "STAND_UNFIT %s %s knee %.6f target %.6f error_deg %.6f ankle_error_m %.6f forward %.6f width_m %.6f target %.6f error_m %.6f" % [clip, sample["side"], worst["knee"], worst["knee_target"], worst["knee_error"], worst["ankle_error"], worst["forward"], worst["width"], worst["width_target"], worst["width_error"]]
 
 
+## 굽기에서 쓰는 손 목표의 몸통 표면 간격.
+const HAND_SURFACE_HEIGHT: float = 0.04
+const HAND_SURFACE_SECTORS: int = 12
+const HAND_SURFACE_MARGIN: float = 0.01
+
+
+## 길이를 늘리거나 도달 경계에 잘라 붙이지 않는 두 관절 풀이.
+static func hand_two_bone(s: Vector3, e: Vector3, w: Vector3, target: Vector3, pole: Vector3, min_bend_degrees: float, max_shoulder_degrees: float) -> Dictionary:
+	if not is_finite(pole.length_squared()):
+		return {"ok": false, "clipped": false, "reason": "invalid elbow pole"}
+	var a := s.distance_to(e)
+	var b := e.distance_to(w)
+	var distance := s.distance_to(target)
+	if not is_finite(distance) or not is_finite(a) or not is_finite(b) or minf(a, b) <= 0.000001 or distance <= 0.000001:
+		return {"ok": false, "clipped": false, "reason": "invalid arm geometry"}
+	if not is_finite(min_bend_degrees) or not is_finite(max_shoulder_degrees) or min_bend_degrees < 0.0 or min_bend_degrees >= 180.0 or max_shoulder_degrees < 0.0 or max_shoulder_degrees > 180.0:
+		return {"ok": false, "clipped": false, "reason": "invalid joint limits"}
+	var safe_reach := sqrt(a * a + b * b + 2.0 * a * b * cos(deg_to_rad(min_bend_degrees)))
+	if distance > safe_reach or distance < absf(a - b) + 0.000001:
+		return {"ok": false, "clipped": true, "reason": "final target outside safe reach", "distance": distance, "safe_reach": safe_reach}
+	var axis := (target - s) / distance
+	var bend := pole - axis * pole.dot(axis)
+	if bend.length_squared() < 0.00000001:
+		var fallback := Vector3.BACK if absf(axis.dot(Vector3.BACK)) < 0.95 else Vector3.RIGHT
+		bend = fallback - axis * fallback.dot(axis)
+	bend = bend.normalized()
+	var along := (a * a - b * b + distance * distance) / (2.0 * distance)
+	var height_squared := a * a - along * along
+	if height_squared < -0.00000001:
+		return {"ok": false, "clipped": true, "reason": "negative bend radius"}
+	var elbow := s + axis * along + bend * sqrt(maxf(0.0, height_squared))
+	var upper := (elbow - s).normalized()
+	var lower := (target - elbow).normalized()
+	var shoulder_degrees := rad_to_deg((e - s).normalized().angle_to(upper))
+	if shoulder_degrees > max_shoulder_degrees:
+		return {"ok": false, "clipped": false, "reason": "shoulder rotation limit", "shoulder_degrees": shoulder_degrees}
+	var upper_rotation := Quaternion((e - s).normalized(), upper)
+	var lower_rotation := Quaternion(upper_rotation * (w - e).normalized(), lower)
+	return {"ok": true, "clipped": false, "elbow": elbow, "wrist": target,
+		"upper_rotation": upper_rotation, "lower_rotation": lower_rotation,
+		"bend_degrees": rad_to_deg(upper.angle_to(lower)), "shoulder_degrees": shoulder_degrees}
+
+
+## 제어점과 손목을 분리한다. 손 회전에는 무기 쪽 회전을 넣지 않는다.
+static func hand_solve_reference(frame: Dictionary, goal: Vector3, spec: Dictionary) -> Dictionary:
+	for key: String in ["s", "e", "w", "c", "pole"]:
+		if typeof(frame.get(key)) != TYPE_VECTOR3:
+			return {"ok": false, "clipped": false, "reason": "missing arm reference " + key}
+	if typeof(frame.get("hand_basis")) != TYPE_BASIS:
+		return {"ok": false, "clipped": false, "reason": "missing hand basis"}
+	var minimum := float(spec.get("min_elbow_degrees", 8.0))
+	if not is_finite(minimum) or minimum < 0.0 or minimum >= 180.0:
+		return {"ok": false, "clipped": false, "reason": "invalid elbow limit"}
+	var s: Vector3 = frame["s"]
+	var e: Vector3 = frame["e"]
+	var w: Vector3 = frame["w"]
+	var c: Vector3 = frame["c"]
+	var basis: Basis = frame["hand_basis"]
+	if not is_finite(goal.length_squared()) or goal.distance_to(s) < 0.000001:
+		return {"ok": false, "clipped": false, "reason": "invalid hand goal"}
+	# 손목 오프셋을 포함한 삼각형으로 팔꿈치를 구하고, 실제 아래팔을 복원한다.
+	# 뼈 길이는 바꾸지 않으며 마지막에는 실제 팔꿈치 굽힘을 검사한다.
+	var reference := w + basis * c
+	var reference_axis := (reference - s).normalized()
+	var pole := (e - s) - reference_axis * (e - s).dot(reference_axis)
+	if pole.length_squared() < 0.00000001:
+		pole = frame["pole"]
+	var first := _hand_reference_with_pole(frame, goal, spec, pole)
+	if bool(first["ok"]) or first.get("reason", "") != "actual elbow below safe bend":
+		return first
+	# 손 오프셋 때문에 같은 제어점 삼각형에도 실제 팔꿈치 굽힘은 달라진다.
+	# 원래 평면이 안전할 때는 그대로 쓰고, 실패할 때만 가장 가까운 평면부터 찾는다.
+	var target_axis := (goal - s).normalized()
+	for step in range(1, 13):
+		var best: Dictionary = {}
+		for direction: float in [1.0, -1.0]:
+			var trial_pole := Basis(target_axis, deg_to_rad(float(step) * 15.0 * direction)) * pole
+			var trial := _hand_reference_with_pole(frame, goal, spec, trial_pole)
+			if not bool(trial["ok"]):
+				continue
+			if best.is_empty() or (trial["elbow"] as Vector3).distance_squared_to(e) < (best["elbow"] as Vector3).distance_squared_to(e):
+				best = trial
+		if not best.is_empty():
+			return best
+	return first
+
+
+static func _hand_reference_with_pole(frame: Dictionary, goal: Vector3, spec: Dictionary, pole: Vector3) -> Dictionary:
+	var s: Vector3 = frame["s"]
+	var e: Vector3 = frame["e"]
+	var w: Vector3 = frame["w"]
+	var c: Vector3 = frame["c"]
+	var basis: Basis = frame["hand_basis"]
+	var reference := w + basis * c
+	var solved := hand_two_bone(s, e, reference, goal, pole, 0.0, float(spec.get("max_shoulder_degrees", 80.0)))
+	if not bool(solved["ok"]):
+		return solved
+	var rotation := Basis(solved["lower_rotation"]) * Basis(solved["upper_rotation"])
+	var elbow: Vector3 = solved["elbow"]
+	var wrist := elbow + rotation * (w - e)
+	var bend := rad_to_deg((elbow - s).angle_to(wrist - elbow))
+	if not is_finite(bend) or bend < float(spec.get("min_elbow_degrees", 8.0)):
+		return {"ok": false, "clipped": true, "reason": "actual elbow below safe bend", "bend_degrees": bend}
+	var error := (wrist + rotation * basis * c).distance_to(goal)
+	if not is_finite(error) or error > 0.0005:
+		return {"ok": false, "clipped": false, "reason": "hand reference error", "error": error}
+	solved["wrist"] = wrist
+	solved["bend_degrees"] = bend
+	solved["reference_error"] = error
+	return solved
+
+static func _hand_points(frame: Dictionary, solved: Dictionary, group: String, weight: float = 1.0) -> PackedVector3Array:
+	var result := PackedVector3Array()
+	var q1 := Quaternion.IDENTITY.slerp(solved["upper_rotation"], weight)
+	var q2 := Quaternion.IDENTITY.slerp(solved["lower_rotation"], weight)
+	var s: Vector3 = frame["s"]
+	var elbow: Vector3 = s + q1 * ((frame["e"] as Vector3) - s)
+	for vertex: Array in frame["points"][group]:
+		var sum := Vector3.ZERO
+		for influence: Array in vertex:
+			var point: Vector3 = influence[2]
+			if int(influence[0]) >= 1:
+				point = s + q1 * (point - s)
+			if int(influence[0]) >= 2:
+				point = elbow + q2 * (point - elbow)
+			sum += point * float(influence[1])
+		result.append(sum)
+	return result
+
+
+static func _hand_mean(points: PackedVector3Array) -> Vector3:
+	var total := Vector3.ZERO
+	for point in points:
+		total += point
+	return total / float(points.size()) if not points.is_empty() else Vector3(INF, INF, INF)
+
+
+static func _hand_candidate(frame: Dictionary, offset: Vector3, spec: Dictionary) -> Dictionary:
+	var drift: Array = spec.get("sag_drift", [0.0, 0.0, 0.0])
+	var selected: Vector3 = frame["hips"] + offset + Vector3(drift[0], drift[1], drift[2]) * float(frame.get("drift", 0.0))
+	var reference: Vector3 = frame["w"] + (frame["hand_basis"] as Basis) * (frame["c"] as Vector3)
+	var weight := clampf(float(frame.get("weight", 1.0)), 0.0, 1.0)
+	var goal := reference.lerp(selected, weight)
+	var control := goal
+	for correction in 2:
+		var solved := hand_solve_reference(frame, control, spec)
+		if not bool(solved["ok"]):
+			return solved
+		var measured := _hand_mean(_hand_points(frame, solved, "hand"))
+		var error := measured.distance_to(goal)
+		if not is_finite(error):
+			return {"ok": false, "clipped": false, "reason": "non-finite skinned hand"}
+		if error > 0.002 and correction == 0:
+			control += goal - measured
+			continue
+		if error > 0.0075:
+			return {"ok": false, "clipped": false, "reason": "skinned hand reference error", "error": error}
+		if weight >= 0.999999:
+			if measured.y > (frame["hips"] as Vector3).y:
+				return {"ok": false, "clipped": false, "reason": "skinned hand above hips"}
+			var torso := hand_torso_surface(_hand_points(frame, solved, "torso"), frame["hips"], frame["chest"])
+			if not bool(torso["valid"]):
+				return {"ok": false, "clipped": false, "reason": "missing torso surface"}
+			for point in _hand_points(frame, solved, "arm"):
+				var clearance := hand_surface_clearance(torso, point)
+				if not bool(clearance["valid"]) or bool(clearance["inside"]):
+					return {"ok": false, "clipped": false, "reason": "arm enters torso"}
+			var gap := measured.distance_to(_hand_mean(_hand_points(frame, solved, "free")))
+			if gap < float(spec.get("minimum_gap", 0.25)):
+				return {"ok": false, "clipped": false, "reason": "hand separation"}
+		solved["goal"] = goal
+		solved["control"] = control
+		solved["measured"] = measured
+		solved["error"] = error
+		solved["score"] = (solved["elbow"] as Vector3).distance_squared_to(frame["e"])
+		return solved
+	return {"ok": false, "clipped": false, "reason": "skinned hand correction failed"}
+
+
+## 선호 높이의 위아래를 같은 간격으로 찾고, 거리가 같으면 팔꿈치 이동이 작은 자리를 고른다.
+static func hand_select_target(frames: Array, spec: Dictionary) -> Dictionary:
+	if frames.is_empty():
+		return {"ok": false, "clipped": false, "reason": "no hand reference frames"}
+	for axis: String in ["x_range", "z_range"]:
+		var bounds: Variant = spec.get(axis)
+		if not bounds is Array or bounds.size() != 2:
+			return {"ok": false, "clipped": false, "reason": "invalid arrival region " + axis}
+		for value: Variant in bounds:
+			if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)):
+				return {"ok": false, "clipped": false, "reason": "non-finite arrival region " + axis}
+		if float(bounds[0]) > float(bounds[1]):
+			return {"ok": false, "clipped": false, "reason": "reversed arrival region " + axis}
+	for frame: Dictionary in frames:
+		for key: String in ["s", "e", "w", "c", "pole", "hips", "chest"]:
+			if typeof(frame.get(key)) != TYPE_VECTOR3 or not is_finite((frame[key] as Vector3).length_squared()):
+				return {"ok": false, "clipped": false, "reason": "invalid hand frame " + key}
+		if typeof(frame.get("hand_basis")) != TYPE_BASIS or typeof(frame.get("points")) != TYPE_DICTIONARY:
+			return {"ok": false, "clipped": false, "reason": "missing hand frame geometry"}
+		for group: String in ["hand", "arm", "free", "torso"]:
+			var points: Variant = frame["points"].get(group)
+			if not points is Array or points.is_empty():
+				return {"ok": false, "clipped": false, "reason": "empty hand frame group " + group}
+	var preferred := float(spec.get("preferred_y", -0.175))
+	var minimum := float(spec.get("min_y", -0.25))
+	var maximum := float(spec.get("max_y", 0.0))
+	var step := float(spec.get("y_step", 0.005))
+	var grid := int(spec.get("grid", 7))
+	if not is_finite(preferred) or not is_finite(minimum) or not is_finite(maximum) or not is_finite(step) or step <= 0.0 or grid < 2 or maximum < preferred or minimum > preferred:
+		return {"ok": false, "clipped": false, "reason": "invalid hand target grid"}
+	var xr: Array = spec["x_range"]
+	var zr: Array = spec["z_range"]
+	var rejected := {}
+	var levels := int(ceil(maxf(preferred - minimum, maximum - preferred) / step))
+	for level in levels + 1:
+		var best: Dictionary = {}
+		for direction: int in [-1, 1]:
+			if level == 0 and direction == 1:
+				continue
+			var y := preferred + float(direction * level) * step
+			if y < minimum - 0.00000001 or y > maximum + 0.00000001:
+				continue
+			y = clampf(y, minimum, maximum)
+			for ix in grid:
+				for iz in grid:
+					var offset := Vector3(lerpf(xr[0], xr[1], float(ix) / float(grid - 1)), y,
+						lerpf(zr[0], zr[1], float(iz) / float(grid - 1)))
+					var score := 0.0
+					var valid := true
+					for frame: Dictionary in frames:
+						var candidate := _hand_candidate(frame, offset, spec)
+						if not bool(candidate["ok"]):
+							var reason: String = candidate.get("reason", "unknown target failure")
+							rejected[reason] = int(rejected.get(reason, 0)) + 1
+							valid = false
+							break
+						score += float(candidate["score"])
+					if valid and (best.is_empty() or score < float(best["score"])):
+						best = {"ok": true, "clipped": false, "offset": offset, "score": score}
+		if not best.is_empty():
+			best["rejected"] = rejected
+			return best
+	return {"ok": false, "clipped": false, "reason": "no feasible point in arrival region", "rejected": rejected}
+
+
+static func hand_torso_surface(points: PackedVector3Array, hips: Vector3, chest: Vector3) -> Dictionary:
+	var axis := chest - hips
+	if points.is_empty() or not is_finite(axis.length_squared()) or axis.length_squared() < 0.00000001:
+		return {"valid": false, "reason": "empty torso or invalid axis"}
+	axis = axis.normalized()
+	var forward := Vector3.BACK - axis * axis.dot(Vector3.BACK)
+	if forward.length_squared() < 0.00000001:
+		forward = Vector3.RIGHT - axis * axis.dot(Vector3.RIGHT)
+	forward = forward.normalized()
+	var surface := {
+		"valid": true, "origin": hips, "axis": axis, "forward": forward,
+		"left": axis.cross(forward).normalized(), "cells": {},
+		"height_low": INF, "height_high": -INF,
+	}
+	var cells: Dictionary = surface["cells"]
+	for point in points:
+		if not is_finite(point.length_squared()):
+			return {"valid": false, "reason": "non-finite torso vertex"}
+		var sample := _hand_surface_coordinates(surface, point)
+		var cell: Vector2i = sample["cell"]
+		cells[cell] = maxf(float(cells.get(cell, 0.0)), float(sample["radius"]))
+		surface["height_low"] = minf(float(surface["height_low"]), float(sample["height"]))
+		surface["height_high"] = maxf(float(surface["height_high"]), float(sample["height"]))
+	surface["cells"] = cells
+	return surface
+
+
+static func _hand_surface_coordinates(surface: Dictionary, point: Vector3) -> Dictionary:
+	var delta := point - (surface["origin"] as Vector3)
+	var axis: Vector3 = surface["axis"]
+	var height := delta.dot(axis)
+	var radial := delta - axis * height
+	var angle := atan2(radial.dot(surface["left"]), radial.dot(surface["forward"]))
+	var sector := posmod(int(floorf(angle / (TAU / float(HAND_SURFACE_SECTORS)) + 0.5)), HAND_SURFACE_SECTORS)
+	return {"height": height, "radius": radial.length(), "cell": Vector2i(int(floorf(height / HAND_SURFACE_HEIGHT)), sector)}
+
+
+## 빈 구간은 높이·둘레의 가장 가까운 구간으로 채우고, 동률이면 큰 반지름을 쓴다.
+static func hand_surface_clearance(surface: Dictionary, point: Vector3) -> Dictionary:
+	if not bool(surface.get("valid", false)) or not is_finite(point.length_squared()):
+		return {"valid": false, "inside": false, "reason": "invalid surface or point"}
+	var sample := _hand_surface_coordinates(surface, point)
+	var cell: Vector2i = sample["cell"]
+	var height: float = sample["height"]
+	if height < float(surface["height_low"]) or height > float(surface["height_high"]):
+		return {"valid": true, "inside": false, "clearance": INF, "radius": 0.0, "cell": cell, "source_cell": cell, "fallback": false}
+	var cells: Dictionary = surface["cells"]
+	var fallback := not cells.has(cell)
+	var radius := float(cells.get(cell, 0.0))
+	var source_cell := cell
+	if fallback:
+		var nearest := 2147483647
+		for occupied: Vector2i in cells:
+			var dy := absi(occupied.x - cell.x)
+			var da := absi(occupied.y - cell.y)
+			da = mini(da, HAND_SURFACE_SECTORS - da)
+			var distance := dy * dy + da * da
+			var candidate := float(cells[occupied])
+			if distance < nearest or (distance == nearest and candidate > radius):
+				nearest = distance
+				radius = candidate
+				source_cell = occupied
+		if nearest == 2147483647:
+			return {"valid": false, "inside": false, "reason": "no occupied surface bins"}
+	var clearance := float(sample["radius"]) - radius
+	return {"valid": true, "inside": clearance < -HAND_SURFACE_MARGIN, "clearance": clearance,
+		"radius": radius, "cell": cell, "source_cell": source_cell, "fallback": fallback}
+
+
+
+static func _hand_descends(body: Skeleton3D, bone: int, ancestor: int) -> bool:
+	while bone >= 0:
+		if bone == ancestor:
+			return true
+		bone = body.get_bone_parent(bone)
+	return false
+
+
+static func _hand_source_arrays(ctx: Dictionary) -> Array:
+	var mesh_node: MeshInstance3D = ctx["mesh_node"]
+	return mesh_node.get_meta(PERSON_PHASE_SOURCE) if mesh_node.has_meta(PERSON_PHASE_SOURCE) else mesh_node.mesh.surface_get_arrays(0)
+
+
+static func _hand_meta(ctx: Dictionary) -> Dictionary:
+	if ctx.has("hand_reference"):
+		return ctx["hand_reference"]
+	var body: Skeleton3D = ctx["body"]
+	var skin: Skin = ctx["skin"]
+	var bind_bone: Array = ctx["bind_bone"]
+	var arrays := _hand_source_arrays(ctx)
+	var positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+	var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+	var upper := _bone(body, "upper_arm.R")
+	var lower := _bone(body, "forearm.R")
+	var hand := _bone(body, "hand.R")
+	var free := _bone(body, "hand.L")
+	if positions.is_empty() or body.get_bone_parent(lower) != upper or body.get_bone_parent(hand) != lower:
+		return {"ok": false, "reason": "missing direct arm chain or source mesh"}
+	var per := int(bones.size() / positions.size())
+	var torso: Array[int] = [_bone(body, "hips"), _bone(body, "spine"), _bone(body, "chest")]
+	var records := {"hand": [], "arm": [], "free": [], "torso": []}
+	for id in positions.size():
+		var sums := [0.0, 0.0, 0.0, 0.0]
+		var influences: Array = []
+		for k in per:
+			var at := id * per + k
+			if weights[at] <= 0.0:
+				continue
+			var bind := int(bones[at])
+			var bone := int(bind_bone[bind])
+			var kind := 2 if _hand_descends(body, bone, lower) else (1 if _hand_descends(body, bone, upper) else 0)
+			influences.append([kind, weights[at], skin.get_bind_pose(bind) * positions[id], bone])
+			if _hand_descends(body, bone, hand):
+				sums[0] += weights[at]
+			if _hand_descends(body, bone, lower):
+				sums[1] += weights[at]
+			if _hand_descends(body, bone, free):
+				sums[2] += weights[at]
+			if bone in torso:
+				sums[3] += weights[at]
+		for part in 4:
+			if sums[part] >= 0.5:
+				(records[["hand", "arm", "free", "torso"][part]] as Array).append(influences)
+	for group: String in records:
+		if (records[group] as Array).is_empty():
+			return {"ok": false, "reason": "missing original body group " + group}
+	var rest_hand := PackedVector3Array()
+	for vertex: Array in records["hand"]:
+		var point := Vector3.ZERO
+		for influence: Array in vertex:
+			point += (body.get_bone_global_rest(int(influence[3])) * (influence[2] as Vector3)) * float(influence[1])
+		rest_hand.append(point)
+	var rest := body.get_bone_global_rest(hand)
+	var c := rest.basis.orthonormalized().inverse() * (_hand_mean(rest_hand) - rest.origin)
+	var meta := {"ok": true, "records": records, "upper": upper, "lower": lower, "hand": hand, "c": c}
+	ctx["hand_reference"] = meta
+	return meta
+
+
+static func _hand_frame(ctx: Dictionary, meta: Dictionary, phase: float, drift: float) -> Dictionary:
+	var body: Skeleton3D = ctx["body"]
+	var upper := body.get_bone_global_pose(meta["upper"])
+	var lower := body.get_bone_global_pose(meta["lower"])
+	var hand := body.get_bone_global_pose(meta["hand"])
+	var axis := (hand.origin - upper.origin).normalized()
+	var pole := (lower.origin - upper.origin) - axis * (lower.origin - upper.origin).dot(axis)
+	if pole.length_squared() < 0.00000001:
+		pole = Vector3.BACK - axis * axis.dot(Vector3.BACK)
+	if pole.length_squared() < 0.00000001:
+		pole = Vector3.RIGHT - axis * axis.dot(Vector3.RIGHT)
+	var points := {}
+	for group: String in meta["records"]:
+		var vertices: Array = []
+		for vertex: Array in meta["records"][group]:
+			var influences: Array = []
+			for influence: Array in vertex:
+				influences.append([influence[0], influence[1],
+					body.get_bone_global_pose(int(influence[3])) * (influence[2] as Vector3)])
+			vertices.append(influences)
+		points[group] = vertices
+	return {"s": upper.origin, "e": lower.origin, "w": hand.origin, "pole": pole.normalized(),
+		"upper_basis": upper.basis.orthonormalized(), "lower_basis": lower.basis.orthonormalized(),
+		"hand_basis": hand.basis.orthonormalized(), "c": meta["c"], "points": points,
+		"hips": body.get_bone_global_pose(_bone(body, "hips")).origin,
+		"chest": body.get_bone_global_pose(_bone(body, "chest")).origin, "phase": phase, "drift": drift}
+
+
+static func _hand_fail(ctx: Dictionary, clip: String, phase: float, reason: String) -> void:
+	var failures: Array = ctx.get_or_add("fit_failures", [])
+	var prefix := "HAND_TARGET_UNFIT %s %s phase " % [clip, reason]
+	for failure: String in failures:
+		if failure.begins_with(prefix):
+			return
+	failures.append(prefix + "%.8f" % phase)
+
+
+## 최종 장을 굽기 전에 원본 몸으로 목표를 한 번 고른다. 옷도 같은 원본 자료를 쓴다.
+static func _prepare_hand_clip(ctx: Dictionary, clip: String) -> void:
+	var cache: Dictionary = ctx.get_or_add("hand_target_cache", {})
+	if cache.has(clip):
+		return
+	var specs: Array = LAYERS[clip].get("hand_targets", [])
+	if specs.size() != 1 or specs[0].get("side", "") != "R" or specs[0].get("anchor", "") != "hips":
+		cache[clip] = {"ok": false, "clipped": false, "reason": "invalid hand target declaration"}
+	else:
+		var spec: Dictionary = specs[0]
+		var meta := _hand_meta(ctx)
+		if not bool(meta["ok"]):
+			cache[clip] = meta
+		else:
+			var frames: Array = []
+			var phases: Array[float] = [float(spec["follow"]), (float(spec["follow"]) + float(spec["sag"])) * 0.5, float(spec["sag"])]
+			for key: Array in spec["weight"][1]:
+				if float(key[1]) > 0.0 and not phases.has(float(key[0])):
+					phases.append(float(key[0]))
+			for index in 24:
+				var phase := float(index) / 23.0
+				if _value(spec["weight"], TAU * phase) > 0.0 and not phases.has(phase):
+					phases.append(phase)
+			phases.sort()
+			for phase: float in phases:
+				_pose_at(ctx, "", 0.0, {})
+				apply_layer(ctx["body"], LAYERS[clip], phase, float(ctx.get("sink_scale", 1.0)))
+				var frame := _hand_frame(ctx, meta, phase, smoothstep(float(spec["follow"]), float(spec["sag"]), phase))
+				frame["weight"] = _value(spec["weight"], TAU * phase)
+				frames.append(frame)
+			cache[clip] = hand_select_target(frames, spec)
+	if not bool(cache[clip]["ok"]):
+		_hand_fail(ctx, clip, 0.0, String(cache[clip].get("reason", "hand preparation failed")))
+
+
+static func _hand_set_solution(body: Skeleton3D, meta: Dictionary, frame: Dictionary, solved: Dictionary) -> void:
+	var upper: int = meta["upper"]
+	var lower: int = meta["lower"]
+	var parent := body.get_bone_parent(upper)
+	var parent_basis := body.get_bone_global_pose(parent).basis.orthonormalized() if parent >= 0 else Basis()
+	var upper_basis: Basis = Basis(solved["upper_rotation"]) * (frame["upper_basis"] as Basis)
+	body.set_bone_pose_rotation(upper, (parent_basis.inverse() * upper_basis).get_rotation_quaternion())
+	var lower_basis: Basis = Basis(solved["lower_rotation"]) * Basis(solved["upper_rotation"]) * (frame["lower_basis"] as Basis)
+	var lower_parent := body.get_bone_global_pose(body.get_bone_parent(lower)).basis.orthonormalized()
+	body.set_bone_pose_rotation(lower, (lower_parent.inverse() * lower_basis).get_rotation_quaternion())
+
+
+static func _apply_hand_clip(ctx: Dictionary, clip: String, phase: float) -> void:
+	var spec: Dictionary = LAYERS[clip]["hand_targets"][0]
+	var plan: Dictionary = ctx["hand_target_cache"][clip]
+	var reports: Dictionary = ctx.get_or_add("hand_targets", {})
+	if not bool(plan["ok"]):
+		reports[clip] = {"ok": false, "clipped": bool(plan.get("clipped", false)), "reason": plan.get("reason", "no hand target"), "rejected": plan.get("rejected", {})}
+		_hand_fail(ctx, clip, phase, String(plan.get("reason", "no hand target")))
+		return
+	var weight := clampf(_value(spec["weight"], TAU * phase), 0.0, 1.0)
+	if weight <= 0.0:
+		reports[clip] = {"ok": true, "clipped": false, "weight": 0.0, "offset": plan["offset"]}
+		return
+	var meta: Dictionary = ctx["hand_reference"]
+	var amount := smoothstep(float(spec["follow"]), float(spec["sag"]), phase)
+	var frame := _hand_frame(ctx, meta, phase, amount)
+	var drift: Array = spec["sag_drift"]
+	var selected: Vector3 = frame["hips"] + (plan["offset"] as Vector3) + Vector3(drift[0], drift[1], drift[2]) * amount
+	var reference: Vector3 = frame["w"] + (frame["hand_basis"] as Basis) * (frame["c"] as Vector3)
+	var wanted := reference.lerp(selected, weight)
+	var control := wanted
+	var solved: Dictionary = {}
+	for correction in 2:
+		solved = hand_solve_reference(frame, control, spec)
+		if not bool(solved["ok"]):
+			reports[clip] = solved
+			_hand_fail(ctx, clip, phase, String(solved["reason"]))
+			return
+		var prediction := _hand_mean(_hand_points(frame, solved, "hand"))
+		if prediction.distance_to(wanted) <= 0.002:
+			break
+		control += wanted - prediction
+	_hand_set_solution(ctx["body"], meta, frame, solved)
+	var actual := _hand_frame(ctx, meta, phase, amount)
+	var identity := {"upper_rotation": Quaternion.IDENTITY, "lower_rotation": Quaternion.IDENTITY}
+	var measured := _hand_mean(_hand_points(actual, identity, "hand"))
+	var error := measured.distance_to(wanted)
+	var valid := error <= 0.01
+	if weight >= 0.999999:
+		var surface := hand_torso_surface(_hand_points(actual, identity, "torso"), actual["hips"], actual["chest"])
+		if not bool(surface["valid"]):
+			valid = false
+		else:
+			for point in _hand_points(actual, identity, "arm"):
+				var check := hand_surface_clearance(surface, point)
+				if not bool(check["valid"]) or bool(check["inside"]):
+					valid = false
+		if measured.y - (actual["hips"] as Vector3).y > 0.0:
+			valid = false
+		var gap := measured.distance_to(_hand_mean(_hand_points(actual, identity, "free")))
+		if not is_finite(gap) or gap < float(spec.get("minimum_gap", 0.25)):
+			valid = false
+	reports[clip] = {"ok": valid, "clipped": false, "weight": weight, "target": wanted, "selected_target": selected,
+		"measured": measured, "offset": plan["offset"], "error": error,
+		"error_from_pref": absf(measured.y - (actual["hips"] as Vector3).y - float(spec["preferred_y"])),
+		"bend_degrees": solved["bend_degrees"], "shoulder_degrees": solved["shoulder_degrees"]}
+	if not valid:
+		_hand_fail(ctx, clip, phase, "reskinned hand error or torso clearance")
+
+
+
 ## Hangs a layer on the body (after retarget), for progress u (0..1). The
 ## layers' sinks are metres for hips 1 m up; `sink_scale` is this body's hip
 ## height over that, so a shorter body is lowered as far in proportion.
@@ -2569,6 +3099,8 @@ static func _pose_at(ctx: Dictionary, clip: String, at: float, damp: Dictionary)
 ## Poses the body for `clip` of the motion set under `layer` ("" for none) at progress u (0..1).
 static func pose(ctx: Dictionary, clip: String, layer: String, u: float, report_clip: String = "") -> void:
 	var spec: Dictionary = LAYERS.get(layer, {})
+	if spec.has("hand_targets"):
+		_prepare_hand_clip(ctx, layer)
 	var at := u
 	if spec.has("warp"):
 		var warp: Array = spec["warp"]
@@ -2580,6 +3112,8 @@ static func pose(ctx: Dictionary, clip: String, layer: String, u: float, report_
 	var failures: Array[Dictionary] = apply_layer(ctx["body"], spec, u, float(ctx.get("sink_scale", 1.0)))
 	_record_stand_failures(ctx, layer if report_clip.is_empty() else report_clip, failures)
 	_apply_person_stride(ctx, layer)
+	if spec.has("hand_targets"):
+		_apply_hand_clip(ctx, layer, u)
 
 
 ## Rotation vectors on the shortest arc, so a loop's mean pose survives a
@@ -3765,7 +4299,7 @@ static func compact(assets: Dictionary, keep_full: Array = []) -> Dictionary:
 ## cannot read EXR; a compacted bake's bytes), mesh.res and clips.json into `dir`.
 static func save(assets: Dictionary, dir: String) -> void:
 	for failure: String in assets.get("fit_failures", []):
-		if failure.begins_with("KEY_EASE_UNKNOWN "):
+		if failure.begins_with("KEY_EASE_UNKNOWN ") or failure.begins_with("HAND_TARGET_"):
 			push_error("body_bake: refusing save: " + failure)
 			return
 	DirAccess.make_dir_recursive_absolute(dir)
