@@ -7,6 +7,15 @@ const CELL_SIZE := 128
 const MARGIN := 0.12 # Per edge.
 const CANVAS := Color("8a8270")
 const OUTLINE := Color("171c22")
+## A pale line just outside the dark one, so a dark thing still parts from the
+## pane's dark glass at 26 css (코디 2026-11-07 「어두운 바탕에서 읽히는지」); on a
+## light ground it is all but unseen and the dark line does that work.
+const RIM := Color("d6dde3")
+const RIM_ALPHA := 0.3
+## The camera is moved onto the drawing at most this many times, until it is
+## within this many pixels of filling the square (refit).
+const FIT_TRIES := 3
+const FIT_TOLERANCE := 2.0
 const BACKGROUNDS := [Color("3a3f45"), Color("d9dde0")]
 
 var _entries: Array[Dictionary] = []
@@ -121,14 +130,32 @@ func _bake_next() -> void:
 	view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	root.add_child(view)
 	view.add_child(stage)
-	if not _set_camera_and_lights(stage, view, float(entry["yaw"]), float(entry["pitch"]), float(entry["roll"]), clampf(float(entry["margin"]), 0.0, 0.4)):
+	var margin: float = clampf(float(entry["margin"]), 0.0, 0.4)
+	if not _set_camera_and_lights(stage, view, float(entry["yaw"]), float(entry["pitch"]), float(entry["roll"]), margin):
 		_skip(entry, "empty or non-finite mesh bounds", view)
 		return
-	# Wait for uploads, shader compilation and completed draws.
-	for _frame in range(4):
-		await process_frame
-		await RenderingServer.frame_post_draw
-	var image := view.get_texture().get_image()
+	var image: Image = await _draw(view)
+	# Every thing fills its square alike (코디 2026-11-07 「칸 채움 크기 맞추기」): the
+	# camera was framed on the box round the model's corners, which is wider than
+	# what is drawn, the more so turned. So the drawing itself is measured and the
+	# camera moved and zoomed onto it, a few times at most.
+	var camera: Camera3D = view.get_camera_3d()
+	for _try in range(FIT_TRIES):
+		if image == null or image.is_empty():
+			break
+		image.convert(Image.FORMAT_RGBA8)
+		var used: Rect2i = image.get_used_rect()
+		if not used.has_area():
+			break
+		var fit: Dictionary = refit(used, ICON_SIZE, margin)
+		if not bool(fit["off"]):
+			break
+		var per_pixel: float = camera.size / float(ICON_SIZE)
+		var shift: Vector2 = fit["shift"]
+		var axes: Basis = camera.transform.basis
+		camera.position += axes.x * (shift.x * per_pixel) - axes.y * (shift.y * per_pixel)
+		camera.size *= float(fit["scale"])
+		image = await _draw(view)
 	view.queue_free()
 	if image == null or image.is_empty():
 		_skip(entry, "viewport readback failed")
@@ -155,6 +182,28 @@ func _bake_next() -> void:
 	else:
 		entry["error"] = "one or more PNG writes failed"
 	call_deferred("_bake_next")
+
+
+## The view's picture once uploads, shader compilation and the draws are done.
+func _draw(view: SubViewport) -> Image:
+	for _frame in range(4):
+		await process_frame
+		await RenderingServer.frame_post_draw
+	return view.get_texture().get_image()
+
+
+## How far the camera is off a square filled as every other is: the drawn part
+## (`used`, pixels of a `size` square) should have its longer side at
+## size·(1 − 2·margin) and its middle at the square's middle. {"scale": the factor
+## for the camera's size, "shift": Vector2 pixels the camera moves (x right, y
+## down), "off": whether either is more than FIT_TOLERANCE pixels out}.
+static func refit(used: Rect2i, size: int, margin: float) -> Dictionary:
+	var side: float = float(maxi(used.size.x, used.size.y))
+	var target: float = float(size) * (1.0 - margin * 2.0)
+	var middle: Vector2 = Vector2(used.position) + Vector2(used.size) * 0.5
+	var shift: Vector2 = middle - Vector2(size, size) * 0.5
+	var off: bool = absf(side - target) > FIT_TOLERANCE or shift.length() > FIT_TOLERANCE
+	return {"scale": side / maxf(target, 1.0), "shift": shift, "off": off}
 
 
 func _skip(entry: Dictionary, reason: String, view: SubViewport = null) -> void:
@@ -371,29 +420,60 @@ func _resize_alpha(source: Image, size: int) -> Image:
 	return image
 
 
-func _make_muted(source: Image) -> Image:
+## The picture as the pane shows it: colour pressed to 0.75, a dark line one pixel
+## round the thing (half strength) and, one pixel further out, the pale RIM.
+## Each lies behind what is drawn there, so the thing's own edge stays as drawn.
+static func _make_muted(source: Image) -> Image:
 	var muted := source.duplicate() as Image
 	muted.adjust_bcs(1.0, 1.0, 0.75)
+	var width: int = muted.get_width()
+	var height: int = muted.get_height()
+	var own := PackedFloat32Array()
+	own.resize(width * height)
+	for y in height:
+		for x in width:
+			own[y * width + x] = muted.get_pixel(x, y).a
+	var near := _dilate(own, width, height)
+	var further := _dilate(near, width, height)
 	var result := muted.duplicate() as Image
-	for y in ICON_SIZE:
-		for x in ICON_SIZE:
+	for y in height:
+		for x in width:
+			var at: int = y * width + x
 			var pixel := muted.get_pixel(x, y)
-			var neighbor_alpha := pixel.a
-			for dy in range(-1, 2):
-				for dx in range(-1, 2):
-					var nx := x + dx
-					var ny := y + dy
-					if nx >= 0 and ny >= 0 and nx < ICON_SIZE and ny < ICON_SIZE:
-						neighbor_alpha = maxf(neighbor_alpha, muted.get_pixel(nx, ny).a)
-			var border_alpha := (neighbor_alpha - pixel.a) * 0.5
-			var behind := border_alpha * (1.0 - pixel.a)
-			var alpha := pixel.a + behind
+			var line := (near[at] - own[at]) * 0.5 * (1.0 - pixel.a)
+			var halo := maxf(further[at] - near[at], 0.0) * RIM_ALPHA * (1.0 - pixel.a - line)
+			var alpha := pixel.a + line + halo
 			if alpha > 0.0:
 				result.set_pixel(x, y, Color(
-					(pixel.r * pixel.a + OUTLINE.r * behind) / alpha,
-					(pixel.g * pixel.a + OUTLINE.g * behind) / alpha,
-					(pixel.b * pixel.a + OUTLINE.b * behind) / alpha, alpha))
+					(pixel.r * pixel.a + OUTLINE.r * line + RIM.r * halo) / alpha,
+					(pixel.g * pixel.a + OUTLINE.g * line + RIM.g * halo) / alpha,
+					(pixel.b * pixel.a + OUTLINE.b * line + RIM.b * halo) / alpha, alpha))
 	return result
+
+
+## Each value as the largest within one step round it (a 3×3 grey dilation).
+static func _dilate(values: PackedFloat32Array, width: int, height: int) -> PackedFloat32Array:
+	var across := PackedFloat32Array()
+	across.resize(values.size())
+	for y in height:
+		for x in width:
+			var best: float = values[y * width + x]
+			if x > 0:
+				best = maxf(best, values[y * width + x - 1])
+			if x < width - 1:
+				best = maxf(best, values[y * width + x + 1])
+			across[y * width + x] = best
+	var out := PackedFloat32Array()
+	out.resize(values.size())
+	for y in height:
+		for x in width:
+			var best: float = across[y * width + x]
+			if y > 0:
+				best = maxf(best, across[(y - 1) * width + x])
+			if y < height - 1:
+				best = maxf(best, across[(y + 1) * width + x])
+			out[y * width + x] = best
+	return out
 
 
 func _finish() -> void:
