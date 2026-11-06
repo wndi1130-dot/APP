@@ -71,6 +71,8 @@ var menu: Control
 var field: Node3D
 var _retiring_field: WeakRef
 var theme: Theme
+## A line under the menu's subtitle when the start could not read a save (left alone on disk).
+var save_note: String = ""
 
 
 func _ready() -> void:
@@ -82,17 +84,25 @@ func _ready() -> void:
 	preload("res://game/world/horde_warm.gd").start(self, PerfSwitch.read() if OS.has_feature("android") else {}) # 무리 첫 그림 데우기(메뉴 동안)
 	var board: Array = SliceFlow.start_board()
 	var field_read: Dictionary = {}
-	var slice_resume: Dictionary = SliceSave.pick(slice_save_path, train_save_path, board[1], field_save_path, field_read)
-	if not slice_resume.is_empty():
+	# One read of the train decides everything below (slice_save.gd boot_choice); the layer
+	# above reads no save of its own.
+	var choice: Dictionary = SliceSave.boot_choice(slice_save_path, train_save_path, board[1], field_save_path, field_read)
+	var kind := String(choice["kind"])
+	if kind == "blocked":
+		save_note = "열차 저장을 읽을 수 없어 이어 할 수 없어요. 저장 파일은 그대로 두었어요."
+		_show_menu()
+		return
+	if kind == "slice" or kind == "campaign":
+		var slice_resume: Dictionary = choice["resume"]
 		slice_resume["_field_read"] = field_read
 		_start_slice(slice_resume)
 		return
 	# A stop the app was shut in the middle of comes back where it was (user decision 296).
-	var resume: Dictionary = FieldSave.pick_start(field_save_path, train_save_path, field_read)
-	if bool(resume.get("slice", false)):
-		_show_menu()
-		return
-	if not resume.is_empty():
+	if kind == "field":
+		var resume: Dictionary = choice["resume"]
+		if bool(resume.get("slice", false)):
+			_show_menu()
+			return
 		_start(resume)
 		return
 	var auto: String = OS.get_environment("S2_AUTOSTART")
@@ -130,6 +140,12 @@ func _show_menu() -> void:
 	sub.text = "얼어붙은 급수탑 옆 작은 역. 열차는 승강장에 서 있다. 해 지기 전에 떠난다."
 	sub.add_theme_color_override("font_color", Color(0.7, 0.7, 0.68))
 	v.add_child(sub)
+	if save_note != "":
+		var note := Label.new()
+		note.name = "SaveNote"
+		note.text = save_note
+		note.add_theme_color_override("font_color", Color(0.7, 0.7, 0.68))
+		v.add_child(note)
 	# Start first, so it never falls off a short screen; the settings scroll.
 	var go := HBoxContainer.new()
 	go.add_theme_constant_override("separation", 12)
@@ -268,7 +284,7 @@ func _start_slice(resume: Dictionary = {}) -> void:
 	get_tree().change_scene_to_node.call_deferred(_make_slice(resume))
 
 
-## `resume` is the start options of a stop coming back (FieldSave.pick_start); none starts a new one.
+## `resume` is the start options of a stop coming back (FieldSave.pick_start_with); none starts a new one.
 func _start(resume: Dictionary = {}) -> void:
 	if menu != null:
 		menu.get_parent().queue_free()
