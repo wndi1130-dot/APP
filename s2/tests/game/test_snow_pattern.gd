@@ -1,10 +1,11 @@
 extends "res://addons/gut/test.gd"
-## PR2c: 눈 무늬·면적 보존·미분의 실행 경로와 검사기 자체를 소스에서 확인한다.
+## PR2c: 눈 무늬·덤불 크기 구멍·미분의 실행 경로와 검사기 자체를 소스에서 확인한다.
 ## 화면과 셰이더 컴파일은 부른 세션에서 별도로 확인한다.
 
 const SHADER_PATH := "res://game/world/world_vis.gdshader"
-const GRAIN_PATH := "res://fx/textures/ground_detail.png"
 const SENSITIVE_CALLS := ["fwidth", "dFdx", "dFdy", "texture"]
+const UNSUPPORTED_PREFIX := "검사기가 지원하지 않는 구문: "
+const UNSUPPORTED_SHADER_WORDS := ["discard", "while", "for", "do", "break", "continue", "inout", "switch"]
 const DECLARATION_TYPES := [
 	"bool", "int", "uint", "float", "vec2", "vec3", "vec4", "ivec2", "ivec3", "ivec4",
 	"bvec2", "bvec3", "bvec4", "mat2", "mat3", "mat4", "sampler2D", "sampler2DArray",
@@ -99,6 +100,23 @@ func _paired_tokens(tokens: Array[String]) -> Dictionary:
 	return {"pairs": pairs}
 
 
+func _unsupported_syntax(tokens: Array[String]) -> PackedStringArray:
+	var errors: PackedStringArray = []
+	for i in tokens.size():
+		var syntax := ""
+		if tokens[i] == "#":
+			var directive := tokens[i + 1] if i + 1 < tokens.size() else ""
+			if directive != "include":
+				syntax = "#" + directive
+		elif tokens[i] in UNSUPPORTED_SHADER_WORDS:
+			syntax = tokens[i]
+		if not syntax.is_empty():
+			var message := UNSUPPORTED_PREFIX + syntax
+			if not errors.has(message):
+				errors.append(message)
+	return errors
+
+
 func _included_source(source: String) -> Dictionary:
 	# 포함 파일도 같은 검사 대상이다. 중복 읽기와 순환을 막고 읽기 실패를 통과시키지 않는다.
 	var texts: PackedStringArray = []
@@ -112,6 +130,9 @@ func _included_source(source: String) -> Dictionary:
 			return {"error": "include가 64개를 넘음"}
 		var unit: Dictionary = queue[at]
 		var code := _strip_comments(String(unit["source"]))
+		var unsupported := _unsupported_syntax(_tokens(code))
+		if not unsupported.is_empty():
+			return {"unsupported": unsupported}
 		texts.append(code)
 		for found: RegExMatch in include_regex.search_all(code):
 			var path := found.get_string(1)
@@ -127,12 +148,12 @@ func _included_source(source: String) -> Dictionary:
 	return {"source": "\n".join(texts)}
 
 
-func _uniform_condition(tokens: Array[String], start: int, end: int, known: Dictionary, local: Dictionary) -> bool:
+func _uniform_condition(tokens: Array[String], start: int, end: int, known: Dictionary) -> bool:
 	for i in range(start, end):
 		var token := tokens[i]
 		if not token.is_valid_identifier() or (i > start and tokens[i - 1] == "."):
 			continue
-		if known.has(token) or local.has(token) or token in DECLARATION_TYPES or token in ["true", "false", "const"]:
+		if known.has(token) or token in DECLARATION_TYPES or token in ["true", "false", "const"]:
 			continue
 		if token in CONDITION_BUILTINS and i + 1 < end and tokens[i + 1] == "(":
 			continue
@@ -140,10 +161,10 @@ func _uniform_condition(tokens: Array[String], start: int, end: int, known: Dict
 	return true
 
 
-func _guarded(state: Dictionary, start: int, end: int, guards: Array[String], local: Dictionary, label: String) -> Array[String]:
+func _guarded(state: Dictionary, start: int, end: int, guards: Array[String], label: String) -> Array[String]:
 	var next: Array[String] = guards.duplicate()
 	var tokens: Array[String] = state["tokens"]
-	if not _uniform_condition(tokens, start, end, state["known"], local):
+	if not _uniform_condition(tokens, start, end, state["known"]):
 		next.append(label + "(" + " ".join(PackedStringArray(tokens.slice(start, end))) + ")")
 	return next
 
@@ -153,7 +174,7 @@ func _statement_end(tokens: Array[String], pairs: Dictionary, start: int, end: i
 		return end
 	if tokens[start] == "{":
 		return int(pairs[start]) + 1
-	if tokens[start] in ["if", "for", "while"] and start + 1 < end and tokens[start + 1] == "(":
+	if tokens[start] == "if" and start + 1 < end and tokens[start + 1] == "(":
 		var next := _statement_end(tokens, pairs, int(pairs[start + 1]) + 1, end, depth + 1)
 		if tokens[start] == "if" and next < end and tokens[next] == "else":
 			next = _statement_end(tokens, pairs, next + 1, end, depth + 1)
@@ -177,7 +198,7 @@ func _expression_start(tokens: Array[String], start: int, end: int) -> int:
 	return start + 1 if start < end and tokens[start] == "return" else start
 
 
-func _scan_expression(state: Dictionary, start: int, end: int, guards: Array[String], local: Dictionary, depth := 0) -> void:
+func _scan_expression(state: Dictionary, start: int, end: int, guards: Array[String], depth := 0) -> void:
 	if depth > 128:
 		state["errors"].append("식의 중첩이 너무 깊음")
 		return
@@ -201,22 +222,22 @@ func _scan_expression(state: Dictionary, start: int, end: int, guards: Array[Str
 			if ternary_depth == 0 and colon < 0:
 				colon = i
 		elif tokens[i] in [",", ";"] and ternary_depth == 0:
-			_scan_expression(state, start, i, guards, local, depth + 1)
-			_scan_expression(state, i + 1, end, guards, local, depth + 1)
+			_scan_expression(state, start, i, guards, depth + 1)
+			_scan_expression(state, i + 1, end, guards, depth + 1)
 			return
 		elif tokens[i] in ["&&", "||"] and split < 0 and question < 0:
 			split = i
 		i += 1
 	if question >= 0 and colon > question:
-		_scan_expression(state, start, question, guards, local, depth + 1)
-		var next := _guarded(state, _expression_start(tokens, start, question), question, guards, local, "?:")
-		_scan_expression(state, question + 1, colon, next, local, depth + 1)
-		_scan_expression(state, colon + 1, end, next, local, depth + 1)
+		_scan_expression(state, start, question, guards, depth + 1)
+		var next := _guarded(state, _expression_start(tokens, start, question), question, guards, "?:")
+		_scan_expression(state, question + 1, colon, next, depth + 1)
+		_scan_expression(state, colon + 1, end, next, depth + 1)
 		return
 	if split >= 0:
-		_scan_expression(state, start, split, guards, local, depth + 1)
-		var next := _guarded(state, _expression_start(tokens, start, split), split, guards, local, tokens[split])
-		_scan_expression(state, split + 1, end, next, local, depth + 1)
+		_scan_expression(state, start, split, guards, depth + 1)
+		var next := _guarded(state, _expression_start(tokens, start, split), split, guards, tokens[split])
+		_scan_expression(state, split + 1, end, next, depth + 1)
 		return
 	i = start
 	while i < end:
@@ -227,17 +248,17 @@ func _scan_expression(state: Dictionary, start: int, end: int, guards: Array[Str
 			elif state["functions"].has(tokens[i]):
 				state["calls"].append(call)
 			var close: int = pairs[i + 1]
-			_scan_expression(state, i + 2, close, guards, local, depth + 1)
+			_scan_expression(state, i + 2, close, guards, depth + 1)
 			i = close + 1
 		elif tokens[i] in ["(", "["]:
 			var close: int = pairs[i]
-			_scan_expression(state, i + 1, close, guards, local, depth + 1)
+			_scan_expression(state, i + 1, close, guards, depth + 1)
 			i = close + 1
 		else:
 			i += 1
 
 
-func _scan_statement(state: Dictionary, start: int, end: int, guards: Array[String], local: Dictionary, depth := 0) -> int:
+func _scan_statement(state: Dictionary, start: int, end: int, guards: Array[String], depth := 0) -> int:
 	var tokens: Array[String] = state["tokens"]
 	var pairs: Dictionary = state["pairs"]
 	if start >= end:
@@ -250,43 +271,27 @@ func _scan_statement(state: Dictionary, start: int, end: int, guards: Array[Stri
 		var block_end: int = pairs[start]
 		var i := start + 1
 		while i < block_end:
-			var following := _scan_statement(state, i, block_end, guards, local, depth + 1)
+			var following := _scan_statement(state, i, block_end, guards, depth + 1)
 			if following <= i:
 				state["errors"].append("문장 경계를 찾지 못함")
 				return block_end + 1
 			i = following
 		return block_end + 1
-	if token in ["if", "for", "while"]:
+	if token == "if":
 		if start + 1 >= end or tokens[start + 1] != "(":
 			state["errors"].append("제어문 조건 괄호가 없음")
 			return end
 		var condition_end: int = pairs[start + 1]
-		var loop_local: Dictionary = local.duplicate()
-		var counter := ""
-		if token == "for" and start + 5 < condition_end and tokens[start + 2] in ["int", "uint"] and tokens[start + 4] == "=":
-			var semicolon := tokens.find(";", start + 5)
-			if semicolon >= 0 and semicolon < condition_end and _uniform_condition(tokens, start + 5, semicolon, state["known"], local):
-				counter = tokens[start + 3]
-				loop_local[counter] = true
-		_scan_expression(state, start + 2, condition_end, guards, loop_local)
-		var next_guards := _guarded(state, start + 2, condition_end, guards, loop_local, token)
-		if not counter.is_empty():
-			var body_end := _statement_end(tokens, pairs, condition_end + 1, end)
-			for i in range(condition_end + 1, body_end - 1):
-				if tokens[i] == counter and (tokens[i + 1] in ["=", "+=", "-=", "*=", "/=", "++", "--"] or tokens[i - 1] in ["++", "--"]):
-					next_guards.append("for 본문이 반복 변수를 바꿈: " + counter)
-					break
-		var after_body := _scan_statement(state, condition_end + 1, end, next_guards, loop_local, depth + 1)
-		if token == "if" and after_body < end and tokens[after_body] == "else":
-			after_body = _scan_statement(state, after_body + 1, end, next_guards, local, depth + 1)
+		_scan_expression(state, start + 2, condition_end, guards)
+		var next_guards := _guarded(state, start + 2, condition_end, guards, token)
+		var after_body := _scan_statement(state, condition_end + 1, end, next_guards, depth + 1)
+		if after_body < end and tokens[after_body] == "else":
+			after_body = _scan_statement(state, after_body + 1, end, next_guards, depth + 1)
 		return after_body
-	if token in ["do", "switch"]:
-		state["errors"].append("지원하지 않는 제어문을 통과시키지 않음: " + token)
-		return _statement_end(tokens, pairs, start, end)
 	var statement_end := _statement_end(tokens, pairs, start, end)
-	_scan_expression(state, start, statement_end, guards, local)
-	if token in ["return", "discard", "break", "continue"] and not guards.is_empty():
-		state["escapes"].append({"at": start, "guards": guards.duplicate(), "kind": token})
+	_scan_expression(state, start, statement_end, guards)
+	if token == "return" and not guards.is_empty():
+		state["returns"].append({"at": start, "guards": guards.duplicate()})
 	return statement_end
 
 
@@ -294,6 +299,8 @@ func _derivative_errors(source: String) -> PackedStringArray:
 	# 호출 그래프의 고정점으로, 분기 안에서 부른 함수의 그 아래 호출까지 따라간다.
 	var errors: PackedStringArray = []
 	var included := _included_source(source)
+	if included.has("unsupported"):
+		return PackedStringArray(included["unsupported"])
 	if included.has("error"):
 		errors.append(String(included["error"]))
 		return errors
@@ -304,8 +311,13 @@ func _derivative_errors(source: String) -> PackedStringArray:
 		return errors
 	var pairs: Dictionary = paired["pairs"]
 	var known := {}
-	for i in range(tokens.size() - 2):
-		if tokens[i] in ["uniform", "const"]:
+	var brace_depth := 0
+	for i in tokens.size():
+		if tokens[i] == "{":
+			brace_depth += 1
+		elif tokens[i] == "}":
+			brace_depth -= 1
+		elif brace_depth == 0 and i + 2 < tokens.size() and tokens[i] in ["uniform", "const"]:
 			known[tokens[i + 2]] = true
 	var functions := {}
 	var at := 0
@@ -314,10 +326,17 @@ func _derivative_errors(source: String) -> PackedStringArray:
 			var close: int = pairs[at + 1]
 			if close + 1 < tokens.size() and tokens[close + 1] == "{":
 				var finish: int = pairs[close + 1]
-				functions[tokens[at]] = {"parameters": at + 2, "start": close + 1, "end": finish + 1}
+				if functions.has(tokens[at]):
+					var message := UNSUPPORTED_PREFIX + "같은 이름 함수 둘: " + tokens[at]
+					if not errors.has(message):
+						errors.append(message)
+				else:
+					functions[tokens[at]] = {"parameters": at + 2, "start": close + 1, "end": finish + 1}
 				at = finish + 1
 				continue
 		at += 1
+	if not errors.is_empty():
+		return errors
 	for name: String in functions:
 		var info: Dictionary = functions[name]
 		var visible: Dictionary = known.duplicate()
@@ -325,9 +344,9 @@ func _derivative_errors(source: String) -> PackedStringArray:
 		for i in range(int(info["parameters"]), int(info["end"]) - 2):
 			if tokens[i] in DECLARATION_TYPES and tokens[i + 1].is_valid_identifier() and tokens[i + 2] != "(" and tokens[i - 1] != "const":
 				visible.erase(tokens[i + 1])
-		info.merge({"tokens": tokens, "pairs": pairs, "known": visible, "functions": functions, "ops": [], "calls": [], "escapes": [], "errors": []})
+		info.merge({"tokens": tokens, "pairs": pairs, "known": visible, "functions": functions, "ops": [], "calls": [], "returns": [], "errors": []})
 		var initial_guards: Array[String] = []
-		_scan_statement(info, int(info["start"]), int(info["end"]), initial_guards, {})
+		_scan_statement(info, int(info["start"]), int(info["end"]), initial_guards)
 		errors.append_array(PackedStringArray(info["errors"]))
 		info["sensitive"] = not (info["ops"] as Array).is_empty()
 	for _iteration in functions.size():
@@ -351,9 +370,9 @@ func _derivative_errors(source: String) -> PackedStringArray:
 				sites.append(call)
 		for site: Dictionary in sites:
 			var guards: Array = (site["guards"] as Array).duplicate()
-			for escape: Dictionary in info["escapes"]:
-				if int(escape["at"]) < int(site["at"]) or escape["kind"] in ["break", "continue"]:
-					guards.append_array(escape["guards"])
+			for prior_return: Dictionary in info["returns"]:
+				if int(prior_return["at"]) < int(site["at"]):
+					guards.append_array(prior_return["guards"])
 			if not guards.is_empty():
 				var message := "%s → %s: %s" % [name, site["name"], "; ".join(PackedStringArray(guards))]
 				if not errors.has(message):
@@ -367,10 +386,14 @@ func _snow_contract_errors(source: String) -> PackedStringArray:
 	var code := _compact(_strip_comments(source))
 	var required := [
 		"boolis_ground=ground_kind>0.5;",
+		"floatsnow_fine=0.5;",
+		"vec2snow_fine_p=vec2(0.0);",
 		"vec2patch_p=snow_p*(is_ground?0.09:0.15);",
 		"vec2fine_p=is_ground?snow_p*1.1:patch_p*3.1;",
 		"vec2warp_p=is_ground?snow_p*0.125:patch_p*0.5;",
-		"floatsnow_patch=(is_ground?0.8:0.72)*fx_vnoise(patch_p+0.7*warp)+(is_ground?0.2:0.28)*fx_vnoise(fine_p+1.4*warp+vec2(5.3,11.9));",
+		"snow_fine_p=fine_p+1.4*warp+vec2(5.3,11.9);",
+		"snow_fine=fx_vnoise(snow_fine_p);",
+		"floatsnow_patch=(is_ground?0.8:0.72)*fx_vnoise(patch_p+0.7*warp)+(is_ground?0.2:0.28)*snow_fine;",
 		"floatsnow_blend=smoothstep(0.05,0.95,local_snow);",
 		"floatsnow_edge=snow_patch-(1.0-snow_blend);",
 		"floatground_w=max(1.25*fwidth(snow_edge),0.002);",
@@ -406,6 +429,48 @@ func _grass_order_errors(source: String) -> PackedStringArray:
 		if at < 0 or at <= previous or code.count(expression) != 1:
 			errors.append("풀 구멍 순서·횟수 오류: " + expression)
 		previous = at
+	return errors
+
+
+func _single_assignment_errors(source: String) -> PackedStringArray:
+	# 이 세 값은 선언과 최종 소비 두 자리만 허용한다. 별도 호출에 넘기는 것도 거절한다.
+	var errors: PackedStringArray = []
+	var tokens := _tokens(_strip_comments(source))
+	var paired := _paired_tokens(tokens)
+	if paired.has("error"):
+		errors.append(String(paired["error"]))
+		return errors
+	var pairs: Dictionary = paired["pairs"]
+	var opening := -1
+	for i in range(tokens.size() - 2):
+		if tokens[i] == "void" and tokens[i + 1] == "fragment" and tokens[i + 2] == "(":
+			var after_parameters := int(pairs[i + 2]) + 1
+			if after_parameters < tokens.size() and tokens[after_parameters] == "{":
+				opening = after_parameters
+			break
+	if opening < 0:
+		errors.append("단일 대입 검사: fragment 본문이 없음")
+		return errors
+	var closing: int = pairs[opening]
+	for name: String in ["prop_cover", "ground_cover", "grass_cut"]:
+		var uses: Array[int] = []
+		for i in range(opening + 1, closing):
+			if tokens[i] == name:
+				uses.append(i)
+		if uses.size() != 2:
+			errors.append("단일 선언·최종 사용 횟수 오류: " + name)
+			continue
+		var writes := 0
+		for at: int in uses:
+			if tokens[at + 1] in ["=", "+=", "-=", "*=", "/=", "++", "--"] or tokens[at - 1] in ["++", "--"]:
+				writes += 1
+		if tokens[uses[0] - 1] != "float" or tokens[uses[0] + 1] != "=" or writes != 1:
+			errors.append("선언 뒤 덮어쓰기 또는 선언 전 사용: " + name)
+	var body := "".join(PackedStringArray(tokens.slice(opening + 1, closing)))
+	if not body.contains("cover=is_ground?0.97*ground_cover:prop_cover;"):
+		errors.append("두 눈 덮임 값을 최종 cover에서 사용하지 않음")
+	if not body.contains("floatgrass_holes=grass_share*thin_snow*grass_cut;"):
+		errors.append("덤불 마스크를 grass_holes에서 사용하지 않음")
 	return errors
 
 
@@ -462,10 +527,11 @@ func test_patch_fine_and_warp_scales_are_independent() -> void:
 
 
 func test_fine_noise_has_one_fifth_of_the_patch_weight() -> void:
-	# 6378c2d8에서는 실패 예상: 소품의 원래 무게 0.72/0.28을 복원하지 않는다.
+	# 35c73dc8에서는 실패 예상: 잔 결 호출을 구멍과 공유하는 지역 값이 없다.
 	var snow := _compact(_snow_code())
 	assert_true(snow.contains("floatsnow_patch=(is_ground?0.8:0.72)*fx_vnoise(patch_p+"))
-	assert_true(snow.contains("+(is_ground?0.2:0.28)*fx_vnoise(fine_p+"))
+	assert_true(snow.contains("+(is_ground?0.2:0.28)*snow_fine;"))
+	assert_eq(snow.count("snow_fine=fx_vnoise(snow_fine_p);"), 1)
 
 
 func test_edge_width_tracks_the_continuous_noise_minus_threshold() -> void:
@@ -553,11 +619,12 @@ func test_fragment_receives_grass_without_recomputing_the_ground() -> void:
 
 
 func test_grass_grain_edge_uses_a_derivative_outside_branches() -> void:
-	# 6378c2d8에서는 실패 예상: 구멍 문턱 0.65가 고정되어 2.6 m 반복이 남는다.
+	# 35c73dc8에서는 실패 예상: 사진의 높은 알파가 구멍 본체이고 잔 결의 낮은 꼬리를 쓰지 않는다.
 	var fragment := _block(_code(), "void fragment() {")
 	var code := _compact(fragment)
-	assert_true(code.contains("floatgrass_threshold=0.65+clamp((wander-1.0)*(0.06/0.45),-0.06,0.06);"))
-	assert_true(code.contains("floatgrass_edge=grain.a-grass_threshold;"), "기존 사진의 잔 채널만 재사용")
+	assert_true(code.contains("floatgrass_threshold=0.30+clamp((wander-1.0)*(0.02/0.45),-0.02,0.02);"))
+	assert_true(code.contains("floatgrass_cell_edge=0.13-length(fract(snow_fine_p+vec2(0.5))-vec2(0.5));"))
+	assert_true(code.contains("floatgrass_edge=min(grass_threshold-snow_fine,grass_cell_edge)+(grain.a-0.5)*0.01;"), "낮은 꼬리·크기 제한·테두리 결을 함께 미분")
 	assert_true(code.contains("floatgrass_w=max(1.25*fwidth(grass_edge),0.002);"))
 	var width_at := fragment.find("fwidth(grass_edge)")
 	assert_gte(width_at, 0)
@@ -637,55 +704,38 @@ func test_grass_holes_add_no_noise_or_texture_reads() -> void:
 		assert_false(holes.contains(word), "구멍은 이미 읽고 계산한 값만 사용: " + word)
 
 
-func test_far_hole_areas_match_the_original_png_alpha() -> void:
-	# 6378c2d8에서는 실패 예상: 원본 알파 면적 표와 원거리 면적 보존이 없다.
-	var code := _compact(_code())
-	var table := _match(code, "constfloatGRASS_HOLE_AREAS\\[13\\]=float\\[13\\]\\(([^)]+)\\);")
-	if table == null:
-		return
-	var values := table.get_string(1).split(",", false)
-	assert_eq(values.size(), 13)
-	if values.size() != 13:
-		return
-	var image := Image.new()
-	assert_eq(image.load_png_from_buffer(FileAccess.get_file_as_bytes(GRAIN_PATH)), OK)
-	assert_eq(image.get_size(), Vector2i(512, 512))
-	assert_eq(image.get_format(), Image.FORMAT_RGBA8)
-	if image.get_format() != Image.FORMAT_RGBA8 or image.is_empty():
-		return
-	var histogram := PackedInt32Array()
-	histogram.resize(256)
-	var bytes := image.get_data()
-	for i in range(3, bytes.size(), 4):
-		histogram[bytes[i]] += 1
-	var total := float(image.get_width() * image.get_height())
-	var previous := 1.0
-	for i in 13:
-		var above := 0
-		# alpha / 255 > (59 + i) / 100: 문턱과 같은 화소는 세지 않는다.
-		var first := floori(float((59 + i) * 255) / 100.0) + 1
-		for alpha in range(first, 256):
-			above += histogram[alpha]
-		var area := String(values[i]).to_float()
-		assert_almost_eq(area, float(above) / total, 0.0000001, "알파 문턱 %.2f" % (0.59 + 0.01 * i))
-		assert_lte(area, previous, "문턱이 높을수록 구멍 면적 감소")
-		previous = area
+func test_tufts_reuse_the_fine_noise_sample_and_its_position() -> void:
+	# 35c73dc8에서는 실패 예상: 눈 잔 결 값·좌표를 눈 블록 밖으로 넘기지 않는다.
+	var fragment := _block(_code(), "void fragment() {")
+	var snow := _compact(_snow_code())
+	var gate_at := fragment.find("if (fx_snow > 0.01) {")
+	var value_at := fragment.find("float snow_fine = 0.5;")
+	var position_at := fragment.find("vec2 snow_fine_p = vec2(0.0);")
+	assert_gte(value_at, 0)
+	assert_gte(position_at, 0)
+	assert_lt(value_at, gate_at, "눈 없을 때 중립값")
+	assert_lt(position_at, gate_at)
+	assert_true(snow.contains("snow_fine_p=fine_p+1.4*warp+vec2(5.3,11.9);"))
+	assert_eq(snow.count("snow_fine=fx_vnoise(snow_fine_p);"), 1)
+	assert_eq(snow.count("fx_vnoise("), 5, "덤불을 위해 노이즈를 다시 부르지 않음")
 
 
-func test_far_holes_blend_to_measured_area_at_the_measured_pixel_size() -> void:
-	# 6378c2d8에서는 실패 예상: 밉에서 평균 알파가 문턱 밑으로 가면 구멍 면적이 0이 된다.
+func test_tufts_replace_the_area_table_and_only_fade_below_two_pixels() -> void:
+	# 35c73dc8에서는 실패 예상: 놀이 줌에서 구멍을 전부 평균 면적으로 바꾸는 표가 남아 있다.
 	var code := _compact(_code())
-	assert_true(code.contains("constfloatGRASS_HOLE_FADE_START=0.0025390625;"), "반 텍셀: 가장 작은 구멍을 두 화소로 표현")
-	assert_true(code.contains("constfloatGRASS_HOLE_FADE_END=0.01015625;"), "두 텍셀: 면적 가중 중앙 구멍 크기")
+	for obsolete: String in ["GRASS_HOLE_AREAS", "grass_hole_area(", "GRASS_HOLE_FADE_", "grass_mean", "grass_far"]:
+		assert_false(code.contains(obsolete), "밀리미터 사진 구멍용 경로 제거: " + obsolete)
 	assert_true(code.contains("floatgrass_px=max(length(ground_dx),length(ground_dy));"))
-	assert_true(code.contains("floatgrass_far=smoothstep(GRASS_HOLE_FADE_START,GRASS_HOLE_FADE_END,grass_px);"))
-	assert_true(code.contains("floatgrass_mean=grass_hole_area(grass_threshold);"))
-	assert_true(code.contains("floatgrass_cut=mix(smoothstep(-grass_w,grass_w,grass_edge),grass_mean,grass_far);"))
-	var area := _compact(_block(_code(), "float grass_hole_area("))
-	assert_true(area.contains("clamp((threshold-0.59)*100.0,0.0,12.0)"))
-	assert_true(area.contains("mix(GRASS_HOLE_AREAS[lower],GRASS_HOLE_AREAS[min(lower+1,12)],fract(index))"))
-	for word: String in ["texture", "fx_vnoise(", "fx_fbm2("]:
-		assert_false(area.contains(word), "면적 표는 추가 읽기 없이 보간: " + word)
+	assert_true(code.contains("floatgrass_resolve=1.0-smoothstep(0.05,0.1,grass_px);"), "10 cm 덤불이 2→1 화소가 될 때만 옅게")
+	assert_true(code.contains("floatgrass_cut=smoothstep(-grass_w,grass_w,grass_edge)*grass_resolve;"))
+	var pitch := sin(deg_to_rad(35.0))
+	for height: float in [780.0, 1080.0]:
+		var play_pixel := 20.0 / height / pitch
+		var far_pixel := 36.0 / height / pitch
+		assert_gt(0.10 / play_pixel, 2.0, "기본 줌의 작은 덤불도 두 화소 이상")
+		assert_eq(1.0 - smoothstep(0.05, 0.1, play_pixel), 1.0, "기본 줌에서 면적 평균·소실 없음")
+		assert_lt(0.10 / far_pixel, 2.0, "가장 먼 줌에서는 작은 덤불이 두 화소 미만")
+		assert_between(1.0 - smoothstep(0.05, 0.1, far_pixel), 0.0, 1.0)
 
 
 func test_indoor_finish_clears_the_replaced_ground_grass() -> void:
@@ -763,16 +813,9 @@ func test_control_checker_follows_nested_helper_calls_and_else_paths() -> void:
 	assert_gt(_derivative_errors(in_else).size(), 0)
 
 
-func test_control_checker_handles_loops_and_unbraced_statements() -> void:
-	# 검사기 시험: 상수 for는 허용하고 화소별 for/while·중괄호 없는 if는 거부한다.
-	var prefix := "varying float sky; void fragment() { "
-	assert_eq(_derivative_errors(prefix + "for (int i = 0; i < 3; i++) { float x = fwidth(sky); } }").size(), 0)
-	for statement: String in [
-		"for (int i = 0; i < int(sky); i++) { float x = fwidth(sky); }",
-		"while (sky > 0.5) { float x = fwidth(sky); }",
-		"if (sky > 0.5) fwidth(sky);",
-	]:
-		assert_gt(_derivative_errors(prefix + statement + " }").size(), 0, statement)
+func test_control_checker_handles_unbraced_if_statements() -> void:
+	var source := "varying float sky; void fragment() { if (sky > 0.5) fwidth(sky); }"
+	assert_gt(_derivative_errors(source).size(), 0)
 
 
 func test_control_checker_handles_conditional_expressions_and_early_exit() -> void:
@@ -803,9 +846,66 @@ func test_grass_order_checker_rejects_both_reordered_steps() -> void:
 	assert_gt(_grass_order_errors(changed).size(), 0)
 
 
-func test_control_checker_rejects_shadowed_uniforms_and_changed_loop_counters() -> void:
-	# 검사기 시험: 같은 이름의 인자는 uniform이 아니며, 본문이 바꾼 반복 변수도 상수가 아니다.
+func test_control_checker_rejects_shadowed_uniform_parameters() -> void:
+	# 검사기 시험: 같은 이름의 함수 인자는 전역 uniform이 아니다.
 	var shadow := "uniform float amount; varying float sky; float helper(float amount) { if (amount > 0.5) { return fwidth(sky); } return 0.0; } void fragment() { float x = helper(sky); }"
 	assert_gt(_derivative_errors(shadow).size(), 0)
-	var loop := "varying float sky; void fragment() { for (int i = 0; i < 3; i++) { float x = fwidth(sky); i = int(sky); } }"
-	assert_gt(_derivative_errors(loop).size(), 0)
+
+
+func test_control_checker_rejects_each_unsupported_syntax() -> void:
+	# 35c73dc8 검사기에서는 실패 예상: 지원하지 않을 구문도 일부 분석해 통과시킨다.
+	var cases := {
+		"#define": "#define VALUE 1.0\nvoid fragment() {}",
+		"#if": "#if 1\nvoid fragment() {}\n#endif",
+		"#ifdef": "#ifdef VALUE\nvoid fragment() {}\n#endif",
+		"#ifndef": "#ifndef VALUE\nvoid fragment() {}\n#endif",
+		"#pragma": "#pragma unknown\nvoid fragment() {}",
+		"discard": "void fragment() { discard; }",
+		"while": "void fragment() { while (false) {} }",
+		"for": "void fragment() { for (int i = 0; i < 1; i++) {} }",
+		"do": "void fragment() { do {} while (false); }",
+		"break": "void fragment() { for (int i = 0; i < 1; i++) { break; } }",
+		"continue": "void fragment() { for (int i = 0; i < 1; i++) { continue; } }",
+		"inout": "void helper(inout float x) {} void fragment() { float x = 0.0; helper(x); }",
+	}
+	for syntax: String in cases:
+		var errors := _derivative_errors(String(cases[syntax]))
+		assert_true(errors.has(UNSUPPORTED_PREFIX + syntax), syntax)
+		assert_eq(errors.count(UNSUPPORTED_PREFIX + syntax), 1, "구문마다 진단 한 줄: " + syntax)
+
+
+func test_control_checker_rejects_duplicate_function_names() -> void:
+	# 35c73dc8 검사기에서는 실패 예상: 같은 이름 함수의 뒤 정의로 앞 정의를 덮어쓴다.
+	var source := "float helper(float x) { return x; } float helper(vec2 x) { return x.x; } void fragment() {}"
+	assert_true(_derivative_errors(source).has(UNSUPPORTED_PREFIX + "같은 이름 함수 둘: helper"))
+
+
+func test_local_const_does_not_make_a_varying_uniform_in_another_function() -> void:
+	# 35c73dc8 검사기에서는 실패 예상: 다른 함수의 지역 const가 전역 허용 이름에 섞인다.
+	var source := "varying float sky; float helper() { const float sky = 1.0; return sky; } void fragment() { if (sky > 0.5) { float x = fwidth(sky); } }"
+	assert_gt(_derivative_errors(source).size(), 0)
+
+
+func test_unsupported_words_in_comments_are_ignored() -> void:
+	var source := "// #define for while discard\n/* #if #ifdef do break continue inout */\nvoid fragment() {}"
+	assert_eq(_derivative_errors(source).size(), 0)
+
+
+func test_cover_values_and_tuft_mask_are_declared_once_and_consumed() -> void:
+	var errors := _single_assignment_errors(_code())
+	assert_eq(errors.size(), 0, "\n".join(errors))
+
+
+func test_single_assignment_checker_rejects_cover_and_mask_overwrites() -> void:
+	# 검사기 시험: 정상 식이 남아 있어도 실제 소비 직전 덮어쓰면 실패해야 한다.
+	var source := _code()
+	assert_eq(_single_assignment_errors(source).size(), 0)
+	for name: String in ["prop_cover", "ground_cover"]:
+		var before_use := "cover = is_ground ? 0.97 * ground_cover : prop_cover;"
+		var changed := source.replace(before_use, name + " = 0.0;\n" + before_use)
+		assert_ne(changed, source)
+		assert_gt(_single_assignment_errors(changed).size(), 0, name)
+	var before_holes := "float grass_holes ="
+	var changed := source.replace(before_holes, "grass_cut = 0.0;\n" + before_holes)
+	assert_ne(changed, source)
+	assert_gt(_single_assignment_errors(changed).size(), 0)

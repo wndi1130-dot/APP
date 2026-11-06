@@ -93,28 +93,6 @@ const vec3 GRAVEL = vec3(0.55, 0.52, 0.47);
 // at the dry grass's lightness (linear 0.215 to its 0.22).
 const vec3 LATE_GREEN = vec3(0.46, 0.52, 0.40);
 
-// 2026-11-07: ground_detail.png, RGBA8 512x512, alpha / 255 > threshold.
-// Pillow + NumPy counted all 262144 source texels at thresholds 0.59..0.71, step 0.01.
-// PNG SHA-256: a6efa603d8ad6f957e8360521c0dd43edbd42b03a05b34da83b606c200f78838.
-// Linear interpolation's maximum area error against the 8-bit histogram is 0.006608.
-const float GRASS_HOLE_AREAS[13] = float[13](
-	0.286319733, 0.264266968, 0.249614716, 0.229896545, 0.217304230,
-	0.199253082, 0.188282013, 0.171867371, 0.161499023, 0.147472382,
-	0.137924194, 0.125110626, 0.113395691
-);
-// The 2.6 m tile's texel is 0.005078125 m. Horizontal/vertical above-threshold
-// runs have median 1 texel; the area-weighted median at 0.59/0.65 is 2 texels.
-// Start at half a texel (two pixels per smallest hole), finish at 2 texels
-// (the area-weighted median hole fits within one pixel), before mips erase it.
-const float GRASS_HOLE_FADE_START = 0.0025390625;
-const float GRASS_HOLE_FADE_END = 0.01015625;
-
-float grass_hole_area(float threshold) {
-	float index = clamp((threshold - 0.59) * 100.0, 0.0, 12.0);
-	int lower = int(floor(index));
-	return mix(GRASS_HOLE_AREAS[lower], GRASS_HOLE_AREAS[min(lower + 1, 12)], fract(index));
-}
-
 // Decision 496: metres per layer; the K1 row is road, patch, pavement, grass.
 // Later bands add rows here. Until then every band uses the K1 materials.
 // The two asphalt photos hold their pattern three times over each way, so one
@@ -161,6 +139,10 @@ float band(float d, float w, float aa) {
 // px = abs(dx) + abs(dy), in metres/pixel: 0.31 * frequency * sum(px) approximates
 // the old fwidth(vein), without differentiating inside a material branch.
 // Keep the original value-space half widths (road 0.012, screed 0.01).
+// 카메라 35도 기울기라 화면 미분의 비등방 비 r = 1/sin(35도) = 1.74345.
+// CAM_YAW 45도, 같은 평균 기울기 크기(sqrt(2)*0.31), 1e-4 바닥 제외:
+// 방향에 따른 근사/실제 폭 비는 (1+r)/sqrt(1+r*r)..(1+r) = 1.365..2.744.
+// 이는 화면 미분 방향의 차이이며, 개별 노이즈 기울기가 0인 점의 절대 상한은 아니다.
 float noise_edge_width(vec2 px, float frequency) {
 	return 0.31 * frequency * (px.x + px.y) + 1e-4;
 }
@@ -747,6 +729,8 @@ void fragment() {
 	float chroma = max(base.r, max(base.g, base.b)) - min(base.r, min(base.g, base.b));
 	float cover = 0.0;
 	float local_snow = 0.0;
+	float snow_fine = 0.5;
+	vec2 snow_fine_p = vec2(0.0);
 	bool is_ground = ground_kind > 0.5;
 	// Ground: 11 m drifts, 0.9 m detail, 8 m warp. Props keep the 921e3efd pattern.
 	// Select coordinates/weights before the shared noise calls; no per-kind derivative branch.
@@ -758,7 +742,9 @@ void fragment() {
 		vec2 warp = vec2(fx_vnoise(warp_p + vec2(17.1, 9.2)),
 			fx_vnoise(warp_p + vec2(3.7, 23.6))) - vec2(0.5);
 		// Fine detail breaks the broad drifts' edges without setting their size.
-		float snow_patch = (is_ground ? 0.8 : 0.72) * fx_vnoise(patch_p + 0.7 * warp) + (is_ground ? 0.2 : 0.28) * fx_vnoise(fine_p + 1.4 * warp + vec2(5.3, 11.9));
+		snow_fine_p = fine_p + 1.4 * warp + vec2(5.3, 11.9);
+		snow_fine = fx_vnoise(snow_fine_p);
+		float snow_patch = (is_ground ? 0.8 : 0.72) * fx_vnoise(patch_p + 0.7 * warp) + (is_ground ? 0.2 : 0.28) * snow_fine;
 		// This map's spread of the stop's snow: a whiter or more melted map (snow_shift) and,
 		// across it, wide fields where the snow lies whole or has gone (snow_melt). One more
 		// noise a ground pixel, at the melt field's low frequency, and only on a map that sets
@@ -787,14 +773,26 @@ void fragment() {
 	vec2 ground_dy = dFdy(world_pos.xz);
 	float ground_k = smoothstep(0.6, 0.9, up) * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
 	float wander = 0.55 + 0.9 * fx_vnoise(world_pos.xz * 0.13 + 7.0);
-	// Use the existing 7.7 m wander, not the near-2.6 m drift, to vary the grain threshold.
-	float grass_threshold = 0.65 + clamp((wander - 1.0) * (0.06 / 0.45), -0.06, 0.06);
-	float grass_edge = grain.a - grass_threshold;
+	// 덤불 위치는 이미 읽은 잔 결의 낮은 꼬리, 크기는 같은 비틀린 좌표의 반경으로 제한.
+	// Python float32로 기존 hash/noise 식을 그대로 계산한 2026-11-07 표본(렌더 아님):
+	// 8m 정사각형 16개, 5mm 간격(40960000점), phase (0,0)/(37,113)/(211,401)/(479,73),
+	// 원점 (0,0)/(16,8)/(32,24)/(48,40). PNG alpha는 bilinear repeat, 8방향 연결 성분.
+	// 지름은 등가원 2*sqrt(area/pi), 표본 테두리에 닿은 성분만 지름 집계에서 제외.
+	// grass_edge>0 면적 1.652014%, 중앙 지름 0.2317m, 구멍 면적의 99.8488%가 0.10..0.30m.
+	// 잔 톱니를 빼고 본체만 재면 지름 P10/P50/P90 = 0.2193/0.2343/0.2483m.
+	// local_snow 0.4..0.5, grass_share=1, pile/bank/tracks=0의 기본 20m 줌 CPU 표본:
+	// 512x512점/phase, 중심 (64,64), PNG trilinear mip + 2x2 fwidth 모사에서 마스크 1.743%(H780),
+	// 1.771%(H1080). 기존 눈 덮임을 실제 줄이는 몫은 각각 0.102..0.446, 0.099..0.343 %p.
+	float grass_threshold = 0.30 + clamp((wander - 1.0) * (0.02 / 0.45), -0.02, 0.02);
+	float grass_cell_edge = 0.13 - length(fract(snow_fine_p + vec2(0.5)) - vec2(0.5));
+	float grass_edge = min(grass_threshold - snow_fine, grass_cell_edge) + (grain.a - 0.5) * 0.01;
 	float grass_w = max(1.25 * fwidth(grass_edge), 0.002);
 	float grass_px = max(length(ground_dx), length(ground_dy));
-	float grass_far = smoothstep(GRASS_HOLE_FADE_START, GRASS_HOLE_FADE_END, grass_px);
-	float grass_mean = grass_hole_area(grass_threshold);
-	float grass_cut = mix(smoothstep(-grass_w, grass_w, grass_edge), grass_mean, grass_far);
+	// field_hud._zoom은 14..36m, CAM_PITCH=35도: 먼 36m에서 10..30cm 덤불의 세로 크기는
+	// H780: 1.243..3.728px, H1080: 1.721..5.162px(가로는 각각 2.167..6.5, 3..9px).
+	// 작은 10cm 덤불이 2→1px가 되는 0.05..0.10m/px에서만 옅게. 기본 20m는 두 화면 모두 1.
+	float grass_resolve = 1.0 - smoothstep(0.05, 0.1, grass_px);
+	float grass_cut = smoothstep(-grass_w, grass_w, grass_edge) * grass_resolve;
 	// Keep the kind's dark bare look in snow gaps, even in deep winter.
 	float bare_k = sky * smoothstep(0.6, 0.9, up);
 	int kind = int(ground_kind + 0.5) - 1;
