@@ -176,7 +176,9 @@ func test_fail_a_broken_train_slot_leaves_its_files_and_says_so() -> void:
 	var boot: Probe = _boot()
 	assert_null(boot.field, "no stop is started")
 	assert_not_null(boot.menu)
-	assert_not_null(boot.menu.find_child("SaveNote", true, false), "the menu says why")
+	# With no menu up the line above already fails; the file checks below still run.
+	if boot.menu != null:
+		assert_not_null(boot.menu.find_child("SaveNote", true, false), "the menu says why")
 	assert_eq(FileAccess.get_file_as_string(train_at), train_text, "the train slot is untouched")
 	assert_eq(FileAccess.get_file_as_string(field_at), field_text, "the field slot is untouched")
 	_handle_block_warnings()
