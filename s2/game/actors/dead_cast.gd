@@ -132,8 +132,10 @@ static func look_code_for(seed: int, id: int) -> int:
 	return 0 if outfit == 0 else outfit * 8 + variant
 
 
-static func look_code_migrated(seed: int, id: int, name: String) -> int:
-	return 0 if name != "" else look_code_for(seed, id)
+## Origin is independent of the current state: a risen person can already wander.
+## The caller builds the restored people's id set once; this decision is pure.
+static func look_code_migrated(seed: int, id: int, name: String, person_ids: Dictionary = {}) -> int:
+	return 0 if name != "" or person_ids.has(id) else look_code_for(seed, id)
 
 
 ## Shell b uses dirt 0..7, blood 0..7 and a stable pattern seed 0..7. Strengths

@@ -8,6 +8,8 @@ const FieldGame = preload("res://game/field_game.gd")
 const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
 const Wear = preload("res://game/sim/wear.gd")
 var api: GDScript = DeadCast
+var body_api: GDScript = DeadBody
+var saved_rendering_method: Variant
 var game
 var dead: ObservedLooks
 var camera: Camera3D
@@ -43,8 +45,29 @@ class ObservedLooks extends Zombies:
 
 
 func before_each() -> void:
+	saved_rendering_method = body_api.get("_test_rendering_method")
 	for method: String in ["look_code_for", "look_code_migrated", "active_look_code", "pack_still", "unpack_still"]:
 		assert_true(api.has_method(method), "required DeadCast method: " + method)
+
+
+func after_each() -> void:
+	if saved_rendering_method is String:
+		body_api.set("_test_rendering_method", saved_rendering_method)
+		assert_eq(body_api.get("_test_rendering_method"), saved_rendering_method, "restore the renderer seam after every test")
+
+
+func _force_rendering_method(method: String) -> bool:
+	assert_true(saved_rendering_method is String, "required renderer-method test seam")
+	if not saved_rendering_method is String:
+		return false
+	body_api.set("_test_rendering_method", method)
+	return true
+
+
+func _migrate_rows() -> void:
+	assert_true(dead.has_method("migrate_look_codes"), "required post-restore migration method")
+	if dead.has_method("migrate_look_codes"):
+		dead.call("migrate_look_codes")
 
 
 func _field() -> void:
@@ -119,12 +142,67 @@ func test_t5_spawn_keeps_three_game_rng_draws_and_uses_a_private_look_seed() -> 
 	assert_gt(int(z.get("look_code", -1)), 7, "spawn chooses an active common outfit")
 
 
+func test_named_direct_spawn_keeps_zero_and_the_same_three_game_rng_draws() -> void:
+	_field()
+	for kind: String in ["dead", "fresh", "frozen"]:
+		for who_name: String in ["동료", "약탈자", ""]:
+			var expected := RandomNumberGenerator.new()
+			expected.seed = game.rng.seed
+			expected.state = game.rng.state
+			var angle := expected.randf() * TAU
+			var phase := expected.randf()
+			var stander := expected.randf() < 0.55
+			var z: Dictionary = dead.spawn(kind, origin, {"name": who_name})
+			var expected_code := 0 if who_name != "" else int(api.call("look_code_for", 11, int(z["id"])))
+			assert_eq(int(z.get("look_code", -1)), expected_code, "named direct spawn must keep code zero")
+			assert_eq(z["angle"], angle)
+			assert_eq(z["phase"], phase)
+			assert_eq(z["stander"], stander)
+			assert_eq(game.rng.state, expected.state, "naming a zombie does not change simulation dice")
+
+
+func test_missing_look_read_waits_for_restored_person_links_before_persisting() -> void:
+	_field()
+	var z: Dictionary = dead.spawn("fresh", origin)
+	z["state"] = "wander"  # it has already stood up; state is not evidence of origin
+	z.erase("look_code")
+	var state: int = game.rng.state
+	assert_eq(int(dead.call("look_code_of", z)), 0, "a draw before people restore uses the old look")
+	assert_false(z.has("look_code"), "a draw cannot permanently assign a still-unlinked legacy row")
+	game.people[-1].team = "raider"  # unnamed raiders follow the same person-origin contract
+	game.people[-1].brain["rising_id"] = int(z["id"])
+	_migrate_rows()
+	assert_eq(int(z.get("look_code", -1)), 0, "unnamed risen person keeps zero after its link restores")
+	assert_eq(game.rng.state, state)
+	game.people[-1].brain.erase("rising_id")
+	_migrate_rows()
+	assert_eq(int(z.get("look_code", -1)), 0, "later origin changes cannot reroll a stored zero")
+
+
+func test_person_origin_migration_preserves_all_explicit_codes() -> void:
+	_field()
+	var z: Dictionary = dead.spawn("fresh", origin)
+	game.people[-1].brain["rising_id"] = int(z["id"])
+	var state: int = game.rng.state
+	for who_name: String in ["", "이름 있는 망자"]:
+		z["name"] = who_name
+		for code: int in [0, 88, 511, 24 * 8 + 3, 27 * 8 + 7, 13]:
+			z["look_code"] = code
+			_migrate_rows()
+			assert_eq(int(z["look_code"]), code, "even a linked/named row preserves an explicit code")
+			assert_eq(int(dead.call("look_code_of", z)), int(api.call("active_look_code", code)))
+			assert_eq(int(z["look_code"]), code)
+	assert_eq(game.rng.state, state)
+
+
 func test_lazy_migration_preserves_saved_codes_and_reserved_rows_draw_as_zero() -> void:
 	_field()
 	var state: int = game.rng.state
 	for named: String in ["", "옛 동료"]:
 		var old := {"id": 73, "name": named}
 		var expected: int = 0 if named != "" else int(api.call("look_code_for", 11, 73))
+		dead.list.assign([old])
+		_migrate_rows()
 		assert_eq(int(dead.call("look_code_of", old)), expected)
 		assert_eq(int(old["look_code"]), expected)
 		assert_eq(int(dead.call("look_code_of", old)), expected)
@@ -177,6 +255,8 @@ func test_private_generation_and_migration_leave_game_rng_unchanged() -> void:
 		assert_eq(int(api.call("look_code_migrated", 11, id, "")), expected)
 		assert_eq(int(api.call("look_code_migrated", 11, id, "옛 동료")), 0)
 		var old := {"id": id, "name": ""}
+		dead.list.assign([old])
+		_migrate_rows()
 		assert_eq(int(dead.call("look_code_of", old)), expected)
 		assert_eq(int(old["look_code"]), expected)
 		assert_eq(game.rng.state, state, "private generation and lazy migration consume no simulation dice")
@@ -190,7 +270,54 @@ func test_spawn_and_migration_use_the_run_seed_when_options_omit_it() -> void:
 		var expected: int = int(api.call("look_code_for", int(game.rng.seed), int(z["id"])))
 		assert_eq(int(z.get("look_code", -1)), expected)
 		z.erase("look_code")
+		_migrate_rows()
 		assert_eq(int(dead.call("look_code_of", z)), expected)
+
+
+func _assert_transport_for_method(method: String, capable: bool, carried_code: int) -> void:
+	if not _force_rendering_method(method):
+		return  # the required seam assertion above failed; this is not a skipped pass
+	_field()
+	assert_eq(DeadBody.can_mix(), capable, "explicit renderer capability: " + method)
+	var state: int = game.rng.state
+	for saved_code: int in [13, 0]:
+		var z := _spawn(origin, saved_code)
+		z["state"] = "frozen"
+		var garment: MultiMeshInstance3D = dead._garment_of(0, "coat_long")
+		var record: Dictionary = dead._sight_draw(z, 0, "dead", {"shell": "coat_long"}, garment, {})
+		record["color"] = Color(0.75, 0.25, 0.9, 1.0)
+		var expected := carried_code if saved_code == 13 else 0
+		var shell_expected := 362 if expected == 13 else 0  # dirt 2 + blood 5*8 + variant 5*64
+		assert_eq(_decode((record["custom"] as Color).b), Vector2(1, expected))
+		dead._submit_sight_draw(int(z["id"]), record, 1.0, _counts(), Vector2i.ZERO)
+		var receipt: Dictionary = _ledger().get(int(z["id"]), {})
+		assert_true(receipt.has("body"))
+		assert_true(receipt.has("garment"))
+		if receipt.has("body") and receipt.has("garment"):
+			assert_eq(_decode((receipt["body"] as Color).b), Vector2(1, expected))
+			assert_eq(_decode((receipt["garment"] as Color).b), Vector2(1, shell_expected))
+		assert_eq(int(z["look_code"]), saved_code, "both capability paths preserve the persistent code")
+		# Only spawn's three draws are allowed; drawing adds no random consumption.
+		var rng := RandomNumberGenerator.new()
+		rng.seed = game.rng.seed
+		rng.state = state
+		for _i: int in 3:
+			rng.randf()
+		assert_eq(game.rng.state, rng.state)
+		state = game.rng.state
+
+
+func test_mobile_transport_carries_nonzero_body_and_shell_codes() -> void:
+	_assert_transport_for_method("mobile", true, 13)
+
+
+func test_compatibility_transport_carries_zero_and_preserves_saved_codes() -> void:
+	_assert_transport_for_method("gl_compatibility", false, 0)
+
+
+func test_default_mix_capability_uses_the_actual_renderer() -> void:
+	if _force_rendering_method(""):
+		assert_eq(DeadBody.can_mix(), RenderingServer.get_current_rendering_method() != "gl_compatibility")
 
 
 func test_t7_fresh_aging_and_thaw_keep_the_same_persistent_code() -> void:

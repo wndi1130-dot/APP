@@ -209,7 +209,7 @@ func spawn(kind: String, at: Vector3, opts: Dictionary = {}) -> Dictionary:
 		"rise_t": 0.0, "name": String(opts.get("name", "")), "bang_t": 0.0, "depth": float(opts.get("depth", 1.0)),
 		"stun": 0.0, "speed": 0.0, "stander": game.rng.randf() < 0.55, "search_left": 0, "sense_t": 0.0, "smell_lock": 0.0,
 	}
-	z["look_code"] = DeadCast.look_code_for(int(game.opts.get("seed", game.rng.seed)), int(z["id"]))
+	z["look_code"] = DeadCast.look_code_migrated(int(game.opts.get("seed", game.rng.seed)), int(z["id"]), String(z["name"]))
 	next_id += 1
 	# Not the frozen, and not those sent in with a horde (a horde's runners are another rule).
 	# Keep the roll even for a drifter; zero share rolls nothing (decisions 134, 250, 387).
@@ -231,7 +231,7 @@ func _floor_y(at: Vector3) -> Vector3:
 ## A dead person becomes a corpse that stands up as "fresh" after RISE_TIME.
 func add_rising(at: Vector3, who_name: String) -> Dictionary:
 	var z := spawn("fresh", at, {"name": who_name})
-	z["look_code"] = 0   # every risen person keeps the old look, including unnamed people
+	z["look_code"] = 0   # spawn handles names; this also covers unnamed people before their rising_id is linked
 	z["state"] = "rising"
 	z["rise_t"] = RISE_TIME
 	# A risen person stands. Keep this second roll after spawn's (decisions 134, 250, 387).
@@ -275,12 +275,23 @@ func worn_of(z: Dictionary) -> Dictionary:
 	return z["worn"]
 
 
-## Materialise old rows on the persistent record, not on a draw-only copy.
-## Reserved numbers remain saved as-is and are interpreted as the old look.
+## Only restoration finalises old missing rows, after people and their links exist.
+## Drawing before then uses zero without committing a provisional origin decision.
 func look_code_of(z: Dictionary) -> int:
-	if not z.has("look_code"):
-		z["look_code"] = DeadCast.look_code_migrated(int(game.opts.get("seed", game.rng.seed)), int(z["id"]), String(z.get("name", "")))
-	return DeadCast.active_look_code(int(z["look_code"]))
+	return DeadCast.active_look_code(int(z.get("look_code", 0)))
+
+
+## One people scan per restore, then one pass over the final persistent records.
+## Explicit zero, inactive outfits and existing person-origin codes are all kept.
+func migrate_look_codes() -> void:
+	var person_ids := {}
+	for person in game.people:
+		if person.brain.has("rising_id"):
+			person_ids[int(person.brain["rising_id"])] = true
+	var seed: int = int(game.opts.get("seed", game.rng.seed))
+	for z: Dictionary in list:
+		if not z.has("look_code"):
+			z["look_code"] = DeadCast.look_code_migrated(seed, int(z["id"]), String(z.get("name", "")), person_ids)
 
 
 func _roll_worn(z: Dictionary) -> Dictionary:

@@ -308,6 +308,26 @@ func test_private_stream_is_independent_of_call_order_and_interleaved_ids() -> v
 		assert_eq(int(api.call("look_code_migrated", 11, id, "")), int(expected[id]))
 
 
+func test_migration_uses_person_origin_ids_and_names_without_changing_the_set() -> void:
+	var accepts_person_ids := false
+	for method: Dictionary in api.get_script_method_list():
+		if String(method["name"]) == "look_code_migrated":
+			accepts_person_ids = (method.get("args", []) as Array).size() == 4
+	assert_true(accepts_person_ids, "migration must accept the restored person-origin id set")
+	if not accepts_person_ids:
+		return  # fail the contract assertion instead of calling an unsupported signature
+	var person_ids := {41: true, 73: true}
+	var before: Dictionary = person_ids.duplicate()
+	for who_name: String in ["", "옛 동료", "약탈자"]:
+		for id: int in [23, 41, 73]:
+			var expected := 0 if who_name != "" or id in [41, 73] else int(api.call("look_code_for", 11, id))
+			assert_eq(int(api.call("look_code_migrated", 11, id, who_name, person_ids)), expected,
+				"a name or restored person link keeps the old look, regardless of zombie state")
+	assert_eq(person_ids, before, "migration does not mutate the caller's origin set")
+	assert_eq(int(api.call("look_code_migrated", 11, 41, "", {})), int(api.call("look_code_for", 11, 41)),
+		"an unrelated ordinary zombie still uses its private stream")
+
+
 func test_t4_motion_changes_and_both_recoil_strengths_keep_b() -> void:
 	var saved_table: Array = DeadBody.table
 	var table: Array = []

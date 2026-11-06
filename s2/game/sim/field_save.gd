@@ -620,6 +620,8 @@ static func apply(game, save: Dictionary) -> void:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
 	if exact(save):
 		_restore_work_fallback(game, save)
+	# All five fallback routes share this final migration, after person links restore.
+	game.zombies.migrate_look_codes()
 	game.cam_focus = game.player.position
 	game._update_camera(1.0)
 	Sled.reconcile(game)
@@ -772,6 +774,13 @@ static func _sled_person_state(saved: Dictionary) -> Dictionary:
 static func _put_person(p, row: Dictionary) -> void:
 	p.cancel_action()
 	p.stop()
+	# Fallback does not restore the whole brain, but legacy look migration needs this
+	# identity link. Clear a stale local link when the saved person has none.
+	var brain: Dictionary = row.get("state", {}).get("brain", {})
+	if brain.has("rising_id"):
+		p.brain["rising_id"] = brain["rising_id"]
+	else:
+		p.brain.erase("rising_id")
 	p.position = row["pos"]
 	p.bag = String(row["bag"])
 	p.items = (row["items"] as Dictionary).duplicate(true)
@@ -1099,9 +1108,6 @@ static func _apply_exact(game, save: Dictionary) -> void:
 		game.zombies.list[i].clear()
 		game.zombies.list[i].merge(restored)
 		_restore_noise_pace(game, game.zombies.list[i])
-		# The draw above used copies, then the saved row replaced its pose caches.
-		# Migrate only now, on the final persistent record, before an immediate save.
-		game.zombies.look_code_of(game.zombies.list[i])
 	for row: Dictionary in save["people"]:
 		var p = _person_with_id(game, String(row["pid"]))
 		if p != null:
@@ -1111,6 +1117,8 @@ static func _apply_exact(game, save: Dictionary) -> void:
 					p.set_meta(key, _thaw(game, metadata[key]))
 				elif p.has_meta(key):
 					p.remove_meta(key)
+	# Drawing did not commit missing codes; all people and the final rows now exist.
+	game.zombies.migrate_look_codes()
 
 
 static func _refresh_restored_view(game) -> void:
@@ -1172,8 +1180,7 @@ static func _put_zombies(game, rows: Array) -> void:
 		if row.has("look_code"):
 			z["look_code"] = int(row["look_code"])
 		else:
-			z.erase("look_code")   # discard spawn's temporary identity before migrating
-			all.look_code_of(z)
+			z.erase("look_code")   # discard spawn's temporary identity; migrate after people restore
 		z["state"] = state if state in RESUME_STATES else "wander"
 		# A version-2 row is the whole record: pockets not rolled yet stay unrolled (zombies.gd rolls them when asked).
 		if row.has("loot"):
