@@ -5,6 +5,7 @@ const StoryLook = preload("res://game/world/story_look.gd")
 const Story01 = preload("res://game/world/maps/story_01.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const FieldMaps = preload("res://game/world/field_maps.gd")
 
 var story_grid: FieldGrid
 
@@ -175,14 +176,20 @@ func _weights(point: Vector2, a: Vector3, b: Vector3, c: Vector3) -> Vector3:
 
 
 ## 실제 땅 배열에서 해당 칸의 삼각형을 고른다. 전차대의 보간 도우미는 부르지 않는다.
-func _ground_sample(point: Vector2, ground: Dictionary) -> Array:
-	var x := clampi(floori(point.x), 0, story_grid.width - 1)
-	var z := clampi(floori(point.y), 0, story_grid.height - 1)
+## grid를 주지 않으면 story_01 지도. pick을 주면 그 점으로 삼각형을 고르고 point의 무게를 잰다 — 칸 경계 위
+## 정점은 칸마다 다른 값(하늘 알파)을 가진 두 삼각형에 걸치므로, 그 정점이 든 전차대 조각의 가운데로 고른다.
+func _ground_sample(point: Vector2, ground: Dictionary, grid: FieldGrid = null, pick: Vector2 = Vector2.INF) -> Array:
+	if grid == null:
+		grid = story_grid
+	if not pick.is_finite():
+		pick = point
+	var x := clampi(floori(pick.x), 0, grid.width - 1)
+	var z := clampi(floori(pick.y), 0, grid.height - 1)
 	var tile := Vector2i(floori(float(x) / MapView.TILE), floori(float(z) / MapView.TILE))
 	var arrays: Array = ground[tile]
-	var width := mini(MapView.TILE, story_grid.width - tile.x * MapView.TILE)
+	var width := mini(MapView.TILE, grid.width - tile.x * MapView.TILE)
 	var first := ((z - tile.y * MapView.TILE) * width + x - tile.x * MapView.TILE) * 6
-	if point.x - x < point.y - z:
+	if pick.x - x < pick.y - z:
 		first += 3
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var uv: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
@@ -246,6 +253,63 @@ func test_snow_uv_and_dense_surface_clearance_match_ground_triangles() -> void:
 	for color: Color in [TurntableView.FLOOR, TurntableView.RIM, TurntableView.BRIDGE, TurntableView.BED, TurntableView.STEEL]:
 		assert_gt(int(counts.get(color, 0)), 0, "모든 종류의 윗면을 표본으로 검사한다")
 		assert_gte(float(clearance.get(color, -INF)), 0.02 - 0.00001, "땅 위 2 cm 간격: %s" % color)
+
+
+## world_vis.vertex의 벽 발치 눈 값(foot): 정점마다 max(|UV.x|, |UV.y|) × COLOR.a를 잡아 면 안에서 보간한다.
+static func _foot(uv: Vector2, sky: float) -> float:
+	return maxf(absf(uv.x), absf(uv.y)) * sky
+
+
+## 벽 발치 눈(땅·눈 루프 PR2b, weather_fx 17장)이 전차대 윗면에서도 땅과 같은 자리에 같은 굵기로 쌓인다.
+## 땅 정점은 칸 모서리라 모서리마다 잡은 foot을 땅 삼각형 안에서 보간하지만, 전차대 정점은 땅 삼각형 안쪽에
+## 있어 부호 있는 UV를 먼저 보간한 뒤 잡는다. 한 땅 삼각형의 모서리 부호가 축마다 엇갈리거나(맞선 벽) ㄱ자면
+## 둘이 달라져, 전차대 위에서만 발치 눈 띠가 끊기거나 번진다(점검 M2). 전차대 조각은 땅 칸과 대각선으로 잘려
+## 한 땅 삼각형 안에 있으므로 정점에서 같으면 면 안에서도 같다(둘 다 그 삼각형 위 일차식).
+## 전차대가 있는 모든 곳을 본다 — 11-06 story_01 하나, 윗면 정점 1,407개 중 발치 값이 있는 것 332개, 어긋남 0.
+## 어긋나는 지도가 생기면 전차대가 모서리별 foot을 따로 넘기는 길로 고친다(땅·눈 설계 「점검 반영」 칸).
+func test_foot_snow_on_turntable_tops_matches_ground_triangles() -> void:
+	var places: int = 0
+	for place_id: String in StoryLook.LOOKS:
+		var spec: Dictionary = StoryLook.for_place(place_id).get("turntable", {})
+		if spec.is_empty():
+			continue
+		places += 1
+		var data := FieldMaps.build(place_id)
+		# 모르는 곳이면 build가 기본 지도를 주므로, 전차대를 엉뚱한 땅 위에 재지 않게 곳부터 맞춘다.
+		assert_eq(String(data.get("place_id", "")), place_id, "전차대 곳의 지도를 지었다")
+		var grid: FieldGrid = data["grid"]
+		var arrays := TurntableView.arrays(spec, grid, MapView.ground_bank_row)
+		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+		var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+		var uv: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
+		var ground := MapView.ground_arrays(grid, MapView.ground_details(grid))
+		var tops: int = 0
+		var footed: int = 0
+		var worst: float = 0.0
+		var worst_at := Vector3.ZERO
+		for i in range(0, vertices.size(), 3):
+			if normals[i].y < 0.6:
+				continue
+			var centre := Vector2(vertices[i].x + vertices[i + 1].x + vertices[i + 2].x, vertices[i].z + vertices[i + 1].z + vertices[i + 2].z) / 3.0
+			for j in range(i, i + 3):
+				tops += 1
+				var sample := _ground_sample(Vector2(vertices[j].x, vertices[j].z), ground, grid, centre)
+				var weights: Vector3 = sample[0]
+				var corner_uv: Array = sample[1]
+				var ground_foot: float = 0.0
+				for corner in 3:
+					ground_foot += weights[corner] * _foot(corner_uv[corner], float(sample[2]))
+				var top_foot := _foot(uv[j], colors[j].a)
+				if ground_foot > 0.001 or top_foot > 0.001:
+					footed += 1
+				if absf(top_foot - ground_foot) > worst:
+					worst = absf(top_foot - ground_foot)
+					worst_at = vertices[j]
+		gut.p("%s: 윗면 정점 %d, 발치 값 있는 것 %d, 가장 큰 차이 %.4f" % [place_id, tops, footed, worst])
+		assert_gt(footed, 0, "%s: 발치 값이 있는 윗면 정점이 있어야 이 검사가 뜻을 가진다" % place_id)
+		assert_lte(worst, 0.05, "%s: 전차대 윗면 발치 눈 = 땅(가장 큰 차이 %.3f, 자리 %s)" % [place_id, worst, worst_at])
+	assert_gt(places, 0, "전차대가 있는 곳이 하나는 있다")
 
 
 func test_door_fan_rails_and_both_bed_edges_reach_wall() -> void:
