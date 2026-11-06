@@ -14,6 +14,9 @@ var slice_path: String = folder + "/slice.json"
 var train_path: String = folder + "/train.json"
 var field_path: String = folder + "/field.json"
 var roots: Array[Node] = []
+## The machine's own autostart must not open a stop where a menu is expected.
+var had_auto: bool = false
+var old_auto: String = ""
 
 
 class FlowProbe extends SliceFlow:
@@ -61,6 +64,9 @@ func before_each() -> void:
 	_clear_slots()
 	FieldSave._test_reads = 0
 	SliceSave._test_train_parses = 0
+	had_auto = OS.has_environment("S2_AUTOSTART")
+	old_auto = OS.get_environment("S2_AUTOSTART")
+	OS.unset_environment("S2_AUTOSTART")
 
 
 func after_each() -> void:
@@ -68,6 +74,9 @@ func after_each() -> void:
 		if is_instance_valid(node):
 			node.free()
 	roots.clear()
+	OS.unset_environment("S2_AUTOSTART")
+	if had_auto:
+		OS.set_environment("S2_AUTOSTART", old_auto)
 	_clear_slots()
 	FieldSave._test_reads = 0
 	SliceSave._test_train_parses = 0

@@ -190,18 +190,10 @@ static func clear(path: String = PATH) -> void:
 			DirAccess.remove_absolute(at)
 
 
-## Read through S1's shape check without writing its global broken-save slot.
-static func _train(path: String, t: Dictionary, source: Dictionary = {}) -> Dictionary:
-	var result := _train_read(path, t)
-	var g: Dictionary = result["g"]
-	if not g.is_empty():
-		source["train_sha"] = String(result["sha"])
-	return g
-
-
 ## The train's slot and its backup read once each, as one decision: what this build can take
 ## (status "accepted", the first accepted board) and whether a candidate is newer than this
-## build ("newer"), which stops the start before anything is chosen.
+## build ("newer"), which stops the start before anything is chosen. Read through S1's shape
+## check without writing its global broken-save slot.
 static func _train_read(path: String, t: Dictionary) -> Dictionary:
 	var found: bool = false
 	var accepted: bool = false
@@ -224,6 +216,10 @@ static func _train_read(path: String, t: Dictionary) -> Dictionary:
 		if version != null and float(version) > float(TrainSave.SAVE_VERSION):
 			newer = true
 			continue
+		# The first accepted candidate stands: a later one is read for a newer version only,
+		# never decoded or checked, so it can neither replace the board nor cost a second decode.
+		if accepted:
+			continue
 		var decoded: Variant = FieldSave.decode_checked(raw)
 		if not decoded is Dictionary:
 			continue
@@ -235,9 +231,6 @@ static func _train_read(path: String, t: Dictionary) -> Dictionary:
 			continue
 		if not _returns_whole(candidate):
 			continue
-		# The first accepted candidate stands: the backup is still read, but does not replace it.
-		if accepted:
-			continue
 		accepted = true
 		g = candidate
 		sha = text.sha256_text()
@@ -245,12 +238,28 @@ static func _train_read(path: String, t: Dictionary) -> Dictionary:
 		"g": g, "sha": sha, "newer": newer}
 
 
-## The slot's version as a number, or null when the file has none. A JSON number comes back
-## as a float; a typed int tag keeps the encoder's text.
+## The slot's version as a number, or null when the file has none. A board with a key that is
+## not text is written as one typed map of [key, value] pairs (field_save.gd _encode, which
+## writes a text key as itself): its version is the pair keyed "version". A repeated key makes
+## the codec refuse the file; the first such pair is the one asked here.
 static func _train_version(raw: Variant) -> Variant:
 	if not raw is Dictionary:
 		return null
-	var version: Variant = (raw as Dictionary).get("version")
+	var top: Dictionary = raw
+	if top.get("$type") == "Dictionary":
+		var pairs: Variant = top.get("value")
+		if not pairs is Array:
+			return null
+		for pair: Variant in pairs:
+			if pair is Array and (pair as Array).size() == 2 and (pair as Array)[0] is String and (pair as Array)[0] == "version":
+				return _version_number((pair as Array)[1])
+		return null
+	return _version_number(top.get("version"))
+
+
+## A version value as a number: a JSON number comes back as a float; a typed int tag keeps the
+## encoder's text. Anything else (a fraction, inf, another tag, text) is no version.
+static func _version_number(version: Variant) -> Variant:
 	if version is Dictionary:
 		var tag: Dictionary = version as Dictionary
 		if tag.size() == 2 and tag.get("$type") == "int":
@@ -299,10 +308,17 @@ static func receipt_of_field(saved: Dictionary) -> Dictionary:
 	return ended.to_dict()
 
 
+## The slice's resume alone (boot_choice's slice and campaign kinds), held as the start holds
+## it: a newer or unreadable train resumes nothing.
 static func pick(slice_path: String, train_path: String, t: Dictionary, field_path: String = FieldSave.PATH, read_context: Variant = null) -> Dictionary:
+	var result := _train_read(train_path, t)
+	var status := String(result["status"])
+	if status == "newer" or status == "unacceptable":
+		return {}
 	var source: Dictionary = {}
-	var g := _train(train_path, t, source)
-	return _pick_with(read(slice_path), g, source, field_path, read_context)
+	if status == "accepted":
+		source["train_sha"] = String(result["sha"])
+	return _pick_with(read(slice_path), result["g"], source, field_path, read_context)
 
 
 ## Where the app starts, decided from one read of the train: "blocked" (a newer or unreadable

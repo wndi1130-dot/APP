@@ -115,6 +115,21 @@ func _break_cell(at: String, key: String) -> void:
 		assert_eq(String((cell as Dictionary).get("value", "")), "x")
 
 
+## Rewrites a written slot as the codec's typed map of [key, value] pairs (how field_save.gd
+## _encode writes a map with a key that is not text) carrying this version, and checks the
+## form is really on disk: no version at the top, only inside the pairs.
+func _as_pairs(at: String, version: Variant) -> void:
+	var parsed: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(at))
+	parsed["version"] = version
+	var pairs: Array = []
+	for key: String in parsed:
+		pairs.append([key, parsed[key]])
+	_write_text(at, JSON.stringify({"$type": "Dictionary", "value": pairs}, "", false, true))
+	var disk: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(at))
+	assert_eq(disk.get("$type"), "Dictionary", "the typed map is on disk")
+	assert_false(disk.has("version"), "no version at the top")
+
+
 ## A stop left mid-play, independent of the train (receipt id ret_resume).
 func _left_field(extra: Dictionary = {}) -> Dictionary:
 	var game = FieldGame.new()
@@ -242,6 +257,36 @@ func test_fail_a_newer_train_slot_wins_over_a_refusing_cell() -> void:
 	_handle_block_warnings()
 
 
+## Implementation review M: a newer slot written as the typed map of pairs keeps its version
+## inside the pairs; a whole current backup must not let the stop open.
+func test_fail_a_newer_train_slot_written_as_pairs_blocks() -> void:
+	_left_field()
+	_write_train_board(_board({}))
+	var first: String = FileAccess.get_file_as_string(train_at)
+	_write_train_board(_board({}))
+	assert_eq(FileAccess.get_file_as_string(train_at + ".bak"), first, "a whole current backup")
+	_as_pairs(train_at, {"$type": "int", "value": str(TrainSave.SAVE_VERSION + 1)})
+	var boot: Probe = _boot()
+	assert_false(boot.slice_started)
+	assert_null(boot.field, "the version inside the pairs is read too")
+	assert_not_null(boot.menu)
+	_handle_block_warnings()
+
+
+## Implementation review L: the slot's bad record row sends the read to a backup that took the
+## return in, so the two candidates lead to different starts.
+func test_fail_a_bad_record_row_in_the_slot_with_an_applied_backup_does_not_start_the_field() -> void:
+	_left_field()
+	var bad: Dictionary = _board({})
+	bad["fieldReturns"] = {"applied": {}, "records": [{"receiptId": 1, "seg": 0}]}
+	_write_train_board(bad)
+	_write_train_board(_board({"ret_resume": true}), train_at + ".bak")
+	var boot: Probe = _boot()
+	assert_false(boot.slice_started)
+	assert_null(boot.field, "the backup, which took the return in, is the train save read")
+	assert_not_null(boot.menu)
+
+
 # ---------------------------------------------------------------- hold before and after
 
 func test_keep_a_slice_stop_does_not_start_from_the_field() -> void:
@@ -306,12 +351,14 @@ func test_keep_a_backup_alone_starts_the_field() -> void:
 	assert_null(boot.menu)
 
 
-func test_keep_a_bad_record_row_sends_the_read_to_the_backup() -> void:
+## Which candidate is read is not seen here (neither took the return in): the fail test above
+## and test_boot_choice.gd's _train_read test tell the two apart.
+func test_keep_a_slot_with_a_bad_record_row_and_no_return_anywhere_starts_the_field() -> void:
 	_left_field()
 	var bad: Dictionary = _board({})
 	bad["fieldReturns"] = {"applied": {}, "records": [{"receiptId": 1, "seg": 0}]}
 	_write_train_board(bad)
 	_write_train_board(_board({}), train_at + ".bak")
 	var boot: Probe = _boot()
-	assert_not_null(boot.field, "the backup's board is believed")
+	assert_not_null(boot.field, "neither board took the return in")
 	assert_null(boot.menu)

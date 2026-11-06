@@ -226,13 +226,83 @@ func test_train_read_reports_a_newer_backup_over_a_whole_slot() -> void:
 	assert_false((read["g"] as Dictionary).is_empty(), "the slot is still the accepted board")
 
 
-func test_train_still_returns_the_board_and_its_hash() -> void:
-	var text: String = _write_train(_board())
-	var source: Dictionary = {}
-	var g: Dictionary = SliceSave._train(train_at, _table(), source)
-	assert_false(g.is_empty())
-	assert_eq(String(source["train_sha"]), text.sha256_text())
-	assert_eq(SliceSave._train(train_at + "_none", _table(), source), {})
+## A written slot as the codec's typed map of [key, value] pairs (field_save.gd _encode's form
+## for a map with a key that is not text), carrying this version; the form is checked on disk.
+func _as_pairs(at: String, version: Variant) -> String:
+	var parsed: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(at))
+	parsed["version"] = version
+	var pairs: Array = []
+	for key: String in parsed:
+		pairs.append([key, parsed[key]])
+	_write_text(at, JSON.stringify({"$type": "Dictionary", "value": pairs}, "", false, true))
+	var text: String = FileAccess.get_file_as_string(at)
+	var disk: Dictionary = JSON.parse_string(text)
+	assert_eq(disk.get("$type"), "Dictionary", "the typed map is on disk")
+	assert_false(disk.has("version"), "no version at the top")
+	return text
+
+
+func test_train_read_reports_newer_for_a_pairs_slot_over_a_whole_backup() -> void:
+	_write_train(_board())
+	_write_train(_board())
+	_as_pairs(train_at, {"$type": "int", "value": str(TrainSave.SAVE_VERSION + 1)})
+	var read: Dictionary = SliceSave._train_read(train_at, _table())
+	assert_eq(String(read["status"]), "newer")
+	assert_false((read["g"] as Dictionary).is_empty(), "the backup is still read")
+
+
+func test_train_read_reports_newer_for_a_pairs_backup_over_a_whole_slot() -> void:
+	_write_train(_board())
+	_write_train(_board(), other_at)
+	_as_pairs(other_at, float(TrainSave.SAVE_VERSION + 2))
+	_write_text(train_at + ".bak", FileAccess.get_file_as_string(other_at))
+	var read: Dictionary = SliceSave._train_read(train_at, _table())
+	assert_eq(String(read["status"]), "newer")
+
+
+## The pairs form of this build's version is a board this build reads (the codec's own form).
+func test_train_read_accepts_a_pairs_slot_of_the_current_version() -> void:
+	_write_train(_board())
+	var text: String = _as_pairs(train_at, {"$type": "int", "value": str(TrainSave.SAVE_VERSION)})
+	var read: Dictionary = SliceSave._train_read(train_at, _table())
+	assert_eq(String(read["status"]), "accepted")
+	assert_eq(String(read["sha"]), text.sha256_text())
+
+
+## Implementation review L: the record check decides between two boards that differ.
+func test_train_read_skips_a_slot_with_a_bad_record_row() -> void:
+	var bad: Dictionary = _board({})
+	bad["fieldReturns"] = {"applied": {}, "records": [{"receiptId": 1, "seg": 0}]}
+	_write_train(bad)
+	_write_train(_board({"ret_resume": true}), other_at)
+	var backup_text: String = FileAccess.get_file_as_string(other_at)
+	_write_text(train_at + ".bak", backup_text)
+	var read: Dictionary = SliceSave._train_read(train_at, _table())
+	assert_eq(String(read["status"]), "accepted")
+	assert_eq(String(read["sha"]), backup_text.sha256_text(), "the backup is the board read")
+	assert_true(((read["g"]["fieldReturns"] as Dictionary)["applied"] as Dictionary).has("ret_resume"))
+
+
+# ---------------------------------------------------------------- pick
+
+## pick is boot_choice's slice part and holds the same way: a newer slot resumes nothing, even
+## over a whole backup the slice was saved beside.
+func test_pick_holds_a_newer_train_like_the_start() -> void:
+	var g: Dictionary = _board({})
+	var text: String = _write_train(g)
+	_matching_slice(g, text)
+	assert_false(SliceSave.pick(slice_at, train_at, _table(), field_at).is_empty(), "the pair resumes")
+	_write_text(train_at + ".bak", text)
+	_rewrite_version(train_at, float(TrainSave.SAVE_VERSION + 1))
+	assert_eq(SliceSave.pick(slice_at, train_at, _table(), field_at), {})
+
+
+func test_pick_resumes_nothing_from_an_unreadable_train() -> void:
+	var g: Dictionary = _board({})
+	var text: String = _write_train(g)
+	_matching_slice(g, text)
+	_write_text(train_at, "{")
+	assert_eq(SliceSave.pick(slice_at, train_at, _table(), field_at), {})
 
 
 # ---------------------------------------------------------------- boot_choice
@@ -300,7 +370,8 @@ func test_a_blocked_choice_keeps_autostart_from_starting_anything() -> void:
 	assert_false(boot.slice_started)
 	assert_null(boot.field, "autostart waits behind the block")
 	assert_not_null(boot.menu)
-	assert_not_null(boot.menu.find_child("SaveNote", true, false))
+	if boot.menu != null:
+		assert_not_null(boot.menu.find_child("SaveNote", true, false))
 	_handle_block_warnings()
 
 
