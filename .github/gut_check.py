@@ -1,7 +1,7 @@
 # rust-exception: existing — the CI's GUT pass check was inline Python in s2-android.yml; this is that check, testable
 """Pass a GUT shard only when its JUnit report is whole and clean.
 
-    python3 .github/gut_check.py <gut-shard.txt> <gut-results.xml> <gut.log>
+    python3 .github/gut_check.py <gut-shard.txt> <gut-results.xml> <gut.log> <gut-outside-errors.json>
 
 - Every script in the shard must declare at least one top-level `func test_…` (outside strings and
   comments), and every one of them must be in the report under that script. A script GUT could not load
@@ -14,12 +14,17 @@
   runtime script error inside a test does not by itself fail the test in GUT, and GUT's stdout and the
   engine's stderr share one pipe, so the text can land mid-line. Engine `ERROR:` lines are not counted;
   some tests write broken files on purpose (34 such lines a main run, 2026-11-07).
-Exit 0 with one summary line, 1 with every problem listed, 2 for wrong arguments.
+- The post-run hook's outside-test report must be present and valid. Its errors are listed, but only
+  fail the shard when FAIL_ON_OUTSIDE is enabled.
+Exit 0 with the pass summary and outside-test list, 1 with every problem listed, 2 for wrong arguments.
 """
+import json
 import pathlib
 import re
 import sys
 import xml.etree.ElementTree as ET
+
+FAIL_ON_OUTSIDE = False
 
 STRINGS = re.compile(r'"""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'')
 TEST_FUNC = re.compile(r'(?m)^func\s+(test_\w+)\s*\(')
@@ -88,26 +93,86 @@ def summary(sources, report_xml):
             f'({cases} cases), 0 script errors')
 
 
+def _outside_report(text: str | None) -> dict:
+    """Validate the hook's report before either judging or displaying it. Pure: no files."""
+    if text is None:
+        raise ValueError('GUT outside-test report is missing (hook did not run)')
+    try:
+        data = json.loads(text)
+    except (ValueError, RecursionError) as e:
+        raise ValueError(f'GUT outside-test report is not readable JSON: {e}') from e
+    if not isinstance(data, dict) or type(data.get('count')) is not int:
+        raise ValueError('GUT outside-test report must have an integer count')
+    errors = data.get('errors')
+    if not isinstance(errors, list) or data['count'] != len(errors):
+        raise ValueError('GUT outside-test report count must match the errors list length')
+    for error in errors:
+        if (not isinstance(error, dict)
+                or any(not isinstance(error.get(key), str)
+                       for key in ('type', 'code', 'rationale', 'file', 'function'))
+                or type(error.get('line')) is not int):
+            raise ValueError('GUT outside-test report has an invalid error entry')
+    return data
+
+
+def _outside_line(error: dict) -> str:
+    return f"{error['type']} {error['code']} ({error['file']}:{error['line']} {error['function']})"
+
+
+def outside_problems(text: str | None) -> list[str]:
+    """Missing/broken hook reports fail; nonzero counts are report-only in phase one."""
+    try:
+        data = _outside_report(text)
+    except ValueError as e:
+        return [str(e)]
+    if FAIL_ON_OUTSIDE:
+        return [f'outside-test error: {_outside_line(error)}' for error in data['errors']]
+    return []
+
+
+def _print_outside(text: str | None) -> None:
+    try:
+        data = _outside_report(text)
+    except ValueError:
+        return  # The validation problem is already in the failure output; no trustworthy count.
+    print(f"GUT outside-test errors: {data['count']}")
+    for error in data['errors']:
+        print(f'  {_outside_line(error)}')
+
+
 def main(argv):
-    if len(argv) != 3:
-        print('usage: gut_check.py <gut-shard.txt> <gut-results.xml> <gut.log>', file=sys.stderr)
+    if len(argv) != 4:
+        print('usage: gut_check.py <gut-shard.txt> <gut-results.xml> <gut.log> <gut-outside-errors.json>',
+              file=sys.stderr)
         return 2
-    shard, report, log = (pathlib.Path(a) for a in argv)
+    shard, report, log, outside_file = (pathlib.Path(a) for a in argv)
+    outside_text = None
+    try:
+        if outside_file.is_file():
+            outside_text = outside_file.read_text(encoding='utf-8')
+        outside_found = outside_problems(outside_text)
+    except (OSError, UnicodeError) as e:
+        outside_found = [f'GUT outside-test report is not readable: {e}']
     missing = [str(p) for p in (shard, report, log) if not p.is_file()]
     if missing:
         print(f'GUT check failed: missing {", ".join(missing)} (no report or run log means nothing was checked)')
+        for p in outside_found:
+            print(f'  {p}')
+        _print_outside(outside_text)
         return 1
     scripts = [s[len(RES):] if s.startswith(RES) else s for s in shard.read_text(encoding='utf-8').split()]
     sources = {s: (pathlib.Path('s2') / s).read_text(encoding='utf-8-sig') for s in scripts}
     report_xml = report.read_text(encoding='utf-8')
     found = problems(sources, report_xml, log.read_text(encoding='utf-8', errors='replace'))
+    found.extend(outside_found)
     if found:
         print(f'GUT check failed ({len(found)}):')
         for p in found:
             print(f'  {p}')
-        return 1
-    print(summary(sources, report_xml))
-    return 0
+    else:
+        print(summary(sources, report_xml))
+    _print_outside(outside_text)
+    return 1 if found else 0
 
 
 if __name__ == '__main__':

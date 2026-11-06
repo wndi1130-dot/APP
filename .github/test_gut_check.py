@@ -1,11 +1,15 @@
 # rust-exception: existing — tests the CI's Python GUT check (.github/gut_check.py) in the same language
 """python3 .github/test_gut_check.py — runs in CI before GUT so a broken check cannot wave a shard through."""
+import contextlib
+import io
+import json
 import pathlib
 import subprocess
 import sys
-import tempfile
 import unittest
+from unittest import mock
 
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import gut_check  # noqa: E402
 
@@ -35,6 +39,14 @@ def report(*cases):
 
 
 WHOLE = report(case(A, 'test_one'), case(A, 'test_two'), case(B, 'test_three'))
+OUTSIDE_ERRORS = [
+    {'type': 'engine-0', 'code': '엔진 오류', 'rationale': '설명',
+     'file': 'res://tests/한글 파일.gd', 'function': 'before_all', 'line': 12},
+    {'type': 'push_error', 'code': 'second error', 'rationale': '',
+     'file': 'res://tests/test_a.gd', 'function': 'push_error', 'line': 24},
+]
+OUTSIDE_TWO = json.dumps({'count': 2, 'errors': OUTSIDE_ERRORS}, ensure_ascii=False)
+OUTSIDE_EMPTY = '{"count": 0, "errors": []}'
 
 
 class CheckTests(unittest.TestCase):
@@ -122,23 +134,85 @@ class CheckTests(unittest.TestCase):
         self.assertIn('(4 cases)', line)
 
 
+class OutsideTests(unittest.TestCase):
+    def test_missing_file_fails(self):
+        found = gut_check.outside_problems(None)
+        self.assertEqual(len(found), 1, found)
+        self.assertIn('hook did not run', found[0])
+
+    def test_broken_json_fails(self):
+        for text in ('', 'not json', '{'):
+            with self.subTest(text=text):
+                self.assertEqual(len(gut_check.outside_problems(text)), 1)
+
+    def test_invalid_report_shape_fails(self):
+        for value in (None, [], 3, {}, {'count': 0}, {'count': 0, 'errors': {}},
+                      {'count': 0, 'errors': None}):
+            with self.subTest(value=value):
+                self.assertEqual(len(gut_check.outside_problems(json.dumps(value))), 1)
+
+    def test_count_must_be_an_integer(self):
+        for count in (True, False, 0.0, '0', None):
+            with self.subTest(count=count):
+                text = json.dumps({'count': count, 'errors': []})
+                self.assertEqual(len(gut_check.outside_problems(text)), 1)
+
+    def test_count_must_match_errors(self):
+        for count in (-1, 0, 1, 3):
+            with self.subTest(count=count):
+                text = json.dumps({'count': count, 'errors': OUTSIDE_ERRORS})
+                self.assertEqual(len(gut_check.outside_problems(text)), 1)
+
+    def test_invalid_error_entry_fails(self):
+        for entry in (None, 'error', {}, {**OUTSIDE_ERRORS[0], 'code': 3},
+                      {**OUTSIDE_ERRORS[0], 'line': True}):
+            with self.subTest(entry=entry):
+                text = json.dumps({'count': 1, 'errors': [entry]})
+                self.assertEqual(len(gut_check.outside_problems(text)), 1)
+
+    def test_zero_errors_pass(self):
+        for fail in (False, True):
+            with self.subTest(fail=fail), mock.patch.object(gut_check, 'FAIL_ON_OUTSIDE', fail):
+                self.assertEqual(gut_check.outside_problems(OUTSIDE_EMPTY), [])
+
+    def test_nonzero_errors_are_report_only(self):
+        self.assertIs(gut_check.FAIL_ON_OUTSIDE, False)
+        self.assertEqual(gut_check.outside_problems(OUTSIDE_TWO), [])
+
+    def test_enabled_failure_includes_both_codes(self):
+        with mock.patch.object(gut_check, 'FAIL_ON_OUTSIDE', True):
+            found = gut_check.outside_problems(OUTSIDE_TWO)
+        self.assertEqual(len(found), 2, found)
+        for error in OUTSIDE_ERRORS:
+            self.assertTrue(any(error['code'] in p for p in found), found)
+
+
 class MainTests(unittest.TestCase):
     """The command line: reads s2/<script> from the working directory, exit 0/1/2."""
 
-    def run_main(self, files, shard_lines, xml, log, bom=False):
-        with tempfile.TemporaryDirectory(prefix='gut check ') as root:
-            base = pathlib.Path(root)
-            for rel, text in files.items():
-                p = base / 's2' / rel
-                p.parent.mkdir(parents=True, exist_ok=True)
-                p.write_text(('﻿' if bom else '') + text, encoding='utf-8')
-            (base / 'shard.txt').write_text(''.join(f'res://{s}\n' for s in shard_lines), encoding='utf-8')
-            if xml is not None:
-                (base / 'r.xml').write_text(xml, encoding='utf-8')
-            if log is not None:
-                (base / 'gut.log').write_text(log, encoding='utf-8')
-            return subprocess.run([sys.executable, str(pathlib.Path(gut_check.__file__)), 'shard.txt', 'r.xml', 'gut.log'],
-                                  cwd=base, capture_output=True, text=True, timeout=60)
+    def run_main(self, files, shard_lines, xml, log, bom=False, outside=OUTSIDE_EMPTY):
+        # Keep fixtures in memory: running the check's tests must not write outside its checkout.
+        contents = {str(pathlib.Path('s2') / rel): ('\ufeff' if bom else '') + text
+                    for rel, text in files.items()}
+        contents['shard.txt'] = ''.join(f'res://{s}\n' for s in shard_lines)
+        for name, text in (('r.xml', xml), ('gut.log', log), ('outside.json', outside)):
+            if text is not None:
+                contents[name] = text
+
+        def read_text(path, encoding=None, errors=None):
+            text = contents[str(path)]
+            if isinstance(text, Exception):
+                raise text
+            return text.removeprefix('\ufeff') if encoding == 'utf-8-sig' else text
+
+        argv = ['shard.txt', 'r.xml', 'gut.log', 'outside.json']
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(pathlib.Path, 'is_file', autospec=True,
+                               side_effect=lambda path: str(path) in contents), \
+                mock.patch.object(pathlib.Path, 'read_text', autospec=True, side_effect=read_text), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = gut_check.main(argv)
+        return subprocess.CompletedProcess(argv, code, stdout.getvalue(), stderr.getvalue())
 
     def test_pass_and_fail_exit_codes(self):
         ok = self.run_main(SOURCES, [A, B], WHOLE, '')
@@ -161,8 +235,63 @@ class MainTests(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
 
     def test_wrong_arguments(self):
-        p = subprocess.run([sys.executable, str(pathlib.Path(gut_check.__file__))], capture_output=True, text=True, timeout=60)
+        p = subprocess.run([sys.executable, '-X', 'utf8', '-I', '-B', str(pathlib.Path(gut_check.__file__))],
+                           capture_output=True, text=True, encoding='utf-8', timeout=60)
         self.assertEqual(p.returncode, 2)
+
+    def test_three_arguments_exit_2(self):
+        p = subprocess.run([sys.executable, '-X', 'utf8', '-I', '-B', str(pathlib.Path(gut_check.__file__)),
+                            'shard.txt', 'r.xml', 'gut.log'],
+                           capture_output=True, text=True, encoding='utf-8', timeout=60)
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        self.assertIn('<gut-outside-errors.json>', p.stderr)
+
+    def test_missing_outside_file_fails(self):
+        p = self.run_main(SOURCES, [A, B], WHOLE, '', outside=None)
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn('hook did not run', p.stdout)
+
+    def test_invalid_outside_file_fails(self):
+        for outside in ('broken', '{"count": 1, "errors": []}'):
+            with self.subTest(outside=outside):
+                p = self.run_main(SOURCES, [A, B], WHOLE, '', outside=outside)
+                self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+                self.assertIn('outside', p.stdout)
+
+    def test_unreadable_outside_file_fails(self):
+        for error in (OSError('cannot read'), UnicodeDecodeError('utf-8', b'\xff', 0, 1, 'invalid byte')):
+            with self.subTest(error=type(error).__name__):
+                p = self.run_main(SOURCES, [A, B], WHOLE, '', outside=error)
+                self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+                self.assertIn('not readable', p.stdout)
+
+    def test_outside_list_follows_pass_summary(self):
+        for outside, count in ((OUTSIDE_EMPTY, 0), (OUTSIDE_TWO, 2)):
+            with self.subTest(count=count):
+                p = self.run_main(SOURCES, [A, B], WHOLE, '', outside=outside)
+                self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+                self.assertTrue(p.stdout.startswith('GUT report:'), p.stdout)
+                self.assertEqual(p.stdout.splitlines()[1], f'GUT outside-test errors: {count}')
+                if count:
+                    self.assertIn('  engine-0 엔진 오류 (res://tests/한글 파일.gd:12 before_all)', p.stdout)
+                    self.assertIn('  push_error second error (res://tests/test_a.gd:24 push_error)', p.stdout)
+
+    def test_outside_list_printed_on_failure(self):
+        for xml, log in ((report(case(A, 'test_one')), ''), (WHOLE, 'SCRIPT ERROR: bad'),
+                         (None, ''), (WHOLE, None)):
+            with self.subTest(xml=xml, log=log):
+                p = self.run_main(SOURCES, [A, B], xml, log, outside=OUTSIDE_TWO)
+                self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+                self.assertIn('GUT outside-test errors: 2', p.stdout)
+                for error in OUTSIDE_ERRORS:
+                    self.assertIn(error['code'], p.stdout)
+
+    def test_enabled_failure_prints_outside_list(self):
+        with mock.patch.object(gut_check, 'FAIL_ON_OUTSIDE', True):
+            p = self.run_main(SOURCES, [A, B], WHOLE, '', outside=OUTSIDE_TWO)
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn('GUT check failed (2):', p.stdout)
+        self.assertIn('GUT outside-test errors: 2', p.stdout)
 
 
 if __name__ == '__main__':
