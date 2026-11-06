@@ -4,11 +4,15 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const FieldItems = preload("res://game/sim/field_items.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
 const DoorRules = preload("res://game/sim/door_rules.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Wear = preload("res://game/sim/wear.gd")
+const Gait = preload("res://game/sim/gait.gd")
+const SimNoise = preload("res://game/sim/noise.gd")
+const DoorWalk = preload("res://game/sim/door_walk.gd")
 const Corridor = preload("res://tests/game/fixtures/door_walk_map.gd")
 const DOOR := Corridor.FIRST
 const END := Vector3(34.5, 0.0, 8.5)
@@ -376,3 +380,316 @@ func test_thirty_and_sixty_hz_open_on_the_half_second_tick_without_an_extra_fram
 			game._update_person(p, 1.0 / float(hz))
 			assert_eq(game.grid.doors[DOOR]["state"], "open" if tick == frames - 1 else "closed")
 			_assert_outside_if_closed(p)
+
+
+## Review regressions, authored against a7f6e255 before changing production code.
+## Advance the same motion identity and idle-gait tail as the real field loop.
+func _tick_person(person, delta: float) -> void:
+	game._begin_motion_tick()
+	game.clock.advance(delta)
+	game._motion_clock = game.clock.elapsed
+	game._update_person(person, delta)
+	game._update_ground_gait(person, delta)
+
+
+func test_wall_slide_sweeps_the_actual_x_segment_for_stick_and_path() -> void:
+	game.grid.set_solid(Vector2i(31, 10), FieldGrid.Solid.WALL)
+	for stick_input: bool in [false, true]:
+		_place(p, 0.2, true)
+		p.position.z = 8.9
+		p.go_to(PackedVector3Array([p.position + Vector3(5, 0, 5)]), true)
+		if stick_input:
+			p.stick = Vector2.ONE.normalized()
+			p.drive_dir = Vector3(1, 0, 1).normalized()
+			p.drive_speed = 3.9
+		assert_almost_eq(p.speed(FieldGrid.Floor.SNOW), 3.9, 0.00001)
+		_tick_person(p, 0.5)
+		assert_lt(p.position.x, 30.0, "a7f6e255: the x slide tunnels to x=31.179")
+		assert_eq(game.grid.doors[DOOR]["state"], "closed")
+
+
+func test_wall_slide_also_sweeps_the_second_axis() -> void:
+	var cell := Vector2i(28, 10)
+	game.grid.doors[cell] = game.grid.doors[DOOR].duplicate(true)
+	game.grid.set_solid(cell, FieldGrid.Solid.DOOR)
+	game.grid.set_solid(Vector2i(30, 11), FieldGrid.Solid.WALL)
+	game.grid.set_solid(Vector2i(30, 9), FieldGrid.Solid.WALL)
+	_place(p, 1.1, true)
+	p.position = Vector3(28.9, 0, 9.8)
+	p.go_to(PackedVector3Array([p.position + Vector3(5, 0, 5)]), true)
+	_tick_person(p, 0.5)
+	assert_lt(p.position.z, 10.0, "a7f6e255: the z slide skips the closed cell")
+	assert_eq(game.grid.doors[cell]["state"], "closed")
+
+
+func test_reversing_the_real_stick_path_cancels_work_and_reservation() -> void:
+	_place(p, 0.04)
+	p.stick = Vector2.RIGHT
+	_tick_person(p, 0.125)
+	assert_eq(p.action, "door_walk")
+	var before: Vector3 = p.position
+	p.stick = Vector2.LEFT
+	_tick_person(p, 0.125)
+	assert_lt(p.position.x, before.x)
+	assert_eq(p.action, "", "a7f6e255: the abandoned door keeps opening")
+	assert_false(game.actions.ongoing.has(p.get_instance_id()))
+	assert_false(bool(game.grid.doors[DOOR]["busy"]))
+	_tick_person(p, 0.5)
+	assert_eq(game.grid.doors[DOOR]["state"], "closed")
+	assert_eq(game.audio.played.count("door_open"), 0)
+
+
+func test_sideways_stick_removes_the_old_path_door_even_with_forward_inertia() -> void:
+	_place(p, 0.04)
+	_begin()
+	p.drive_dir = Vector3.RIGHT
+	p.drive_speed = 2.1
+	p.stick = Vector2.DOWN
+	_tick_person(p, 0.05)
+	assert_true(p.path.is_empty(), "the actual stick branch discarded the old route")
+	assert_eq(p.action, "", "a7f6e255: reach alone accepts a door off the new direction")
+	assert_false(game.actions.ongoing.has(p.get_instance_id()))
+	assert_false(bool(game.grid.doors[DOOR]["busy"]))
+
+
+func test_same_door_stick_and_release_inertia_keep_the_original_timer() -> void:
+	_place(p, 0.04)
+	_begin()
+	p.stick = Vector2.RIGHT
+	_tick_person(p, 0.125)
+	var work: Dictionary = game.actions.ongoing[p.get_instance_id()]
+	p.stick = Vector2.ZERO
+	_tick_person(p, 0.01)
+	assert_gt(p.drive_speed, 0.0, "release still has forward inertia")
+	assert_eq(p.action, "door_walk")
+	assert_true(is_same(game.actions.ongoing[p.get_instance_id()], work))
+	assert_almost_eq(p.action_t, 0.365, 0.00001)
+	p.stick = Vector2.RIGHT
+	_tick_person(p, 0.365)
+	assert_eq(game.grid.doors[DOOR]["state"], "open")
+	assert_eq(game.audio.played.count("door_open"), 1)
+
+
+func test_long_tick_approaches_locked_and_boarded_doors_before_refusing() -> void:
+	for boarded: bool in [false, true]:
+		game.grid.doors[DOOR]["planks"] = [0, 0]
+		game.grid.set_door_state(DOOR, "closed" if boarded else "locked")
+		if boarded:
+			BuildingRules.add_plank(game.grid.doors[DOOR], 0)
+		_place(p, 1.8, true)
+		var before: Vector3 = p.position
+		assert_gt(before.distance_to(FieldGrid.center(DOOR)), game.actions.INTERACT_REACH)
+		_tick_person(p, 0.5)
+		assert_gt(p.position.x, before.x, "a7f6e255: a failed out-of-reach action freezes approach")
+		assert_lt(p.position.x, 30.0)
+		assert_true(p.path.size() > 0, "rejection has not happened before reaching the door")
+		assert_false(bool(game.grid.doors[DOOR]["busy"]))
+		game.ledger.by_action.clear()
+		game.audio.played.clear()
+		_tick_person(p, 0.05)
+		assert_true(p.path.is_empty(), "in reach, use the existing refusal")
+		assert_eq(game.audio.played.count("boarded" if boarded else "door_locked"), 1)
+		assert_true(game.ledger.by_action.is_empty(), "rattle/thud never enters zombie hearing")
+
+
+func test_long_tick_approaches_a_locked_door_then_uses_its_key() -> void:
+	game.grid.set_door_state(DOOR, "locked")
+	_place(p, 1.8, true)
+	p.add_item(FieldItems.key_for(int(game.grid.doors[DOOR]["building"])))
+	_tick_person(p, 0.5)
+	assert_gt(p.position.x, 28.2, "a7f6e255: never reaches the key interaction")
+	_tick_person(p, 0.05)
+	assert_eq(p.action, "door")
+	assert_eq(game.grid.doors[DOOR]["state"], "locked")
+	_tick_person(p, p.action_t)
+	assert_eq(game.grid.doors[DOOR]["state"], "open")
+	assert_eq(game.audio.played.count("door_unlock"), 1)
+
+
+func test_completion_split_accumulates_gait_and_the_later_run_footstep() -> void:
+	_place(p, DoorWalk.CLEARANCE, true)
+	_begin()
+	p.action_t = 0.01
+	p.rotation.y = PI * 0.5
+	p.brain[Gait.GROUND_RUN] = {"speed": 2.5, "running": false}
+	p.brain["step_r"] = 0.19
+	game.ledger.by_action.clear()
+	var before: Vector3 = p.position
+	var delta: float = 1.0 / 30.0
+	_tick_person(p, delta)
+	var gone: float = before.distance_to(p.position)
+	var expected: float = lerpf(2.5, gone / delta, 1.0 - exp(-delta / Gait.RUN_TAU))
+	assert_almost_eq(float(p.brain[Gait.GROUND_RUN]["speed"]), expected, 0.0001,
+		"a7f6e255: only the first 0.01 s wait reaches the gait filter")
+	assert_true(Gait.ground_runs(p))
+	assert_true(game.ledger.by_action.has("run"), "the second span puts down a running foot")
+	assert_false(game.ledger.by_action.has("walk"))
+	if game.ledger.by_action.has("run"):
+		var row: Dictionary = game.ledger.by_action["run"]
+		var radius: float = SimNoise.footstep_radius(true, 1.0, 1.0, false,
+			int(p.skills["stealth"])) * game.weather.sound_mult(true)
+		assert_almost_eq(float(row["max_radius"]), radius, 0.00001)
+		assert_almost_eq(float(row["linger"]), SimNoise.LINGER[SimNoise.Level.NORMAL], 0.00001)
+	game._update_ground_gait(p, delta)
+	assert_almost_eq(float(p.brain[Gait.GROUND_RUN]["speed"]), expected, 0.0001,
+		"the final idle-gait call cannot apply the same delta twice")
+
+
+func test_corner_tangent_does_not_open_or_refuse_an_unentered_door() -> void:
+	for state: String in ["closed", "locked"]:
+		game.grid.set_door_state(DOOR, state)
+		_place(p, 1.0)
+		p.position = Vector3(30.5, 0, 9.5)
+		p.go_to(PackedVector3Array([Vector3(31.5, 0, 8.5)]))
+		game.audio.played.clear()
+		_tick_person(p, 0.5)
+		assert_gt(p.position.x, 31.0, "a7f6e255: a corner touch opens/refuses the wrong door")
+		assert_eq(game.grid.doors[DOOR]["state"], state)
+		assert_eq(p.action, "")
+		assert_false(bool(game.grid.doors[DOOR]["busy"]))
+		assert_false(game.audio.played.has("door_open"))
+		assert_false(game.audio.played.has("door_locked"))
+
+
+func test_window_is_crossed_before_predicting_the_door_behind_it() -> void:
+	Corridor.add_window(game.grid)
+	_place(p, 1.05)
+	assert_true(game.actions.can_vault_window(p, Corridor.WINDOW))
+	_tick_person(p, 0.05)
+	assert_gt(p.position.x, 29.0, "a7f6e255: door work prevents entering the earlier frame")
+	assert_eq(p.action, "")
+	assert_false(bool(game.grid.doors[DOOR]["busy"]))
+	assert_eq(game.grid.doors[DOOR]["state"], "closed")
+	assert_eq(game.audio.played.count("window_vault"), 1)
+	_tick_person(p, 0.05)
+	assert_eq(p.action, "door_walk", "after the frame, the usual prediction resumes")
+	assert_eq(game.audio.played.count("window_vault"), 1, "no replay inside the frame")
+	assert_false(game.actions.glass_asked.has(Corridor.WINDOW))
+	assert_true(p.body.wounds.is_empty())
+
+
+func test_glass_window_keeps_its_choice_before_any_door_reservation() -> void:
+	Corridor.add_window(game.grid, true)
+	_place(p, 1.05)
+	_tick_person(p, 0.05)
+	assert_true(game.actions.glass_asked.has(Corridor.WINDOW),
+		"a7f6e255: premature door work hides the existing glass choice")
+	assert_eq(p.action, "")
+	assert_false(bool(game.grid.doors[DOOR]["busy"]))
+	assert_lt(p.position.x, 29.0)
+	assert_true(p.body.wounds.is_empty())
+
+
+func test_save_outside_two_metres_preserves_reach_and_live_door_identity() -> void:
+	_place(p, 1.8, true)
+	game.actions.open_door_on_way(p, DOOR, 1.8, 3.9)
+	assert_eq(p.action, "door_walk")
+	var work: Dictionary = game.actions.ongoing[p.get_instance_id()]
+	assert_gt(p.position.distance_to(FieldGrid.center(DOOR)), 2.0)
+	assert_gt(float(work["reach"]), 2.0)
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+	assert_eq(int(saved["version"]), 3)
+	var restored = _game()
+	FieldSave.apply(restored, saved)
+	var q = restored.player
+	var resumed: Dictionary = restored.actions.ongoing[q.get_instance_id()]
+	assert_eq(float(resumed["reach"]), float(work["reach"]))
+	assert_true(is_same(resumed["object"], restored.grid.doors[DOOR]))
+	assert_true(is_same(q.action_busy, resumed["object"]))
+	restored.actions.validate_work(q)
+	assert_eq(q.action, "door_walk")
+	restored._update_person(q, 0.5)
+	assert_eq(restored.grid.doors[DOOR]["state"], "open")
+	assert_false(restored.actions.ongoing.has(q.get_instance_id()))
+
+
+func test_saved_work_without_reach_uses_the_existing_default_radius() -> void:
+	_begin()
+	game.actions.ongoing[p.get_instance_id()].erase("reach")
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+	var restored = _game()
+	FieldSave.apply(restored, saved)
+	var q = restored.player
+	restored.actions.validate_work(q)
+	assert_eq(q.action, "door_walk")
+	restored._update_person(q, 0.5)
+	assert_eq(restored.grid.doors[DOOR]["state"], "open")
+
+
+func test_real_ai_updates_do_not_restart_a_companion_door_timer() -> void:
+	var mate = game.squad[1]
+	_place(mate, 0.8, true)
+	mate.command = "follow"
+	p.position = END
+	p.moving = true
+	p.facing = PI * 0.5
+	game.actions.open_door_on_way(mate, DOOR)
+	var ticket: Dictionary = game.actions.ongoing[mate.get_instance_id()]
+	for tick: int in 3:
+		_tick_person(mate, 0.125)
+		mate.brain["think_t"] = 0.0
+		game.ai.update(0.125)
+		assert_eq(mate.action, "door_walk")
+		assert_true(is_same(game.actions.ongoing.get(mate.get_instance_id(), {}), ticket))
+		assert_almost_eq(mate.action_t, 0.5 - float(tick + 1) * 0.125, 0.00001)
+	_tick_person(mate, 0.125)
+	assert_eq(game.grid.doors[DOOR]["state"], "open")
+	assert_eq(game.audio.played.count("door_open"), 1)
+
+
+func test_stop_cancels_door_work_and_releases_its_reservation() -> void:
+	_begin()
+	p.stop()
+	assert_eq(p.action, "", "a7f6e255: stop leaves a live door action")
+	assert_false(bool(game.grid.doors[DOOR]["busy"]))
+	game.actions.validate_work(p)
+	assert_false(game.actions.ongoing.has(p.get_instance_id()))
+	_tick_person(p, 0.75)
+	assert_eq(game.grid.doors[DOOR]["state"], "closed")
+
+
+func test_ice_fall_in_first_span_prevents_the_remaining_stick_movement() -> void:
+	_place(p, 0.4, true)
+	_begin()
+	p.action_t = 0.01
+	p.stick = Vector2.RIGHT
+	p.drive_dir = Vector3.RIGHT
+	p.drive_speed = 3.9
+	p.brain[Gait.GROUND_RUN] = {"speed": 3.9, "running": true}
+	p.rotation.y = PI * 0.5
+	p.brain["step_r"] = 0.3 # No contact in the first slice: the next RNG draw is the ice check.
+	p.ice_t = 3.0
+	game.grid.floor.fill(FieldGrid.Floor.ICE)
+	var chosen_seed: int = -1
+	for candidate: int in 1000:
+		game.rng.seed = candidate
+		if game.rng.randf() < 0.1:
+			chosen_seed = candidate
+			break
+	assert_gte(chosen_seed, 0, "bounded selection of a real ice-fall random draw")
+	if chosen_seed < 0:
+		return
+	game.rng.seed = chosen_seed
+	var before: Vector3 = p.position
+	_tick_person(p, 0.1)
+	assert_gt(p.fallen_t, 0.0, "the real footstep ice branch called combat.fall")
+	assert_lte(p.position.x - before.x, 3.9 * 0.01 + 0.00001,
+		"a7f6e255: live stick input moves the fallen body in the remaining 0.09 s")
+	assert_eq(game.grid.doors[DOOR]["state"], "closed")
+	assert_false(bool(game.grid.doors[DOOR]["busy"]))
+	assert_false(game.actions.ongoing.has(p.get_instance_id()))
+
+
+func test_released_stick_cancels_when_forward_inertia_has_stopped() -> void:
+	_place(p, 0.04)
+	p.stick = Vector2.RIGHT
+	_tick_person(p, 0.05)
+	assert_eq(p.action, "door_walk")
+	p.stick = Vector2.ZERO
+	_tick_person(p, 0.25)
+	assert_eq(p.drive_speed, 0.0)
+	assert_eq(p.action, "", "a7f6e255: an idle body finishes its abandoned door work")
+	assert_false(game.actions.ongoing.has(p.get_instance_id()))
+	assert_false(bool(game.grid.doors[DOOR]["busy"]))
+	_tick_person(p, 0.5)
+	assert_eq(game.grid.doors[DOOR]["state"], "closed")

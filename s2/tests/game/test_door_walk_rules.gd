@@ -95,3 +95,27 @@ func test_clock_roundoff_cannot_add_a_frame_at_thirty_or_sixty_hz() -> void:
 	assert_true(DoorWalk.finishes(0.5, 0.5, 1.0))
 	assert_false(DoorWalk.finishes(0.5, 0.0, 1.0))
 	assert_false(DoorWalk.finishes(0.5, 1.0, 0.0))
+
+
+func test_corner_tangent_does_not_enter_but_an_endpoint_approach_still_does() -> void:
+	var doors := {Vector2i(2, 2): {"state": "closed"}}
+	for ends: Array in [[Vector3(2.5, 0, 3.5), Vector3(3.5, 0, 2.5)],
+			[Vector3(3.5, 0, 2.5), Vector3(2.5, 0, 3.5)],
+			[Vector3(1.5, 0, 2), Vector3(3.5, 0, 2)]]:
+		assert_true(DoorWalk.first_door(ends[0], PackedVector3Array([ends[1]]),
+			doors, 4.0).is_empty(), "a7f6e255: a tangent is incorrectly a door entry")
+	for start: Vector3 in [Vector3(1.5, 0, 2.5), Vector3(3.5, 0, 2.5)]:
+		var edge := Vector3(2.0 if start.x < 2.0 else 3.0, 0, 2.5)
+		var hit: Dictionary = DoorWalk.first_door(start, PackedVector3Array([edge]), doors, 0.5)
+		assert_false(hit.is_empty(), "an approach ending exactly at the entrance is retained")
+		if not hit.is_empty():
+			assert_almost_eq(float(hit["distance"]), 0.5, 0.000001)
+
+
+func test_ending_at_a_corner_is_entry_only_if_the_continued_ray_enters_the_cell() -> void:
+	var doors := {Vector2i(2, 2): {"state": "closed"}}
+	var corner := Vector3(3, 0, 3)
+	assert_true(DoorWalk.first_door(Vector3(2.5, 0, 3.5), PackedVector3Array([corner]),
+		doors, 2.0).is_empty(), "a7f6e255: clipping at a tangent cannot turn it into entry")
+	assert_false(DoorWalk.first_door(Vector3(3.5, 0, 3.5), PackedVector3Array([corner]),
+		doors, 2.0).is_empty())

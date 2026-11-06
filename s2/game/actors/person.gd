@@ -419,6 +419,8 @@ func go_to(p: PackedVector3Array, run: bool = false) -> void:
 
 
 func stop() -> void:
+	if action == "door_walk":
+		cancel_action()
 	path = PackedVector3Array()
 	moving = false
 

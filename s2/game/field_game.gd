@@ -2281,6 +2281,9 @@ func _walk_with_door(p: Person, delta: float) -> void:
 		return
 	var left: float = delta
 	while left > 0.0:
+		if not p.can_act():
+			actions.validate_work(p)
+			return
 		var rate: float = maxf(0.0, float(p.mults()["hands"]))
 		var span: float = left
 		if rate > 0.0:
@@ -2294,6 +2297,12 @@ func _walk_with_door(p: Person, delta: float) -> void:
 				_drive(p, span)
 			else:
 				_move_person(p, span)
+		# Cover idle slices too. The footsteps already contributed moving slices;
+		# this cumulative-time tail only supplies any as-yet unsampled time.
+		_update_ground_gait(p, delta - left + span)
+		if not p.can_act():
+			actions.validate_work(p)
+			return
 		if p.action == "door_walk":
 			actions.validate_work(p)
 			if p.action == "door_walk":
@@ -2319,7 +2328,7 @@ func _door_step(p: Person, route: PackedVector3Array, step: Vector3, speed: floa
 	var rate: float = float(p.mults()["hands"])
 	if p.action == "" and rate > 0.0:
 		var ahead: Dictionary = DoorWalk.first_door(p.position, route, grid.doors,
-			speed * actions.DOOR_TIME / rate)
+			speed * actions.DOOR_TIME / rate, grid.windows)
 		if not ahead.is_empty():
 			actions.open_door_on_way(p, ahead["cell"], float(ahead["distance"]), speed)
 	var dest: Vector3 = p.position + step
@@ -2329,13 +2338,15 @@ func _door_step(p: Person, route: PackedVector3Array, step: Vector3, speed: floa
 		return dest
 	var cell: Vector2i = barrier["cell"]
 	var door: Dictionary = grid.doors[cell]
-	if _meets_door(p, door):
+	var clear_approach: Dictionary = DoorWalk.first_door(p.position,
+		PackedVector3Array([dest]), grid.doors, step.length(), grid.windows)
+	if _meets_door(p, door) and not clear_approach.is_empty():
+		var in_reach: bool = actions._in_reach(p, FieldGrid.center(cell), true)
 		actions.open_door_on_way(p, cell)
-		if String(door["state"]) == "locked" or BuildingRules.planks_total(door) > 0:
+		if in_reach and (String(door["state"]) == "locked" or BuildingRules.planks_total(door) > 0):
 			p.drive_speed = 0.0
 			return p.position
-	var distance: float = DoorWalk.before_threshold(step.length(), float(barrier["distance"]))
-	return p.position + step.normalized() * distance
+	return DoorWalk.clamp_step(p.position, step, grid.doors)
 
 
 ## A door a walk deals with on the way (field_actions open_door_on_way):
@@ -2516,9 +2527,13 @@ func _slide(at: Vector3, step: Vector3) -> Vector3:
 	var lg := grid_at(at)
 	var r := at
 	var cand := r + Vector3(step.x, 0, 0)
+	if lg == grid:
+		cand = DoorWalk.clamp_step(r, cand - r, grid.doors)
 	if not lg.blocks_body(FieldGrid.cell_of(cand)):
 		r.x = cand.x
 	cand = r + Vector3(0, 0, step.z)
+	if lg == grid:
+		cand = DoorWalk.clamp_step(r, cand - r, grid.doors)
 	if not lg.blocks_body(FieldGrid.cell_of(cand)):
 		r.z = cand.z
 	return r
@@ -2555,24 +2570,37 @@ func _begin_motion_tick() -> void:
 	_motion_clock = clock.elapsed
 
 
-## Moving feet sample before their round; idle ticks decay the same filter.
-func _update_ground_gait(p: Person, delta: float, gone: float = 0.0) -> void:
+## Each prefix of a split tick uses total distance/time from the original
+## filter state. The final idle call fills only missing time, never twice.
+func _update_ground_gait(p: Person, delta: float, gone: float = 0.0, segment: bool = false) -> void:
 	var tick: float = clock.elapsed
 	if tick < float(p.ground_sample.get("clock", -INF)):
 		p.brain.erase(Gait.GROUND_RUN)
 		p.ground_sample.clear()
 		p.motion_epoch += 1
-	if int(p.ground_sample.get("tick", -1)) == _motion_tick and float(p.ground_sample.get("clock", -INF)) == tick:
-		return
+	var same_tick: bool = int(p.ground_sample.get("tick", -1)) == _motion_tick \
+		and float(p.ground_sample.get("clock", -INF)) == tick
+	var elapsed: float = delta if is_finite(delta) and delta > 0.0 else 0.0
+	var distance: float = absf(gone) if is_finite(gone) else 0.0
+	var basis: Dictionary = p.brain.get(Gait.GROUND_RUN, {}).duplicate()
+	if same_tick:
+		var sampled: float = float(p.ground_sample.get("elapsed", 0.0))
+		if not segment and elapsed <= sampled:
+			return
+		elapsed = sampled + elapsed if segment else elapsed
+		distance += float(p.ground_sample.get("distance", 0.0))
+		basis = p.ground_sample["basis"]
 	var floor_kind: int = grid_at(p.position).floor_at(FieldGrid.cell_of(p.position))
-	Gait.update_ground_run(p, gone, delta, floor_kind)
+	p.brain[Gait.GROUND_RUN] = basis
+	Gait.update_ground_run(p, distance, elapsed, floor_kind)
 	var state: Dictionary = p.brain[Gait.GROUND_RUN]
 	state["tick"] = tick if is_finite(tick) else -1.0
-	p.ground_sample = {"tick": _motion_tick, "clock": tick}
+	p.ground_sample = {"tick": _motion_tick, "clock": tick, "basis": basis,
+		"elapsed": elapsed, "distance": distance}
 
 
 func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> void:
-	_update_ground_gait(p, delta, gone)
+	_update_ground_gait(p, delta, gone, true)
 	var running := Gait.ground_runs(p)
 	var lg := grid_at(p.position)
 	var floor_kind := lg.floor_at(cell)
