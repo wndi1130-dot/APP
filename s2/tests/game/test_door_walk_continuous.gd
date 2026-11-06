@@ -693,3 +693,100 @@ func test_released_stick_cancels_when_forward_inertia_has_stopped() -> void:
 	assert_false(bool(game.grid.doors[DOOR]["busy"]))
 	_tick_person(p, 0.5)
 	assert_eq(game.grid.doors[DOOR]["state"], "closed")
+
+
+## Recheck fixtures use only APIs present in c1f4b4f8, including on the red run.
+func _reserve_door_around_window(glass: bool = false) -> bool:
+	Corridor.add_window(game.grid, glass)
+	_place(p, 1.05, true)
+	p.position = Vector3(28.95, 0, 8.95)
+	p.go_to(PackedVector3Array([Vector3(28.95, 0, 9.10),
+		Vector3(30.5, 0, 9.10), FieldGrid.center(DOOR)]), true)
+	assert_true(game.grid.line_clear(FieldGrid.cell_of(p.position), DOOR),
+		"a broken frame without curtain/planks permits the initial hand-work sight line")
+	var hit: Dictionary = DoorWalk.first_door(p.position, p.path, game.grid.doors,
+		p.speed(FieldGrid.Floor.SNOW) * DoorRules.TOGGLE_SECONDS, game.grid.windows)
+	assert_false(hit.is_empty(), "the bent route goes round the window to the door")
+	if hit.is_empty():
+		return false
+	assert_almost_eq(float(hit["distance"]), 1.8, DoorWalk.CLEARANCE)
+	_tick_person(p, 0.01)
+	assert_eq(p.action, "door_walk", "the real path movement starts the reservation")
+	assert_almost_eq(p.action_t, 0.49, DoorWalk.CLOCK_EPS)
+	return p.action == "door_walk"
+
+
+func test_turning_an_active_reservation_toward_a_frame_vaults_before_restarting_the_door() -> void:
+	if not _reserve_door_around_window():
+		return
+	p.stick = Vector2.RIGHT
+	_tick_person(p, 0.1)
+	assert_eq(game.audio.played.count("window_vault"), 1,
+		"c1f4b4f8: the existing door work blocks the newly earlier frame")
+	assert_gt(p.position.x, 29.0)
+	assert_eq(p.action, "")
+	assert_false(game.actions.ongoing.has(p.get_instance_id()))
+	assert_false(bool(game.grid.doors[DOOR]["busy"]))
+	assert_eq(game.grid.doors[DOOR]["state"], "closed")
+	_tick_person(p, 0.05)
+	assert_eq(p.action, "door_walk", "prediction resumes only after entering the frame")
+	assert_almost_eq(p.action_t, 0.45, DoorWalk.CLOCK_EPS, "a fresh half-second, not the old remainder")
+	_tick_person(p, 0.44)
+	assert_eq(game.grid.doors[DOOR]["state"], "closed")
+	_tick_person(p, 0.01)
+	assert_eq(game.grid.doors[DOOR]["state"], "open")
+	assert_eq(game.audio.played.count("window_vault"), 1)
+	assert_eq(game.audio.played.count("door_open"), 1)
+
+
+func test_turning_an_active_reservation_toward_glass_keeps_the_choice_ahead_of_the_door() -> void:
+	if not _reserve_door_around_window(true):
+		return
+	p.running = false
+	p.stick = Vector2.RIGHT
+	_tick_person(p, 0.1)
+	assert_true(game.actions.glass_asked.has(Corridor.WINDOW),
+		"c1f4b4f8: the old door timer hides the newly earlier glass choice")
+	assert_eq(p.action, "")
+	assert_false(game.actions.ongoing.has(p.get_instance_id()))
+	assert_false(bool(game.grid.doors[DOOR]["busy"]))
+	for _tick: int in 5:
+		_tick_person(p, 0.1)
+	assert_eq(game.grid.doors[DOOR]["state"], "closed", "the abandoned timer cannot finish at the frame")
+	assert_lt(p.position.x, 29.0)
+	assert_eq(game.audio.played.count("window_vault"), 0)
+	assert_eq(game.audio.played.count("door_open"), 0)
+	assert_true(p.body.wounds.is_empty())
+
+
+func test_real_stick_crosses_all_four_edges_and_offsets_without_an_unreserved_stall() -> void:
+	for fixed_axis: int in [0, 2]:
+		var moving_axis: int = 2 if fixed_axis == 0 else 0
+		var low: float = float(DOOR.x if fixed_axis == 0 else DOOR.y)
+		var moving_low: float = float(DOOR.x if moving_axis == 0 else DOOR.y)
+		for high_edge: bool in [false, true]:
+			var edge: float = low + (1.0 if high_edge else 0.0)
+			for offset: float in [-DoorWalk.CLEARANCE, 0.0, DoorWalk.CLEARANCE]:
+				var owned: bool = offset < 0.0 if high_edge else offset >= 0.0
+				for direction: float in [-1.0, 1.0]:
+					game.grid.set_door_state(DOOR, "closed")
+					_place(p, 1.0)
+					p.stop()
+					var start: Vector3 = FieldGrid.center(DOOR)
+					start[fixed_axis] = edge + offset
+					start[moving_axis] = moving_low + (-0.02 if direction > 0.0 else 1.02)
+					var forward := Vector3.ZERO
+					forward[moving_axis] = direction
+					p.position = start
+					p.stick = Vector2(forward.x, forward.z)
+					game.audio.played.clear()
+					var reserved := false
+					for _tick: int in 24:
+						_tick_person(p, 0.05)
+						reserved = reserved or p.action == "door_walk"
+					var label := "axis=%d edge=%s offset=%s direction=%s" % [fixed_axis, edge, offset, direction]
+					assert_gt((p.position - start).dot(forward), 1.02,
+						"c1f4b4f8: owned low edges stall forever without reserving; " + label)
+					assert_eq(reserved, owned, label)
+					assert_eq(game.grid.doors[DOOR]["state"], "open" if owned else "closed", label)
+					assert_eq(game.audio.played.count("door_open"), 1 if owned else 0, label)

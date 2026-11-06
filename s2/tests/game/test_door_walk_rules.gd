@@ -101,7 +101,7 @@ func test_corner_tangent_does_not_enter_but_an_endpoint_approach_still_does() ->
 	var doors := {Vector2i(2, 2): {"state": "closed"}}
 	for ends: Array in [[Vector3(2.5, 0, 3.5), Vector3(3.5, 0, 2.5)],
 			[Vector3(3.5, 0, 2.5), Vector3(2.5, 0, 3.5)],
-			[Vector3(1.5, 0, 2), Vector3(3.5, 0, 2)]]:
+			[Vector3(1.5, 0, 3), Vector3(3.5, 0, 3)]]:
 		assert_true(DoorWalk.first_door(ends[0], PackedVector3Array([ends[1]]),
 			doors, 4.0).is_empty(), "a7f6e255: a tangent is incorrectly a door entry")
 	for start: Vector3 in [Vector3(1.5, 0, 2.5), Vector3(3.5, 0, 2.5)]:
@@ -119,3 +119,28 @@ func test_ending_at_a_corner_is_entry_only_if_the_continued_ray_enters_the_cell(
 		doors, 2.0).is_empty(), "a7f6e255: clipping at a tangent cannot turn it into entry")
 	assert_false(DoorWalk.first_door(Vector3(3.5, 0, 3.5), PackedVector3Array([corner]),
 		doors, 2.0).is_empty())
+
+
+func test_parallel_edges_use_half_open_cell_ownership_in_both_directions() -> void:
+	var doors := {Vector2i(2, 2): {"state": "closed"}}
+	for fixed_axis: int in [0, 2]:
+		var moving_axis: int = 2 if fixed_axis == 0 else 0
+		for edge: float in [2.0, 3.0]:
+			for offset: float in [-DoorWalk.CLEARANCE, 0.0, DoorWalk.CLEARANCE]:
+				var owned: bool = offset >= 0.0 if edge == 2.0 else offset < 0.0
+				for direction: float in [-1.0, 1.0]:
+					var start := Vector3(2.5, 0, 2.5)
+					start[fixed_axis] = edge + offset
+					start[moving_axis] = 1.5 if direction > 0.0 else 3.5
+					var step := Vector3.ZERO
+					step[moving_axis] = direction * 2.0
+					var hit: Dictionary = DoorWalk.first_door(start,
+						PackedVector3Array([start + step]), doors, step.length())
+					var label := "axis=%d edge=%s offset=%s direction=%s" % [fixed_axis, edge, offset, direction]
+					assert_eq(not hit.is_empty(), owned,
+						"c1f4b4f8: an owned low edge must enter the door; " + label)
+					var limited: Vector3 = DoorWalk.clamp_step(start, step, doors)
+					if owned:
+						assert_lt((limited - start).length(), 0.5, label)
+					else:
+						assert_eq(limited, start + step, label)

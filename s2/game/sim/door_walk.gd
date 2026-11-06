@@ -28,7 +28,7 @@ static func clamp_step(at: Vector3, step: Vector3, doors: Dictionary) -> Vector3
 ## Use the input that will drive this tick, not yesterday's route or velocity.
 ## Releasing the stick keeps an opening only while inertia still goes to it.
 static func follows(at: Vector3, path: PackedVector3Array, stick: Vector2,
-		drive_dir: Vector3, drive_speed: float, cell: Vector2i) -> bool:
+		drive_dir: Vector3, drive_speed: float, cell: Vector2i, frames: Dictionary = {}) -> bool:
 	if not at.is_finite() or not stick.is_finite():
 		return false
 	var route: PackedVector3Array = path
@@ -40,14 +40,16 @@ static func follows(at: Vector3, path: PackedVector3Array, stick: Vector2,
 			return false
 		var reach: float = at.distance_to(FieldGrid.center(cell)) + sqrt(0.5)
 		route = PackedVector3Array([at + direction.normalized() * reach])
+	# Reuse the same cell/frame ordering as new reservations and swept steps.
+	# The full route length keeps bends; first_door stops at invalid points/stairs.
+	var length := 0.0
 	var from := at
 	for point: Vector3 in route:
-		if not point.is_finite() or absf(point.y - from.y) > 0.001:
-			return false
-		if point != from and _entry_distance(from, point, cell) < INF:
-			return true
+		if not point.is_finite():
+			break
+		length += from.distance_to(point)
 		from = point
-	return false
+	return not first_door(at, route, {cell: {"state": "closed"}}, length, frames).is_empty()
 
 
 static func finishes(remaining: float, elapsed: float, rate: float) -> bool:
@@ -121,7 +123,8 @@ static func _entry_distance(from: Vector3, to: Vector3, cell: Vector2i) -> float
 	var leave: float = INF
 	for axis: int in 2:
 		if step[axis] == 0.0:
-			if start[axis] <= low[axis] or start[axis] >= low[axis] + 1.0:
+			# cell_of floors coordinates: a parallel low edge is owned, a high edge is not.
+			if start[axis] < low[axis] or start[axis] >= low[axis] + 1.0:
 				return INF
 		else:
 			var a: float = (low[axis] - start[axis]) / step[axis]

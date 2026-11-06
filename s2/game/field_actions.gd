@@ -171,7 +171,7 @@ func _work_valid(p, work: Dictionary) -> bool:
 	if not p.can_act() or not _in_reach(p, work["at"], work["kind"] != "container", float(work.get("reach", INTERACT_REACH))):
 		return false
 	if work["action"] == "door_walk" and not DoorWalk.follows(p.position, p.path,
-			p.stick, p.drive_dir, p.drive_speed, work["key"]):
+			p.stick, p.drive_dir, p.drive_speed, work["key"], game.grid.windows):
 		return false
 	if p.body.injured_at != work["injured_at"] or p.body.wounds.size() > int(work["wounds"]):
 		return false
