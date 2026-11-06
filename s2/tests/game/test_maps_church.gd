@@ -1092,14 +1092,17 @@ func test_no_coal_salvage_and_church04_yard_coal_is_a_heap() -> void:
 			continue
 		checked += 1
 		var yard := Vector2i(68, 18)
+		var heap_rect := Rect2i(68, 18, 4, 3)
 		var heaps: int = 0
 		for p: Dictionary in d["props"]:
 			var r: Rect2i = p["rect"]
 			if p["kind"] == "coal_heap" and int(p.get("level", 0)) == 0 and r.has_point(yard):
 				heaps += 1
+				assert_eq(r, heap_rect)
 				assert_eq(p["solid"], "low")
 				assert_eq(p["note"], "식은 석탄 더미")
 		assert_eq(heaps, 1, "church_04 야적장 [68,18] 석탄 더미")
 		var g: FieldGrid = d["grid"]
-		assert_eq(g.solid_at(yard), S.LOW)
+		for c: Vector2i in _cells(heap_rect):
+			assert_eq(g.solid_at(c), S.LOW, "church_04 석탄 더미 칸 " + str(c))
 	assert_eq(checked, 1)
