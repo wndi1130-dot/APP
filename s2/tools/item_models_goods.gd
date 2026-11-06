@@ -266,7 +266,11 @@ static func _bar(root: Node3D, start: Vector3, finish: Vector3, width: float, th
 
 
 static func _triangle(vertices: Array[Vector3], normals: Array[Vector3], a: Vector3, b: Vector3, c: Vector3, normal: Vector3) -> void:
-	var points: Array[Vector3] = [a, c, b] if (b - a).cross(c - a).dot(normal) > 0.0 else [a, b, c]
+	# A ternary of two array literals is an untyped Array, which a typed variable refuses
+	# at run time: each literal goes straight into the typed variable instead.
+	var points: Array[Vector3] = [a, b, c]
+	if (b - a).cross(c - a).dot(normal) > 0.0:
+		points = [a, c, b]
 	for point: Vector3 in points:
 		vertices.append(point)
 		normals.append(normal)
