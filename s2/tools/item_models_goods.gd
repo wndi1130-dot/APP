@@ -1,5 +1,5 @@
 extends RefCounted
-## 파밍 물건 31종. 단위는 m, 발은 y = 0, 새 노드의 소유권은 호출자에게 있다.
+## 파밍 물건 32종. 단위는 m, 발은 y = 0, 새 노드의 소유권은 호출자에게 있다.
 ## GDScript는 Godot 플랫폼 코드이므로 Rust 기본 규칙의 예외다.
 ## Kenney CC0 원본은 기존 models/items/의 License.txt를 따른다.
 
@@ -36,6 +36,7 @@ const RECIPES: Dictionary = {
 	"junk_smokes": {"shape": "smokes"},
 	"junk_rag": {"shape": "rag"},
 	"luxury_pack": {"shape": "luxury_pack"},
+	"it_key": {"shape": "house_key"},
 }
 
 const PAPER: Color = Color("c4bda5")
@@ -154,6 +155,8 @@ static func build(id: String) -> Node3D:
 			_rag(geometry)
 		"luxury_pack":
 			built = _luxury_pack(geometry)
+		"house_key":
+			_house_key(geometry)
 		_:
 			built = false
 	if not built:
@@ -1071,3 +1074,31 @@ static func _luxury_pack(root: Node3D) -> bool:
 	_cylinder(contents, FILL_SIZE, RED, BOTTLE_AT + FILL_LIFT)
 	_metal(_cylinder(root, STOPPER, GOLD, BOTTLE_AT + STOPPER_LIFT))
 	return true
+
+
+static func _house_key(root: Node3D) -> void:
+	# key_<번호>가 공유하는 작은 쇠 열쇠. 머리 구멍 위에는 판을 겹치지 않는다.
+	const HEAD_SIZE: Vector3 = Vector3(0.009, 0.016, 0.008)
+	const HEAD_AT: Vector3 = Vector3(-0.027, 0.004, 0)
+	const METAL_PARTS: Array = [
+		["box", Vector3(0.058, 0.008, 0.008), Vector3(0.011, 0.004, 0), STEEL],
+		["box", Vector3(0.009, 0.008, 0.014), Vector3(0.020, 0.004, 0.009), STEEL],
+		["box", Vector3(0.009, 0.008, 0.018), Vector3(0.035, 0.004, 0.010), STEEL],
+		["box", Vector3(0.010, 0.009, 0.012), Vector3(-0.007, 0.0045, 0), IRON],
+	]
+	const TAG_AT: Vector3 = Vector3(-0.006, 0.004, -0.035)
+	const TAG_TURN: Vector3 = Vector3(0, -12, 0)
+	const TAG_PARTS: Array = [
+		["box", Vector3(0.028, 0.008, 0.022), Vector3.ZERO, NEWSPRINT],
+		["box", Vector3(0.017, 0.008, 0.008), Vector3(0, 0.008, 0), INK],
+	]
+	const TIE_SIZE: Vector3 = Vector3(0.003, 0.009, 0.006)
+	const TIE_AT: Vector3 = Vector3(-0.023, 0.010, -0.018)
+	var head: MeshInstance3D = _ring(root, HEAD_SIZE, STEEL, HEAD_AT)
+	head.name = "Head"
+	_metal(head)
+	_layout(root, METAL_PARTS, true)
+	var tag: Node3D = _frame(root, TAG_AT, TAG_TURN)
+	tag.name = "Tag"
+	_layout(tag, TAG_PARTS)
+	_ring(root, TIE_SIZE, CORD, TIE_AT)

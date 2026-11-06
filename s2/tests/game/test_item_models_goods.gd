@@ -11,12 +11,13 @@ const EXPECTED_KEYS: Array[String] = [
 	"rare_saw_blades", "rusk", "jar_cabbage", "jar_honey", "flour", "peas",
 	"rare_coffee_sack", "fever_pills", "food_pack", "herbs", "med_box", "plank",
 	"rare_wine_case", "rare_silver_case", "junk_smokes", "junk_rag", "luxury_pack",
+	"it_key",
 ]
 const FRAGMENT_KEYS: Array[String] = [
 	"frag_craft", "frag_engine", "frag_expedition", "frag_med", "frag_radio",
 ]
 const GLASS_KEYS: Array[String] = ["jar_cabbage", "rare_wine_case", "luxury_pack"]
-const LONG_KEYS: Array[String] = ["plank", "tweezers", "info_telegraph"]
+const LONG_KEYS: Array[String] = ["plank", "tweezers", "info_telegraph", "it_key"]
 const MIN_AXIS: float = 0.006
 const MAX_AXIS: float = 0.6
 const MIN_LONGEST_AXIS: float = 0.06
@@ -28,8 +29,8 @@ const MIN_GLASS_ALPHA: float = 0.55
 const MAX_GLASS_ALPHA: float = 0.75
 
 
-func test_ids_are_exactly_the_31_requested_keys() -> void:
-	assert_eq(EXPECTED_KEYS.size(), 31)
+func test_ids_are_exactly_the_32_requested_keys() -> void:
+	assert_eq(EXPECTED_KEYS.size(), 32)
 	var expected: Array[String] = EXPECTED_KEYS.duplicate()
 	var actual: Array = Goods.ids()
 	expected.sort()
@@ -37,18 +38,77 @@ func test_ids_are_exactly_the_31_requested_keys() -> void:
 	assert_eq(actual, expected, "누락·추가·중복 없이 같은 집합")
 	assert_false(actual.has("note_side"), "같은 이름의 쪽지는 중복으로 굽지 않음")
 	actual.clear()
-	assert_eq(Goods.ids().size(), 31, "반환한 목록을 바꿔도 등록부는 보존")
+	assert_eq(Goods.ids().size(), 32, "반환한 목록을 바꿔도 등록부는 보존")
 
 
 func test_every_key_is_a_named_field_or_carry_item() -> void:
 	for key: String in EXPECTED_KEYS:
-		var field_known: bool = FieldItems.has(key)
-		var carry_known: bool = Carry.ITEM_NAMES.has(key)
+		# it_key는 물건 id가 아니라 번호별 집 열쇠가 공유하는 그림 이름이다.
+		var item_id: String = FieldItems.key_for(0) if key == "it_key" else key
+		var field_known: bool = FieldItems.has(item_id)
+		var carry_known: bool = Carry.ITEM_NAMES.has(item_id)
 		assert_true(field_known or carry_known, key + "가 실제 물건으로 등록됨")
-		var display_name: String = FieldItems.item_name(key) if field_known else String(Carry.ITEM_NAMES.get(key, ""))
+		var display_name: String = FieldItems.item_name(item_id) if field_known else String(Carry.ITEM_NAMES.get(item_id, ""))
 		assert_false(display_name.is_empty(), key + "에 이름이 있음")
-		assert_ne(display_name, key, key + "가 id 그대로를 이름으로 돌려주지 않음")
+		assert_ne(display_name, item_id, key + "가 id 그대로를 이름으로 돌려주지 않음")
 	assert_eq(FieldItems.item_name("note_map"), FieldItems.item_name("note_side"), "쪽지의 이름이 같음")
+
+
+func test_numbered_house_keys_share_one_it_key_picture() -> void:
+	const BUILDING_NUMBERS: Array[int] = [0, 1, 423, 9999]
+	for building: int in BUILDING_NUMBERS:
+		var item_id: String = FieldItems.key_for(building)
+		assert_true(FieldItems.has(item_id), item_id + "는 실제 집 열쇠")
+		assert_eq(FieldItems.key_building(item_id), building, "집 번호 보존")
+		assert_eq(FieldItems.icon(item_id), "it_key", "번호마다 같은 그림 이름")
+		assert_eq(FieldItems.item_name(item_id), "열쇠", "번호마다 같은 물건 이름")
+		var numbered_model: Node3D = Goods.build(item_id)
+		assert_null(numbered_model, "번호별 모형을 중복 등록하지 않음")
+		if numbered_model != null:
+			numbered_model.free()
+
+
+func test_house_key_has_open_head_tag_and_distinct_metal_geometry() -> void:
+	const OTHER_METAL_KEYS: Array[String] = ["tweezers", "junk_nails"]
+	var model: Node3D = Goods.build("it_key")
+	assert_not_null(model, "집 열쇠 모형 생성")
+	if model == null:
+		return
+	var parts: Array[Dictionary] = []
+	_collect_meshes(model, Transform3D.IDENTITY, parts)
+	var bounds: AABB = _combined_bounds(parts)
+	assert_between(maxf(bounds.size.x, maxf(bounds.size.y, bounds.size.z)), 0.07, 0.1, "꼬리표를 포함한 열쇠 전체 길이")
+	var head: MeshInstance3D = model.find_child("Head", true, false) as MeshInstance3D
+	assert_not_null(head, "고리 머리 있음")
+	if head != null:
+		assert_true(head.mesh is TorusMesh, "막힌 원판 대신 구멍 있는 원환")
+		if head.mesh is TorusMesh:
+			var ring: TorusMesh = head.mesh as TorusMesh
+			assert_gt(ring.inner_radius, 0.0, "머리 가운데 실제 구멍")
+			assert_gt(ring.outer_radius, ring.inner_radius, "쇠 고리 두께")
+		var material: BaseMaterial3D = head.get_active_material(0) as BaseMaterial3D
+		assert_not_null(material, "쇠 고리 재질")
+		if material != null:
+			assert_between(material.metallic, 0.4, 0.7, "쇠 반사")
+			assert_between(material.roughness, 0.35, 0.5, "쇠 거칠기")
+	var tag: Node = model.find_child("Tag", true, false)
+	assert_not_null(tag, "작은 종이 꼬리표 있음")
+	if tag != null:
+		var tag_parts: Array[Dictionary] = []
+		_collect_meshes(tag, Transform3D.IDENTITY, tag_parts)
+		assert_gte(tag_parts.size(), 2, "종이와 글줄 있음")
+	for other_key: String in OTHER_METAL_KEYS:
+		var other: Node3D = Goods.build(other_key)
+		assert_not_null(other, other_key + " 비교 모형 생성")
+		if other == null:
+			continue
+		var other_parts: Array[Dictionary] = []
+		_collect_meshes(other, Transform3D.IDENTITY, other_parts)
+		var other_bounds: AABB = _combined_bounds(other_parts)
+		var same_geometry: bool = parts.size() == other_parts.size() and bounds.size.is_equal_approx(other_bounds.size)
+		assert_false(same_geometry, "열쇠는 " + other_key + "와 다른 모형")
+		other.free()
+	model.free()
 
 
 func test_all_models_have_grounded_geometry_and_muted_opaque_materials() -> void:

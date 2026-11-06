@@ -1,4 +1,4 @@
-# 옷 밖의 파밍 물건 31종: <id> <res://모형 스크립트> <yaw> <pitch> <roll> <margin>
+# 옷 밖의 파밍 물건 32종: <id> <res://모형 스크립트> <yaw> <pitch> <roll> <margin>
 # 굽기는 호출 세션이 Godot 문지기를 거쳐 실행한다. 이 파일은 실행하지 않는 입력 목록이다.
 # 종이 낱장: pitch 65~68, 여백 0.08로 글줄·찢긴 변·큰 도장을 내려다본다.
 # 긴 판자·핀셋·전신 테이프·굴대: 35 28 ±30 0.06으로 칸 대각선을 쓴다.
@@ -39,3 +39,5 @@ rare_silver_case res://tools/item_models_goods.gd 35 50 0 0.08
 junk_smokes res://tools/item_models_goods.gd 35 55 0 0.08
 junk_rag res://tools/item_models_goods.gd 35 58 0 0.08
 luxury_pack res://tools/item_models_goods.gd 35 35 0 0.10
+# 번호별 집 열쇠는 it_key 하나를 공유한다. 긴 대와 종이 꼬리표를 대각선에 둔다.
+it_key res://tools/item_models_goods.gd 35 28 30 0.06
