@@ -144,7 +144,7 @@ static func bag_order(game, p, by: String) -> Array:
 	if by == "name":
 		ids.sort_custom(func(a, b) -> bool: return _steady(game.item_name(a), game.item_name(b), first.find(a), first.find(b)))
 	else:
-		ids.sort_custom(func(a, b) -> bool: return _steady(-Carry.item_weight(a) * int(p.items[a]), -Carry.item_weight(b) * int(p.items[b]), first.find(a), first.find(b)))
+		ids.sort_custom(func(a, b) -> bool: return _steady(-weight_key(Carry.item_weight(a) * int(p.items[a])), -weight_key(Carry.item_weight(b) * int(p.items[b])), first.find(a), first.find(b)))
 	return ids
 
 
@@ -1042,14 +1042,21 @@ static func stack_index(items: Array, key: String) -> int:
 static func _stack_order(hud, s: Dictionary) -> Variant:
 	if hud.inv_sort == "name":
 		return hud.game.item_name(String(s["key"]))
-	return -float(s["weight"])
+	return -weight_key(float(s["weight"]))
+
+
+## A weight as a sort key in whole grams: 0.1 + 0.1 + 0.1 and 0.3 are the same
+## 300, so rows of one weight keep the order they lie in (_steady) instead of
+## splitting on a float's last bit.
+static func weight_key(weight: float) -> int:
+	return roundi(weight * 1000.0)
 
 
 ## What a row sorts by: its name, or the heavier first (a negative weight).
 static func _order_key(hud, id: String, n: int) -> Variant:
 	if hud.inv_sort == "name":
 		return hud.game.item_name(id)
-	return -Carry.item_weight(id) * n
+	return -weight_key(Carry.item_weight(id) * n)
 
 
 ## A steady order: rows with equal keys keep their place between refreshes.

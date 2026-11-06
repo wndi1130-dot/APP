@@ -197,18 +197,157 @@ func test_a_press_on_a_stack_gone_meanwhile_takes_nothing() -> void:
 	game.hud._close_modal()
 
 
-func test_the_bar_fills_on_the_stack_whose_kind_comes_out_even_the_hidden_twin() -> void:
+## What the box side shows while the first of the dented pair comes out, by a
+## real press of its row: the rows' words, which row has the bar and how full at
+## half the time, and the time the take costs.
+func _seen_while_taking(game, items: Array) -> Dictionary:
+	var p = game.player
+	p.items.clear()
+	var id: String = _box(game, items)
+	game.hud.loot(id)
+	_row(game.hud, "can_dented").pressed.emit()
+	var taking: String = game.actions.taking_item(p)
+	var total: float = p.action_total
+	p.action_t = total * 0.5
+	game.hud.loot(id)
+	var rows: Array = _near_rows(game.hud).map(func(b: Button) -> String: return "%s|%s" % [b.text, str(b.disabled)])
+	var barred: Array = []
+	var fill: float = -1.0
+	for b: Button in _near_rows(game.hud):
+		var bar := b.get_node_or_null("TakeBar") as ProgressBar
+		if bar != null:
+			barred.append(String(b.get_meta("item_id")))
+			fill = bar.value
+	# Let it finish, so the next box starts with free hands.
+	_step(game, p)
+	game.hud._close_modal()
+	return {"taking": taking, "total": total, "rows": rows, "barred": barred, "fill": fill}
+
+
+func test_a_tin_gone_off_comes_out_looking_and_timing_as_a_plain_one() -> void:
+	var game = _game()
+	var plain: Dictionary = _seen_while_taking(game, ["can_dented", "can_dented", "scrap"])
+	var hidden: Dictionary = _seen_while_taking(game, ["can_dented_bad", "can_dented", "scrap"])
+	assert_eq(hidden["taking"], "can_dented_bad", "the press took the first in the box, the bad one")
+	assert_eq(plain["taking"], "can_dented")
+	assert_almost_eq(float(hidden["total"]), float(plain["total"]), 0.0001, "the same time")
+	assert_eq(hidden["rows"], plain["rows"], "the same rows, words and waiting")
+	assert_eq(hidden["barred"], ["can_dented"], "the bar on the dented row")
+	assert_eq(hidden["barred"], plain["barred"])
+	assert_almost_eq(float(hidden["fill"]), float(plain["fill"]), 0.0001, "as full at half the time")
+
+
+func test_rows_of_one_weight_keep_the_order_they_lie_in() -> void:
+	var game = _game()
+	var hud = game.hud
+	# Three openers (0.1 each, added up in floats) weigh what one handful of springs does.
+	assert_almost_eq(Carry.item_weight("can_opener") * 3.0, Carry.item_weight("springs"), 0.0001)
+	assert_eq(InventoryPane.weight_key(0.1 + 0.1 + 0.1), InventoryPane.weight_key(0.3))
+	hud.loot(_box(game, ["springs", "can_opener", "can_opener", "can_opener"]))
+	var rows: Array = _near_rows(hud).map(func(b: Button) -> String: return String(b.get_meta("item_id")))
+	assert_eq(rows, ["springs", "can_opener"], "a tie keeps the first laid first")
+	hud._lay_bag_again()
+	rows = _near_rows(hud).map(func(b: Button) -> String: return String(b.get_meta("item_id")))
+	assert_eq(rows, ["springs", "can_opener"], "and again when laid over itself")
+	hud._close_modal()
+
+
+func test_a_held_stack_stays_open_as_it_counts_down_and_closes_when_gone() -> void:
 	var game = _game()
 	var p = game.player
-	var id: String = _box(game, ["can_dented_bad", "can_dented", "scrap"])
+	var hud = game.hud
+	var id: String = _box(game, ["can_beans", "scrap", "can_beans", "can_beans"])
+	hud.loot(id)
+	hud._inv_expand("near", "can_beans")
+	for left: int in [2, 1, 0]:
+		(hud.modal.find_child("Take", true, false) as Button).pressed.emit()
+		assert_null(hud.modal.find_child("More", true, false), "rows wait (and fold) while it comes out")
+		_step(game, p)
+		var more := hud.modal.find_child("More", true, false) as Control
+		var every := hud.modal.find_child("TakeKind", true, false) as Button
+		if left == 0:
+			assert_null(_row(hud, "can_beans"), "the last one out: no row")
+			assert_null(more, "and nothing held open")
+		else:
+			assert_not_null(more, "open again with %d left" % left)
+			assert_eq(_count_word(_row(hud, "can_beans")), "×%d" % left if left > 1 else "")
+			if left > 1:
+				assert_eq((every.find_child("Word", true, false) as Label).text, "×%d" % left)
+			else:
+				assert_null(every, "one left: the take is all of it")
+	assert_eq(int(p.items.get("can_beans", 0)), 3)
+	hud._close_modal()
+
+
+func test_a_held_stack_opens_only_beside_its_own_box() -> void:
+	var game = _game()
+	var hud = game.hud
+	var id: String = _box(game, ["scrap", "scrap"])
+	game.ground_items.append({"pos": game.player.position, "id": "scrap", "n": 1})
+	hud.loot(id)
+	hud._inv_expand("near", "scrap")
+	assert_not_null(hud.modal.find_child("More", true, false))
+	hud._inv_place({"kind": "ground", "id": "", "name": "바닥"})
+	assert_not_null(_row(hud, "scrap"), "the floor's scrap is there")
+	assert_null(hud.modal.find_child("More", true, false), "the box's held row does not open on the floor")
+	hud._inv_place({"kind": "box", "id": id, "name": "궤"})
+	assert_not_null(hud.modal.find_child("More", true, false), "back at the box, it is still held open")
+	hud._close_modal()
+
+
+func test_a_kind_taken_away_while_it_comes_out_is_not_given_twice() -> void:
+	var game = _game()
+	var p = game.player
+	var id: String = _box(game, ["scrap", "scrap", "wood"])
+	var c: Dictionary = game.data["containers"][id]
+	game.actions.take_kind(p, id, "scrap")
+	assert_eq(game.actions.taking_item(p), "scrap")
+	# A companion takes one of the two meanwhile: one is left for this hand.
+	c["items"].erase("scrap")
+	_step(game, p)
+	assert_eq(int(p.items.get("scrap", 0)), 1)
+	assert_eq(p.action, "", "none left to go on with")
+	assert_eq(c["items"], ["wood"])
+	assert_false(game.actions.take_queue.has(p.get_instance_id()), "the queue is gone")
+	# All of it taken away meanwhile: nothing is given.
+	c["items"] = ["scrap", "wood"]
+	game.actions.take_kind(p, id, "scrap")
+	c["items"] = ["wood"]
+	_step(game, p)
+	assert_eq(int(p.items.get("scrap", 0)), 1, "nothing out of thin air")
+	assert_eq(c["items"], ["wood"])
+
+
+func test_a_new_take_after_a_stop_does_not_go_on_with_the_old_kind() -> void:
+	var game = _game()
+	var p = game.player
+	var id: String = _box(game, ["scrap", "scrap", "scrap", "wood"])
+	var c: Dictionary = game.data["containers"][id]
 	game.hud.loot(id)
-	game.hud._loot_take(id, 0)
-	assert_eq(game.actions.taking_item(p), "can_dented_bad")
-	var tins: Button = _row(game.hud, "can_dented")
-	assert_not_null(tins.get_node_or_null("TakeBar"), "the dented row carries the bar")
-	assert_null(_row(game.hud, "scrap").get_node_or_null("TakeBar"), "the other row does not")
-	assert_true(tins.disabled, "rows wait while a thing comes out")
+	game.actions.take_kind(p, id, "scrap")
+	_step(game, p)
+	p.stick = Vector2(1, 0)
+	game._update_person(p, 0.05)
+	p.stick = Vector2.ZERO
+	assert_ne(p.action, "take")
+	game.hud._loot_take_kind(id, "wood")
+	assert_eq(game.actions.taking_item(p), "wood")
+	_step(game, p)
+	assert_eq(p.action, "", "the wood alone")
+	assert_eq(c["items"], ["scrap", "scrap"], "the scrap left stays")
+	assert_eq([int(p.items.get("scrap", 0)), int(p.items.get("wood", 0))], [1, 1])
 	game.hud._close_modal()
+
+
+func test_all_of_a_kind_skips_weapons_put_away_on_a_sled() -> void:
+	var game = _game()
+	var p = game.player
+	p.sled_weapon_stowed = true
+	var id: String = _box(game, ["knife", "knife", "wood"])
+	game.actions.take_kind(p, id, "knife")
+	assert_eq(p.action, "", "no hand free for them")
+	assert_false(game.actions.take_queue.has(p.get_instance_id()))
+	assert_eq(game.data["containers"][id]["items"], ["knife", "knife", "wood"])
 
 
 func test_a_held_stack_offers_all_of_its_kind_and_takes_only_those() -> void:
