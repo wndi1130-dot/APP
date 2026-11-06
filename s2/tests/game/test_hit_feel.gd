@@ -8,6 +8,7 @@ extends "res://addons/gut/test.gd"
 const FieldGame = preload("res://game/field_game.gd")
 const HitFeel = preload("res://game/hit_feel.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
+const Zombies = preload("res://game/actors/zombies.gd")
 const W = preload("res://game/sim/weapons.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
@@ -176,14 +177,13 @@ func test_the_players_shot_kicks_back_from_where_it_went() -> void:
 	assert_false(game.feel.holding(), "a shot does not hold the field")
 
 
-# At 30 frames a second a frame is longer than the lightest holds: the hold is
-# read as the frame starts, so even those stand one whole frame.
+# The remainder of a partially held frame advances the rules.
 func test_a_hold_shorter_than_a_frame_still_stands_one_frame() -> void:
 	game.feel.hold_t = 0.03
 	var t0: float = game.clock.elapsed
 	game._process(1.0 / 30.0)
 	assert_true(game.hitstop)
-	assert_eq(game.clock.elapsed, t0)
+	assert_almost_eq(game.clock.elapsed - t0, 1.0 / 30.0 - 0.03, 0.000001)
 	game._process(1.0 / 30.0)
 	assert_false(game.hitstop)
 	assert_gt(game.clock.elapsed, t0)
@@ -726,3 +726,62 @@ func test_hit_power_never_changes_seen_pos_including_fallen_and_shoved_bodies() 
 				if down > 0.0:
 					assert_eq(drawn, old, "the whole ground pose is unchanged")
 	DeadBody.table = prior
+
+
+func test_hold_seconds_are_exact_at_thirty_and_sixty_hz() -> void:
+	game.resume_pending = false
+	game.paused = false
+	game.slow = 1.0
+	for fps: int in [30, 60]:
+		for hold: float in [2.0 / 60.0, 0.05, 0.08, 0.12]:
+			game.feel.hold_t = 0.0
+			game.feel.rest_t = 0.0
+			game.feel._hold(hold)
+			var start: float = game.clock.elapsed
+			var dt: float = 1.0 / float(fps)
+			for _frame: int in range(int(float(fps) * 0.5)):
+				game._process(dt)
+			assert_almost_eq(0.5 - (game.clock.elapsed - start), hold, 0.000001)
+
+
+func test_a_partial_hold_advances_the_remainder_on_its_last_frame() -> void:
+	game.resume_pending = false
+	game.paused = false
+	game.slow = 1.0
+	game.feel.hold_t = 0.01
+	var start: float = game.clock.elapsed
+	game._process(1.0 / 30.0)
+	assert_almost_eq(game.clock.elapsed - start, 1.0 / 30.0 - 0.01, 0.000001)
+	# The pictures run the same remainder as the rules on that frame, and nothing on a whole held frame.
+	assert_almost_eq(PersonVisual.frame_delta(game, 1.0 / 30.0), 1.0 / 30.0 - 0.01, 0.000001)
+	game.feel.rest_t = 0.0
+	game.feel.hold_t = 0.0
+	game.feel._hold(0.1)
+	game._process(1.0 / 30.0)
+	assert_eq(PersonVisual.frame_delta(game, 1.0 / 30.0), 0.0)
+
+
+func test_dead_sight_fade_uses_partial_hitstop_and_still_finishes_paused() -> void:
+	game.resume_pending = false
+	game.paused = false
+	game.slow = 0.5
+	var z: Dictionary = game.zombies.spawn("dead", p.position)
+	z["worn"] = {}
+	var id: int = int(z["id"])
+	game.zombies._rendered_once = true
+	game.zombies._shown[id] = 0.8
+	game.hitstop = true
+	game.hitstop_active = 1.0 / 30.0 - 0.01
+	game.zombies.render(game.camera, {}, true, 1.0 / 30.0)
+	var expected: float = 0.8 - (1.0 / 30.0 - 0.01) * 0.5 / Zombies.SIGHT_FADE_OUT
+	assert_almost_eq(float(game.zombies._shown[id]), expected, 0.000001)
+	game.hitstop_active = 0.0
+	game.zombies.render(game.camera, {}, true, 1.0 / 30.0)
+	assert_almost_eq(float(game.zombies._shown[id]), expected, 0.000001)
+	game.hitstop = false
+	game.paused = true
+	game.slow = 1.0
+	game.zombies.render(game.camera, {}, true, 0.1)
+	assert_almost_eq(float(game.zombies._shown[id]), expected - 0.5, 0.000001)
+	game.zombies.render(game.camera, {}, true, 0.1)
+	assert_eq(float(game.zombies._shown[id]), 0.0)

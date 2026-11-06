@@ -1079,25 +1079,54 @@ func _move(z: Dictionary, delta: float) -> void:
 		z["path"] = path
 	if path.is_empty():
 		return
-	var next := path[0]
-	var dir := next - at
-	dir.y = 0
-	if dir.length() < 0.25:
-		# Stairs: the next point is the same spot a floor up or down.
-		z["pos"] = Vector3(at.x, game.level_y(game.level_of(next)), at.z)
+	var time_left: float = delta
+	for _segment: int in range(4):
+		if path.is_empty() or time_left <= 0.000000001:
+			break
+		var next: Vector3 = path[0]
+		var dir: Vector3 = next - at
+		dir.y = 0.0
+		var level_changes: bool = game.level_of(next) != game.level_of(at)
+		if level_changes and dir.length() < 0.25:
+			if time_left < delta:
+				break
+			z["pos"] = Vector3(at.x, game.level_y(game.level_of(next)), at.z)
+			path.remove_at(0)
+			break
+		if dir.length() <= 0.00001:
+			path.remove_at(0)
+			continue
+		var speed: float = _speed(z)
+		if speed <= 0.0:
+			break
+		var segment_time: float = minf(time_left, dir.length() / speed)
+		var step: Vector3 = dir.normalized() * minf(speed * segment_time, dir.length())
+		var dest: Vector3 = at + step
+		var dc: Vector2i = FieldGrid.cell_of(dest)
+		var lg = game.grid_at(at)
+		if lg.blocks_body(dc):
+			if lg == game.grid and game.grid.doors.has(dc):
+				_bang(z, dc, time_left)
+			dest = _slide(at, step)
+		var waypoint: Vector3 = Vector3(next.x, dest.y, next.z)
+		var reached: bool = dest.distance_to(waypoint) <= 0.00001
+		var avoided: Vector3 = _avoid_people(z, dest)
+		if not avoided.is_equal_approx(dest):
+			# A displaced intermediate point keeps its arrival radius.
+			if path.size() > 1 and dest.distance_to(waypoint) < 0.25:
+				reached = reached or lg.body_line_clear(FieldGrid.cell_of(dest), FieldGrid.cell_of(waypoint))
+			# Separation must not push a body through a wall or shut door.
+			var avoided_cell: Vector2i = FieldGrid.cell_of(avoided)
+			if not lg.blocks_body(avoided_cell) and lg.body_line_clear(FieldGrid.cell_of(dest), avoided_cell):
+				dest = avoided
+		z["angle"] = atan2(dir.x, dir.z)
+		z["pos"] = dest
+		at = dest
+		time_left -= segment_time
+		if not reached or level_changes:
+			break
 		path.remove_at(0)
-		z["path"] = path
-		return
-	var step := dir.normalized() * _speed(z) * delta
-	var dest := at + step
-	var dc := FieldGrid.cell_of(dest)
-	var lg = game.grid_at(at)
-	if lg.blocks_body(dc):
-		if lg == game.grid and game.grid.doors.has(dc):
-			_bang(z, dc, delta)
-		dest = _slide(at, step)
-	z["angle"] = atan2(dir.x, dir.z)
-	z["pos"] = _avoid_people(z, dest)
+	z["path"] = path
 
 
 func _bang(z: Dictionary, c: Vector2i, delta: float) -> void:
@@ -1561,7 +1590,9 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 	# field_game's clamp before slow; hitstop holds the picture. Pause alone may
 	# finish a pending fade, as the field keeps calling render while paused.
 	var step: float = clampf(get_process_delta_time() if delta < 0.0 else delta, 0.0, 0.1)
-	step = 0.0 if bool(game.hitstop) else step * maxf(float(game.slow), 0.0)
+	if bool(game.hitstop):
+		step = clampf(float(game.hitstop_active), 0.0, step)
+	step *= maxf(float(game.slow), 0.0)
 	var first: bool = not _rendered_once
 	# Only the restored still reads every seen appearance at once; a new field keeps
 	# one read a frame (test_dead_cast) and fades its unread dead in when ready.

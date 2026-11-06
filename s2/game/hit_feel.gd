@@ -152,8 +152,9 @@ func tick(delta: float, step: bool) -> void:
 		if hold_t > 0.0:
 			var over: float = delta - hold_t
 			hold_t = maxf(0.0, hold_t - delta)
-			if hold_t <= 0.0:
-				rest_t = maxf(0.0, STOP_REST - over)
+			if hold_t <= 0.000000001:
+				hold_t = 0.0
+				rest_t = maxf(0.0, STOP_REST - maxf(0.0, over))
 		elif rest_t > 0.0:
 			rest_t = maxf(0.0, rest_t - delta)
 	var keep: Array = []
