@@ -93,6 +93,28 @@ const vec3 GRAVEL = vec3(0.55, 0.52, 0.47);
 // at the dry grass's lightness (linear 0.215 to its 0.22).
 const vec3 LATE_GREEN = vec3(0.46, 0.52, 0.40);
 
+// 2026-11-07: ground_detail.png, RGBA8 512x512, alpha / 255 > threshold.
+// Pillow + NumPy counted all 262144 source texels at thresholds 0.59..0.71, step 0.01.
+// PNG SHA-256: a6efa603d8ad6f957e8360521c0dd43edbd42b03a05b34da83b606c200f78838.
+// Linear interpolation's maximum area error against the 8-bit histogram is 0.006608.
+const float GRASS_HOLE_AREAS[13] = float[13](
+	0.286319733, 0.264266968, 0.249614716, 0.229896545, 0.217304230,
+	0.199253082, 0.188282013, 0.171867371, 0.161499023, 0.147472382,
+	0.137924194, 0.125110626, 0.113395691
+);
+// The 2.6 m tile's texel is 0.005078125 m. Horizontal/vertical above-threshold
+// runs have median 1 texel; the area-weighted median at 0.59/0.65 is 2 texels.
+// Start at half a texel (two pixels per smallest hole), finish at 2 texels
+// (the area-weighted median hole fits within one pixel), before mips erase it.
+const float GRASS_HOLE_FADE_START = 0.0025390625;
+const float GRASS_HOLE_FADE_END = 0.01015625;
+
+float grass_hole_area(float threshold) {
+	float index = clamp((threshold - 0.59) * 100.0, 0.0, 12.0);
+	int lower = int(floor(index));
+	return mix(GRASS_HOLE_AREAS[lower], GRASS_HOLE_AREAS[min(lower + 1, 12)], fract(index));
+}
+
 // Decision 496: metres per layer; the K1 row is road, patch, pavement, grass.
 // Later bands add rows here. Until then every band uses the K1 materials.
 // The two asphalt photos hold their pattern three times over each way, so one
@@ -131,6 +153,16 @@ vec4 ground_layer(int layer, vec2 p, vec2 dx, vec2 dy) {
 // width of a fract() would jump where it wraps and draw every cell's edge).
 float band(float d, float w, float aa) {
 	return 1.0 - smoothstep(w - aa, w + aa, abs(d));
+}
+
+// Cubic value-noise calibration: 262144 uniform corner/phase samples, seed 0x12345678;
+// LCG 1664525/1013904223 modulo 2^32, six draws per sample: x, y, a, b, c, d.
+// 17055 samples with abs(value - 0.5) < 0.02 had mean abs(dvalue/daxis) 0.310137.
+// px = abs(dx) + abs(dy), in metres/pixel: 0.31 * frequency * sum(px) approximates
+// the old fwidth(vein), without differentiating inside a material branch.
+// Keep the original value-space half widths (road 0.012, screed 0.01).
+float noise_edge_width(vec2 px, float frequency) {
+	return 0.31 * frequency * (px.x + px.y) + 1e-4;
 }
 
 // How far a point of a road cell lies from the cell's kerb, in cells (1 with no kerb in the
@@ -270,7 +302,7 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 d
 			// Aged asphalt: wide worn patches, a few cracks.
 			c = ASPHALT * (0.9 + 0.18 * fx_fbm2(p * 0.18 + 11.0)) * (0.96 + 0.08 * fx_vnoise(p * 3.7));
 			float vein = fx_vnoise(p * 0.9 + 2.0) - 0.5;
-			float crack = band(vein, 0.012, fwidth(vein) + 1e-4) * smoothstep(0.55, 0.7, fx_vnoise(p * 0.3 + 5.0));
+			float crack = band(vein, 0.012, noise_edge_width(px, 0.9)) * smoothstep(0.55, 0.7, fx_vnoise(p * 0.3 + 5.0));
 			c *= 1.0 - 0.3 * crack;
 		}
 		// The kerb (light stone) and gutter (dark, silted) on the sides at open ground.
@@ -458,7 +490,7 @@ vec3 room_bricks(vec3 tone, vec3 joint, vec2 p, vec2 px) {
 vec3 room_screed(vec3 tone, vec2 p, vec2 px) {
 	vec3 c = tone * (0.9 + 0.16 * fx_fbm2(p * 0.5 + 6.0)) * (0.96 + 0.06 * fx_vnoise(p * 5.0));
 	float vein = fx_vnoise(p * 0.8 + 3.0) - 0.5;
-	c *= 1.0 - 0.2 * band(vein, 0.01, fwidth(vein) + 1e-4) * smoothstep(0.6, 0.72, fx_vnoise(p * 0.35));
+	c *= 1.0 - 0.2 * band(vein, 0.01, noise_edge_width(px, 0.8)) * smoothstep(0.6, 0.72, fx_vnoise(p * 0.35));
 	return c * (1.0 - 0.12 * smoothstep(0.66, 0.8, fx_fbm2(p * 0.4 + 1.0)));
 }
 
@@ -715,54 +747,54 @@ void fragment() {
 	float chroma = max(base.r, max(base.g, base.b)) - min(base.r, min(base.g, base.b));
 	float cover = 0.0;
 	float local_snow = 0.0;
-	// Separate world scales: broad 11 m drifts, 0.9 m detail and an 8 m warp.
-	// Skip the extra noise without snow.
+	bool is_ground = ground_kind > 0.5;
+	// Ground: 11 m drifts, 0.9 m detail, 8 m warp. Props keep the 921e3efd pattern.
+	// Select coordinates/weights before the shared noise calls; no per-kind derivative branch.
 	if (fx_snow > 0.01) {
 		vec2 snow_p = world_pos.xz + snow_phase;
-		vec2 patch_p = snow_p * 0.09;
-		vec2 fine_p = snow_p * 1.1;
-		vec2 warp_p = snow_p * 0.125;
+		vec2 patch_p = snow_p * (is_ground ? 0.09 : 0.15);
+		vec2 fine_p = is_ground ? snow_p * 1.1 : patch_p * 3.1;
+		vec2 warp_p = is_ground ? snow_p * 0.125 : patch_p * 0.5;
 		vec2 warp = vec2(fx_vnoise(warp_p + vec2(17.1, 9.2)),
 			fx_vnoise(warp_p + vec2(3.7, 23.6))) - vec2(0.5);
 		// Fine detail breaks the broad drifts' edges without setting their size.
-		float snow_patch = 0.8 * fx_vnoise(patch_p + 0.7 * warp) + 0.2 * fx_vnoise(fine_p + 1.4 * warp + vec2(5.3, 11.9));
+		float snow_patch = (is_ground ? 0.8 : 0.72) * fx_vnoise(patch_p + 0.7 * warp) + (is_ground ? 0.2 : 0.28) * fx_vnoise(fine_p + 1.4 * warp + vec2(5.3, 11.9));
 		// This map's spread of the stop's snow: a whiter or more melted map (snow_shift) and,
 		// across it, wide fields where the snow lies whole or has gone (snow_melt). One more
 		// noise a ground pixel, at the melt field's low frequency, and only on a map that sets
 		// it; multiplied, so a stop with no snow keeps none.
 		float melt = snow_melt > 0.0 ? fx_vnoise((world_pos.xz + 1.7 * snow_phase) / max(snow_melt_m, 4.0)) - 0.5 : 0.0;
 		local_snow = clamp(fx_snow * (1.0 + snow_shift + 1.4 * snow_melt * melt), 0.0, 1.0);
-		float snow_t = 1.0 - smoothstep(0.05, 0.95, local_snow);
-		float snow_edge = snow_patch - snow_t;
-		// Include the melt threshold's slope, before any per-pixel branch.
-		float patch_w = max(1.25 * fwidth(snow_edge), 0.002);
-		cover = smoothstep(-patch_w, patch_w, snow_edge);
-		// Guarantee both endpoints even when the pixel footprint is wide.
-		if (local_snow <= 0.05) {
-			cover = 0.0;
-		} else if (local_snow >= 0.95) {
-			cover = 1.0;
-		}
-		// UV2 marks ground only; the shared material keeps props readable.
-		if (ground_kind > 0.5) {
-			cover *= 0.97;
-		} else {
-			cover *= 0.9;
-		}
+		float snow_blend = smoothstep(0.05, 0.95, local_snow);
+		float snow_edge = snow_patch - (1.0 - snow_blend);
+		// Differentiate the continuous ground edge and the legacy prop noise unconditionally.
+		float ground_w = max(1.25 * fwidth(snow_edge), 0.002);
+		float prop_w = max(fwidth(snow_patch), 0.02);
+		float patch_w = is_ground ? ground_w : prop_w;
+		// Extending the threshold by w gives exact 0/1 endpoints without a depth branch.
+		float snow_t = mix(1.0 + patch_w, -patch_w, snow_blend);
+		float ground_cover = smoothstep(-patch_w, patch_w, snow_patch - snow_t);
+		float prop_cover = 0.9 * smoothstep(snow_t - patch_w, snow_t + patch_w, snow_patch);
+		cover = is_ground ? 0.97 * ground_cover : prop_cover;
 	}
 	cover *= smoothstep(0.6, 0.9, up) * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
 	// The photo grain, one fetch for all four; its strength wanders so the
 	// 2.6 m tile does not read as a grid. Grit on bare ground, wet soil as it wets.
 	vec4 grain = texture(fx_ground, world_pos.xz * (1.0 / 2.6));
-	// Fine soil grain opens small grass holes; take its edge width outside branches.
-	float grass_edge = grain.a - 0.65;
-	float grass_w = max(1.25 * fwidth(grass_edge), 0.002);
 	// Decision 496: the ground layers' gradients, taken here outside the branches (bare_ground
 	// reads the layers inside per-kind branches, where a quad's implicit derivatives are undefined).
 	vec2 ground_dx = dFdx(world_pos.xz);
 	vec2 ground_dy = dFdy(world_pos.xz);
 	float ground_k = smoothstep(0.6, 0.9, up) * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
 	float wander = 0.55 + 0.9 * fx_vnoise(world_pos.xz * 0.13 + 7.0);
+	// Use the existing 7.7 m wander, not the near-2.6 m drift, to vary the grain threshold.
+	float grass_threshold = 0.65 + clamp((wander - 1.0) * (0.06 / 0.45), -0.06, 0.06);
+	float grass_edge = grain.a - grass_threshold;
+	float grass_w = max(1.25 * fwidth(grass_edge), 0.002);
+	float grass_px = max(length(ground_dx), length(ground_dy));
+	float grass_far = smoothstep(GRASS_HOLE_FADE_START, GRASS_HOLE_FADE_END, grass_px);
+	float grass_mean = grass_hole_area(grass_threshold);
+	float grass_cut = mix(smoothstep(-grass_w, grass_w, grass_edge), grass_mean, grass_far);
 	// Keep the kind's dark bare look in snow gaps, even in deep winter.
 	float bare_k = sky * smoothstep(0.6, 0.9, up);
 	int kind = int(ground_kind + 0.5) - 1;
@@ -806,6 +838,7 @@ void fragment() {
 			float as_seen = 0.6 * dot(tone_l, luma) + 0.4 * max(tone_l.r, max(tone_l.g, tone_l.b));
 			unseen_k = mix(1.0, 0.93 * mix(was, as_seen, UNSEEN_FOLLOW) / max(as_seen, 0.001), away);
 			base = mix(finish, tone, 0.5 * away);
+			grass_share = 0.0;
 		}
 	}
 	base = floor_to_linear(base) * unseen_k;
@@ -859,7 +892,7 @@ void fragment() {
 	base *= 1.0 - 0.3 * trodden * clamp(fx_snow, 0.0, 1.0);
 	// Grass shows only through thin snow, never through soil, paving or a snow bank.
 	float thin_snow = smoothstep(0.25, 0.4, local_snow) * (1.0 - smoothstep(0.5, 0.65, local_snow));
-	float grass_holes = grass_share * thin_snow * smoothstep(-grass_w, grass_w, grass_edge);
+	float grass_holes = grass_share * thin_snow * grass_cut;
 	grass_holes *= 1.0 - smoothstep(0.0, 0.25, max(pile, bank));
 	cover *= 1.0 - grass_holes;
 	// The ground before the snow: what a frozen pool shows through its ice.
@@ -880,13 +913,16 @@ void fragment() {
 	}
 	float water = clamp(max(fx_wet * 1.2, fx_cold.y * 0.85), 0.0, 1.0);
 	float standing = 0.0;
+	// Take the sky coordinates' gradients before either per-pixel pool branch.
+	vec2 suv = vec2(world_pos.x * 0.015 + TIME * 0.002, 0.2 + 0.6 * abs(fract(world_pos.z * 0.0075) * 2.0 - 1.0));
+	vec2 suv_dx = dFdx(suv);
+	vec2 suv_dy = dFdy(suv);
 	// Noise only where a pool could show (phone budget).
 	if (level_k * water > 0.01) {
 		standing = fx_pool(world_pos.xz) * level_k * water;
 		if (standing > 0.001) {
 			// The photo sky's clouds in the water, at the hour's light (fx_sky).
-			vec2 suv = vec2(world_pos.x * 0.015 + TIME * 0.002, 0.2 + 0.6 * abs(fract(world_pos.z * 0.0075) * 2.0 - 1.0));
-			float shape = dot(texture(fx_sky_tex, suv).rgb, vec3(0.3, 0.59, 0.11));
+			float shape = dot(textureGrad(fx_sky_tex, suv, suv_dx, suv_dy).rgb, vec3(0.3, 0.59, 0.11));
 			float mean_l = max(dot(textureLod(fx_sky_tex, vec2(0.5), 10.0).rgb, vec3(0.3, 0.59, 0.11)), 0.02);
 			vec3 refl = fx_sky.rgb * clamp(shape / mean_l, 0.4, 1.8);
 			base = mix(base, fx_pool_color(base, under_snow, world_pos.xz, TIME, fx_cold.y, fx_wet * (1.0 - fx_cold.y), refl, max(room_px.x, room_px.y)), standing);
@@ -941,9 +977,10 @@ void fragment() {
 	// Tactical pause (fx_fade) fades the world before the sight mask darkens it.
 	ALBEDO = fx_photo(mix(dimmed, vec3(0.86, 0.88, 0.9), frost), fx_fade) * lit;
 	ROUGHNESS = mix(1.0, 0.4, wet * (1.0 - cover));
+	vec3 bank_normal = cross(dFdy(VERTEX), dFdx(VERTEX));
 	if (bank > 0.002) {
 		// The bank's own slope, so the light picks it out.
-		NORMAL = normalize(cross(dFdy(VERTEX), dFdx(VERTEX)));
+		NORMAL = normalize(bank_normal);
 	}
 	// A lamp out of sight still shows faintly, so mates can be found in the dark.
 	float lamp = cell.b * lamp_gain * lamp_here * mix(0.4, 1.0, reveal) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0));
