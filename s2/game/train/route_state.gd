@@ -5,16 +5,26 @@ const Catalog = preload("res://game/train/campaign_route.gd")
 const Rng = preload("res://game/politics/rng.gd")
 const FieldReceipt = preload("res://game/sim/receipt.gd")
 const FieldReturn = preload("res://game/politics/field_return.gd")
+const FieldSave = preload("res://game/sim/field_save.gd")
+const SEED_RULE: int = 1
+const FURNISH_RULE: int = 0
 
 
 static func is_campaign(g: Dictionary) -> bool:
 	return g.get("campaign") is Dictionary and g["campaign"].get("mode") == "campaign"
 
 
-static func start(g: Dictionary, run: String) -> Dictionary:
+static func world_seed_text(bytes: PackedByteArray) -> String:
+	if bytes.size() != 8:
+		return ""
+	return str(bytes.decode_s64(0))
+
+
+static func start(g: Dictionary, run: String, world_seed: String) -> Dictionary:
 	var out: Dictionary = g.duplicate(true)
 	out["campaign"] = {"version": 1, "mode": "campaign", "catalog": Catalog.CATALOG, "run": run,
-		"cursor": 0, "visit": {}, "workshop_done": [], "branches": [], "chosen": {}, "recommended": {}, "dead": {}}
+		"cursor": 0, "visit": {}, "workshop_done": [], "branches": [], "chosen": {}, "recommended": {}, "dead": {},
+		"world_seed": world_seed, "seed_rule": SEED_RULE, "furnish_rule": FURNISH_RULE}
 	return out
 
 
@@ -45,6 +55,14 @@ static func problem(g: Dictionary, t: Dictionary = {}) -> String:
 	if not is_campaign(g):
 		return "F-CAMPAIGN-ROUTE: mode"
 	var route: Dictionary = g["campaign"]
+	if route.has("world_seed") and FieldSave._int_of_text(route["world_seed"]) == null:
+		return "F-CAMPAIGN-ROUTE: world seed"
+	for key: String in ["seed_rule", "furnish_rule"]:
+		var upper: int = SEED_RULE if key == "seed_rule" else FURNISH_RULE
+		if route.has(key) and (not route[key] is int or route[key] < 0 or route[key] > upper):
+			return "F-CAMPAIGN-ROUTE: " + key
+	if int(route.get("furnish_rule", 0)) >= 1 and not route.has("world_seed"):
+		return "F-CAMPAIGN-ROUTE: missing world seed"
 	if route.get("version") != 1 or route.get("catalog") != Catalog.CATALOG or not route.get("run") is String or route["run"].is_empty():
 		return "F-CAMPAIGN-ROUTE: identity"
 	if not _whole(route.get("cursor")) or int(route["cursor"]) > Catalog.size() or not route.get("visit") is Dictionary:
