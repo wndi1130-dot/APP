@@ -7,7 +7,8 @@ extends SceneTree
 ## By default as the first loop shots were taken: no sight mask, no dead drawn, no HUD. The play screen
 ## has all three; turn them on to see it as a player does (the files get _mask, _dead, _hud on the name):
 ##   --mask   the sight mask, the squad leader looking up the screen (or at the door, at the dead); each
-##            spot as on first coming there (what earlier spots saw is forgotten)
+##            spot as on first coming there (what earlier spots saw is forgotten: the seen cells, the
+##            props kept drawn, the seen-before mark of the ground and the roofs lit by it)
 ##   --dead   the dead drawn, and one more spot, dead: four cells short of the outdoor dead nearest
 ##            where the squad steps off, looking at it. Without it no dead are shown.
 ##   --hud    the field HUD
@@ -18,7 +19,8 @@ extends SceneTree
 ##            (building_view.gd NEAR_R), so a building shows its outside only that far off the middle
 ##            of the screen, as here; pushing the camera onto the door would open it. The metrics get
 ##            "fronts" (the building, its door, how many of its outer doors are on seen walls).
-## A map name with no map, a zoom not above 0, a shot or the metrics not written: MAP_SHOTS_FAIL, exit 1.
+## A map name with no map, a zoom the camera does not take (see ZOOM_MIN), a seed past 64 bits, a shot
+## or the metrics not on disk as written (read back after writing): MAP_SHOTS_FAIL, exit 1.
 ## Every run counts, over all buildings, those with an outer door and those with one on a seen wall
 ## (map.outer_doors): a door on a north or west wall never shows from outside.
 ##
@@ -27,8 +29,8 @@ extends SceneTree
 ##   road         a road cell over 15 cells from the train, the one with the most road in the 9x9 round it
 ##   yard         bare ground 2-3 cells out from a small building, the one with the median count of
 ##                things within 6 cells (an ordinary yard)
-##   inside       the ground-floor building with the most boxes, at the walkable cell of it nearest its
-##                rect's middle (its walls cut away)
+##   inside       the ground-floor building with the most boxes that has a walkable cell inside, at the
+##                one nearest its rect's middle (its walls cut away)
 ##   edge         4 cells in from the middle of the inner side farthest from the train
 ##   items        outside, the thing with the most other things within 6 cells (the busiest ground)
 ##   room_<class> the biggest ground-floor room of each furnished class (bed, kitchen, living, bath, ...)
@@ -60,6 +62,15 @@ const NATURE_KINDS: Array[String] = ["bush_juniper", "bush_dry", "dry_bush", "dr
 const PICK_SKIP: Array[String] = ["bare_tree", "thicket", "fir", "pine", "spruce", "birch", "stump"]
 const BOX: int = 36
 const PICK_RADIUS: int = 6
+## The camera refuses a size not above this (Camera3D.set_size, CMP_EPSILON in camera_3d.cpp) and keeps
+## its size as a 32-bit float: a zoom it would refuse, or hold as infinity, is refused before the run.
+const ZOOM_MIN: float = 0.00001
+## The biggest whole numbers a 64-bit int holds, as digits (String.to_int clamps past them, with an
+## engine error, and the run would use another seed than the one asked for).
+const INT64_MAX_DIGITS: String = "9223372036854775807"
+const INT64_MIN_DIGITS: String = "9223372036854775808"
+## No cell: inside_cell found nothing to stand on.
+const NO_CELL: Vector2i = Vector2i(-1, -1)
 
 
 func _initialize() -> void:
@@ -182,6 +193,11 @@ func _run() -> void:
 		game.cam_size = front_zoom if tag.begins_with("front_") else zoom
 		game.camera.size = game.cam_size
 		game._update_camera(1.0)
+		# parse_args lets through only zooms the camera takes; one it still refused would be shot at
+		# another zoom than the metrics give.
+		if not is_equal_approx(game.camera.size, game.cam_size):
+			_fail("the camera did not take zoom %s (it holds %s)" % [game.cam_size, game.camera.size])
+			return
 		game.view.refresh_props(game.camera)
 		await create_timer(2.6 if first else 1.6).timeout
 		first = false
@@ -198,7 +214,7 @@ func _run() -> void:
 			game.player.facing = atan2(ahead.x, ahead.z)
 			game.mask_in = 1.0
 			game.view.set_mask_shade(1.0)
-			_forget_seen(game)
+			forget_seen(game)
 			game._refresh_vision()
 		# The dead read one body in a frame (zombies.gd render): draw them over a few frames.
 		for _i in range(8 if dead else 2):
@@ -231,17 +247,39 @@ func _fail(message: String) -> void:
 
 
 ## With the sight mask, each spot is shot as on first coming there: what earlier spots saw is
-## forgotten (the field's seen cells, and the props the map view keeps drawn once seen).
-func _forget_seen(game) -> void:
+## forgotten (the field's seen cells, the props the map view keeps drawn once seen, and its picture
+## of the ground and the roofs seen before, forget_vis).
+static func forget_seen(game) -> void:
 	game.seen_memory.fill(0)
 	for batch: Dictionary in game.view.prop_batches.values():
 		for item: Dictionary in batch["items"]:
 			item["remembered"] = false
+	forget_vis(game.view)
+
+
+## The map view's sight picture (map_view.gd vis_bytes, RGBA per cell) with nothing seen: R (seen now)
+## and G (seen before) 0 in every cell; B (lamp light) and A (snow marks, which come in only as changes,
+## update_tracks) kept. The picture is uploaded and every roof reads its seen value again from it
+## (building_view.gd update_seen, seen_fixed), so the next sight update lights only what is seen from
+## the spot. A view with no picture yet (before its first sight update) is left alone.
+static func forget_vis(view) -> void:
+	var bytes: PackedByteArray = view.vis_bytes
+	if bytes.is_empty():
+		return
+	for i: int in range(0, bytes.size(), 4):
+		bytes[i] = 0
+		bytes[i + 1] = 0
+	view.vis_bytes = bytes
+	view.vis_image.set_data(view.grid.width, view.grid.height, false, Image.FORMAT_RGBA8, bytes)
+	view.vis_texture.update(view.vis_image)
+	if view.buildings != null:
+		view.buildings.update_seen(bytes)
 
 
 ## The command line after "--" as {out, zoom, front_zoom, seed, place, mask, dead, hud, front}, or as
-## {error} for an unknown or repeated argument, a zoom that is not a finite number above 0, a seed that
-## is not a whole number, an empty --out, or no --out or place.
+## {error} for an unknown or repeated argument, a zoom the camera does not take (not a number, not
+## above ZOOM_MIN, or past a 32-bit float), a seed that is not a whole number a 64-bit int holds, an
+## empty --out, or no --out or place.
 static func parse_args(args: PackedStringArray) -> Dictionary:
 	var out: Dictionary = {"out": "", "zoom": 24.0, "front_zoom": 20.0, "seed": 5, "place": "",
 		"mask": false, "dead": false, "hud": false, "front": false}
@@ -259,12 +297,13 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 				out["out"] = value
 			"--zoom", "--front-zoom":
 				var z: float = float(value) if value.is_valid_float() else NAN
-				if not is_finite(z) or z <= 0.0:
-					return {"error": "zoom must be a number above 0: " + arg}
+				var held: float = PackedFloat32Array([z])[0]  # as the camera holds it
+				if not is_finite(held) or held <= ZOOM_MIN:
+					return {"error": "zoom must be a number the camera takes (above 0.00001): " + arg}
 				out["zoom" if key == "--zoom" else "front_zoom"] = z
 			"--seed":
-				if not value.is_valid_int():
-					return {"error": "seed must be a whole number: " + arg}
+				if not fits_int64(value):
+					return {"error": "seed must be a whole number in 64 bits: " + arg}
 				out["seed"] = value.to_int()
 			"--mask", "--dead", "--hud", "--front":
 				if arg != key:
@@ -279,24 +318,72 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 	return out
 
 
-## The shot as a jpg at path; an empty image (no frame read back) is an error, not a blank file.
-static func save_shot(img: Image, path: String) -> Error:
+## text (a command-line value) is a whole number a 64-bit int holds: digits after at most one sign, as
+## String.is_valid_int takes them, no further from 0 than INT64_MAX_DIGITS (INT64_MIN_DIGITS below 0).
+static func fits_int64(text: String) -> bool:
+	if not text.is_valid_int():
+		return false
+	var negative: bool = text.begins_with("-")
+	var digits: String = text.substr(1) if negative or text.begins_with("+") else text
+	digits = digits.lstrip("0")
+	var limit: String = INT64_MIN_DIGITS if negative else INT64_MAX_DIGITS
+	if digits.length() != limit.length():
+		return digits.length() < limit.length()
+	return digits <= limit
+
+
+## The shot as a jpg at path, written and read back (write_checked); an empty image (no frame read
+## back) or one that encodes to nothing is an error, not a blank file. store: as in write_checked.
+static func save_shot(img: Image, path: String, store: Callable = Callable()) -> Error:
 	if img == null or img.is_empty():
 		return ERR_INVALID_DATA
-	return img.save_jpg(path, 0.9)
+	var jpg: PackedByteArray = img.save_jpg_to_buffer(0.9)
+	if jpg.is_empty():
+		return ERR_INVALID_DATA
+	return write_checked(path, jpg, store)
 
 
-## value as indented JSON at path, every write checked (a full disk or a folder in the way is an error).
-static func write_json(path: String, value: Variant) -> Error:
+## value as indented JSON at path, written and read back (write_checked).
+static func write_json(path: String, value: Variant, store: Callable = Callable()) -> Error:
+	return write_checked(path, JSON.stringify(value, "\t", true).to_utf8_buffer(), store)
+
+
+## bytes at path, then read back and compared, so only what is on disk afterwards counts: a write can
+## fail where no step reports it (a full disk found when close flushes the buffer, and FileAccess.close
+## returns nothing). store(path, bytes) -> Error puts them there, store_file unless one is given (the
+## tests give one that loses the last bytes as such a close would).
+static func write_checked(path: String, bytes: PackedByteArray, store: Callable = Callable()) -> Error:
+	var err: Error
+	if store.is_valid():
+		err = store.call(path, bytes)
+	else:
+		err = store_file(path, bytes)
+	if err != OK:
+		return err
+	return check_written(path, bytes)
+
+
+## Open, store, close: the open's error, the write's, or ERR_FILE_CANT_WRITE when the store did not write.
+static func store_file(path: String, bytes: PackedByteArray) -> Error:
 	var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		return FileAccess.get_open_error()
-	var stored: bool = file.store_string(JSON.stringify(value, "\t", true))
+	var stored: bool = file.store_buffer(bytes)
 	var err: Error = file.get_error()
 	file.close()
 	if err == OK and not stored:
 		err = ERR_FILE_CANT_WRITE
 	return err
+
+
+## OK when the file at path holds exactly bytes; the open's error when it cannot be read, else
+## ERR_FILE_CORRUPT (shorter, longer or other bytes).
+static func check_written(path: String, bytes: PackedByteArray) -> Error:
+	var back: PackedByteArray = FileAccess.get_file_as_bytes(path)
+	var opened: Error = FileAccess.get_open_error()
+	if opened != OK:
+		return opened
+	return OK if back == bytes else ERR_FILE_CORRUPT
 
 
 static func pick_spots(data: Dictionary, g: FieldGrid) -> Dictionary:
@@ -348,9 +435,14 @@ static func pick_spots(data: Dictionary, g: FieldGrid) -> Dictionary:
 	var best_box: int = -1
 	for b: Dictionary in buildings:
 		var n: int = int(count_by.get(int(b["id"]), 0))
-		if n > best_box and (b["rect"] as Rect2i).get_area() <= 900:
-			best_box = n
-			out["inside"] = inside_cell(g, int(b["id"]), b["rect"])
+		if n <= best_box or (b["rect"] as Rect2i).get_area() > 900:
+			continue
+		# A building with no cell to stand on inside (walls all through) is passed over for the next.
+		var cell: Vector2i = inside_cell(g, int(b["id"]), b["rect"])
+		if cell == NO_CELL:
+			continue
+		best_box = n
+		out["inside"] = cell
 	var mids: Array[Vector2i] = [Vector2i(inner.get_center().x, inner.position.y + 4), Vector2i(inner.end.x - 5, inner.get_center().y),
 		Vector2i(inner.get_center().x, inner.end.y - 5), Vector2i(inner.position.x + 4, inner.get_center().y)]
 	var far: float = -1.0
@@ -650,10 +742,10 @@ static func roof_lifted(r: Rect2i, c: Vector2i) -> bool:
 
 ## The middle of rect r when it is a walkable cell of building b (not a door), else the walkable cell
 ## of b nearest it, the first in rows on a tie: an L-shaped building's middle can lie outside it, and a
-## middle can fall on an inner wall. r's middle when b has no such cell.
+## middle can fall on an inner wall. NO_CELL when b has no such cell in r (nothing to stand on inside).
 static func inside_cell(g: FieldGrid, b: int, r: Rect2i) -> Vector2i:
 	var mid: Vector2i = r.get_center()
-	var best: Vector2i = mid
+	var best: Vector2i = NO_CELL
 	var best_d: int = -1
 	for y: int in range(r.position.y, r.end.y):
 		for x: int in range(r.position.x, r.end.x):

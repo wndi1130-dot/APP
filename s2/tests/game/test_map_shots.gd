@@ -2,10 +2,54 @@ extends "res://addons/gut/test.gd"
 ## 결정 562: 지도 촬영 자리를 자료와 규칙으로 고르고 소품을 세는 동작을 지킨다.
 ## 작은 격자로 경계, 빠진 자료, 순서와 동률을 확인한다. 정면 자리는 게임처럼 카메라 초점과 1층
 ## 바닥(footprint)으로 지붕 걷힘을 재고, 인자·그림·잣대 파일의 실패는 오류로 돌아오는지 본다.
+## 쓴 파일은 다시 읽어 대조하는지(닫기에서 잃은 바이트), 카메라가 거부하는 줌과 64비트 밖 씨앗을
+## 거절하는지, 서 있을 칸 없는 건물을 건너뛰는지, 가림 촬영이 앞 자리에서 본 기억(땅·지붕)을
+## 지우는지도 본다.
 
 const MapShots = preload("res://tools/map_shots.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const BuildingView = preload("res://game/world/building_view.gd")
+
+
+## ImageTexture.update as map_view.gd calls it, keeping what was uploaded.
+class FakeTexture:
+	var uploads: Array = []
+
+	func update(img: Image) -> void:
+		uploads.append(img.get_data())
+
+
+## building_view.gd update_seen as map_view.gd calls it, keeping each call.
+class FakeBuildings:
+	var calls: Array = []
+
+	func update_seen(bytes: PackedByteArray, changed: PackedInt32Array = PackedInt32Array()) -> void:
+		calls.append([bytes.duplicate(), changed])
+
+
+## The parts of map_view.gd forget_vis and forget_seen touch: the sight picture, its image and
+## texture, the buildings, the props kept drawn.
+class FakeView:
+	var grid: FieldGrid
+	var vis_bytes: PackedByteArray = PackedByteArray()
+	var vis_image: Image = Image.new()
+	var vis_texture: FakeTexture = FakeTexture.new()
+	var buildings: FakeBuildings = null
+	var prop_batches: Dictionary = {}
+
+
+## The parts of field_game.gd forget_seen touches.
+class FakeGame:
+	var seen_memory: PackedByteArray = PackedByteArray()
+	var view: FakeView = FakeView.new()
+
+
+## Cells of four bytes each: [R, G, B, A] per cell.
+func _cells(rows: Array) -> PackedByteArray:
+	var out: PackedByteArray = PackedByteArray()
+	for row: Array in rows:
+		out.append_array(PackedByteArray(row))
+	return out
 
 
 func _building(g: FieldGrid, r: Rect2i, id: int) -> void:
@@ -207,6 +251,20 @@ func test_inside_cell_keeps_a_walkable_middle_and_moves_off_walls_and_out_of_an_
 	assert_eq(MapShots.inside_cell(g, 2, l), Vector2i(14, 12), "ㄴ자 건물은 건물 안 칸")
 
 
+func test_inside_passes_over_a_building_with_no_cell_to_stand_on() -> void:
+	var g: FieldGrid = FieldGrid.new(30, 30)
+	var walls: Rect2i = Rect2i(2, 2, 2, 2)  # 네 칸 모두 벽
+	var room: Rect2i = Rect2i(10, 10, 5, 5)
+	_building(g, walls, 1)
+	_building(g, room, 2)
+	assert_eq(MapShots.inside_cell(g, 1, walls), MapShots.NO_CELL, "벽뿐인 건물은 칸 없음")
+	var boxes: Dictionary = {"a": {"cell": Vector2i(2, 2)}, "b": {"cell": Vector2i(3, 3)}, "c": {"cell": Vector2i(12, 12)}}
+	var data: Dictionary = {"buildings": [{"id": 1, "rect": walls}, {"id": 2, "rect": room}], "containers": boxes}
+	assert_eq(MapShots.pick_spots(data, g).get("inside"), Vector2i(12, 12), "상자가 더 많아도 벽뿐이면 다음 건물")
+	var only_walls: Dictionary = {"buildings": [{"id": 1, "rect": walls}], "containers": boxes}
+	assert_false(MapShots.pick_spots(only_walls, g).has("inside"), "설 칸 있는 건물이 없으면 실내 자리 없음")
+
+
 func test_parse_args_reads_the_options_and_refuses_bad_ones() -> void:
 	var ok: Dictionary = MapShots.parse_args(PackedStringArray(["--out=D:/x", "--zoom=20", "--seed=7", "--mask", "--front", "houses_01"]))
 	assert_false(ok.has("error"), "바른 인자")
@@ -215,9 +273,31 @@ func test_parse_args_reads_the_options_and_refuses_bad_ones() -> void:
 	var bad_lines: Array = [["--out=D:/x"], ["houses_01"], ["--out=", "houses_01"], ["--out=D:/x", "--zoom=0", "houses_01"],
 		["--out=D:/x", "--zoom=-3", "houses_01"], ["--out=D:/x", "--zoom=abc", "houses_01"], ["--out=D:/x", "--zoom=inf", "houses_01"],
 		["--out=D:/x", "--front-zoom=0", "houses_01"], ["--out=D:/x", "--seed=1.5", "houses_01"], ["--out=D:/x", "--mask=1", "houses_01"],
-		["--out=D:/x", "--bogus", "houses_01"], ["--out=D:/x", "houses_01", "lake_01"], ["--out=D:/x", "--mask", "--mask", "houses_01"]]
+		["--out=D:/x", "--bogus", "houses_01"], ["--out=D:/x", "houses_01", "lake_01"], ["--out=D:/x", "--mask", "--mask", "houses_01"],
+		["--out=D:/x", "--zoom=0.000001", "houses_01"], ["--out=D:/x", "--front-zoom=0.000001", "houses_01"],
+		["--out=D:/x", "--zoom=1e39", "houses_01"], ["--out=D:/x", "--seed=9223372036854775808", "houses_01"],
+		["--out=D:/x", "--seed=-9223372036854775809", "houses_01"], ["--out=D:/x", "--seed=99999999999999999999", "houses_01"]]
 	for bad: Array in bad_lines:
 		assert_true(MapShots.parse_args(PackedStringArray(bad)).has("error"), "거부: %s" % [bad])
+	# The camera's floor and a 32-bit float's top are far from these: a small zoom it still takes passes.
+	var small: Dictionary = MapShots.parse_args(PackedStringArray(["--out=D:/x", "--zoom=0.001", "--front-zoom=3e38", "houses_01"]))
+	assert_false(small.has("error"), "카메라가 받는 줌")
+	assert_almost_eq(float(small.get("zoom", 0.0)), 0.001, 1e-12, "작은 줌")
+	assert_almost_eq(float(small.get("front_zoom", 0.0)), 3e38, 1e30, "32비트 안의 큰 줌")
+	var seeds: Array = [["9223372036854775807", 9223372036854775807], ["-9223372036854775808", -9223372036854775807 - 1],
+		["+5", 5], ["-0", 0], ["000000000000000000000042", 42], ["-0009223372036854775808", -9223372036854775807 - 1]]
+	for pair: Array in seeds:
+		var read: Dictionary = MapShots.parse_args(PackedStringArray(["--out=D:/x", "--seed=" + String(pair[0]), "houses_01"]))
+		assert_eq(read.get("seed"), pair[1], "씨앗 %s" % pair[0])
+
+
+func test_fits_int64_takes_both_ends_and_nothing_past_them() -> void:
+	for text: String in ["0", "-0", "+0", "9223372036854775807", "-9223372036854775808", "+9223372036854775807",
+			"0009223372036854775807", "-1", "123"]:
+		assert_true(MapShots.fits_int64(text), "들어감: " + text)
+	for text: String in ["9223372036854775808", "-9223372036854775809", "+9223372036854775808", "10000000000000000000",
+			"-10000000000000000000", "", "-", "+", "1.5", "--1", "+-1", "1e3", " 1", "１"]:
+		assert_false(MapShots.fits_int64(text), "안 들어감: " + text)
 
 
 func test_write_json_and_save_shot_report_what_was_not_written() -> void:
@@ -229,9 +309,69 @@ func test_write_json_and_save_shot_report_what_was_not_written() -> void:
 	assert_ne(MapShots.write_json("user://map_shots_no_dir_%s/m.json" % tag, {}), OK, "없는 폴더")
 	assert_eq(MapShots.save_shot(Image.new(), "user://map_shots_%s.jpg" % tag), ERR_INVALID_DATA, "빈 그림")
 	var img: Image = Image.create_empty(4, 4, false, Image.FORMAT_RGB8)
+	var shot: String = "user://map_shots_test_%s.jpg" % tag
+	assert_eq(MapShots.save_shot(img, shot), OK, "그림 쓰기")
+	assert_eq(FileAccess.get_file_as_bytes(shot), img.save_jpg_to_buffer(0.9), "그림 다시 읽기")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(shot))
+	# The shot goes through FileAccess like the metrics: a missing folder is an open error, not an engine one.
 	assert_ne(MapShots.save_shot(img, "user://map_shots_no_dir_%s/s.jpg" % tag), OK, "없는 폴더에 그림")
-	# The engine reports the failed jpg write itself (Image.save_jpg); the tool turns it into MAP_SHOTS_FAIL.
-	assert_engine_error_count(1, "없는 폴더에 그림을 쓰면 엔진 오류 하나")
+
+
+func test_write_checked_reads_back_what_a_close_lost() -> void:
+	var tag: String = "%d_%d" % [OS.get_process_id(), Time.get_ticks_usec()]
+	var json_path: String = "user://map_shots_lossy_%s.json" % tag
+	var jpg_path: String = "user://map_shots_lossy_%s.jpg" % tag
+	# Every store step says it wrote, but the last byte never reaches the disk (a full disk at the close).
+	var lossy: Callable = func(path: String, bytes: PackedByteArray) -> Error:
+		return MapShots.store_file(path, bytes.slice(0, bytes.size() - 1))
+	assert_eq(MapShots.write_json(json_path, {"a": 1}, lossy), ERR_FILE_CORRUPT, "잃은 끝 바이트(잣대)")
+	var img: Image = Image.create_empty(4, 4, false, Image.FORMAT_RGB8)
+	assert_eq(MapShots.save_shot(img, jpg_path, lossy), ERR_FILE_CORRUPT, "잃은 끝 바이트(그림)")
+	# A store that fails says so first; its error comes back as it is.
+	var refused: Callable = func(_path: String, _bytes: PackedByteArray) -> Error:
+		return ERR_FILE_NO_PERMISSION
+	assert_eq(MapShots.write_json(json_path, {"a": 1}, refused), ERR_FILE_NO_PERMISSION, "쓰기 단계 오류 그대로")
+	var want: PackedByteArray = PackedByteArray([1, 2, 3])
+	assert_eq(MapShots.store_file(json_path, want), OK, "대조할 파일")
+	assert_eq(MapShots.check_written(json_path, want), OK, "같음")
+	assert_eq(MapShots.check_written(json_path, PackedByteArray([1, 2, 4])), ERR_FILE_CORRUPT, "같은 길이 다른 바이트")
+	assert_eq(MapShots.check_written(json_path, PackedByteArray([1, 2, 3, 4])), ERR_FILE_CORRUPT, "디스크가 더 짧음")
+	assert_eq(MapShots.check_written(json_path, PackedByteArray([1, 2])), ERR_FILE_CORRUPT, "디스크가 더 김")
+	assert_eq(MapShots.check_written("user://map_shots_none_%s.json" % tag, want), ERR_FILE_NOT_FOUND, "없는 파일")
+	for path: String in [json_path, jpg_path]:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	assert_false(FileAccess.file_exists(json_path) or FileAccess.file_exists(jpg_path), "시험 파일 치움")
+
+
+func test_forget_vis_clears_what_was_seen_and_keeps_lamps_and_snow() -> void:
+	var view: FakeView = FakeView.new()
+	view.grid = FieldGrid.new(3, 2)
+	view.buildings = FakeBuildings.new()
+	MapShots.forget_vis(view)
+	assert_eq([view.vis_texture.uploads.size(), view.buildings.calls.size()], [0, 0], "그림이 아직 없으면 그대로")
+	view.vis_bytes = _cells([[255, 255, 40, 200], [0, 255, 41, 255], [255, 0, 0, 199], [0, 0, 0, 255], [255, 255, 255, 0], [9, 8, 7, 6]])
+	var want: PackedByteArray = _cells([[0, 0, 40, 200], [0, 0, 41, 255], [0, 0, 0, 199], [0, 0, 0, 255], [0, 0, 255, 0], [0, 0, 7, 6]])
+	MapShots.forget_vis(view)
+	assert_eq(view.vis_bytes, want, "R(지금 봄)·G(전에 봄)만 0, B(등불)·A(눈 자국)는 그대로")
+	assert_eq([view.vis_image.get_width(), view.vis_image.get_height(), view.vis_image.get_data()], [3, 2, want], "그림에 씀")
+	assert_eq(view.vis_texture.uploads, [want], "한 번 올림")
+	assert_eq(view.buildings.calls, [[want, PackedInt32Array()]], "모든 지붕이 다시 읽음(바뀐 칸 목록 없음)")
+	view.buildings = null
+	MapShots.forget_vis(view)
+	assert_eq(view.vis_texture.uploads.size(), 2, "건물 없는 화면도 지움")
+
+
+func test_forget_seen_forgets_the_field_the_props_and_the_picture() -> void:
+	var game: FakeGame = FakeGame.new()
+	game.seen_memory = PackedByteArray([1, 0, 1, 1])
+	game.view.grid = FieldGrid.new(2, 1)
+	game.view.vis_bytes = _cells([[255, 255, 3, 4], [0, 255, 5, 6]])
+	var items: Array = [{"remembered": true}, {"remembered": false}]
+	game.view.prop_batches = {"a": {"items": items}}
+	MapShots.forget_seen(game)
+	assert_eq(game.seen_memory, PackedByteArray([0, 0, 0, 0]), "본 칸 기억")
+	assert_eq(items, [{"remembered": false}, {"remembered": false}], "그려 둔 소품")
+	assert_eq(game.view.vis_bytes, _cells([[0, 0, 3, 4], [0, 0, 5, 6]]), "땅·지붕 그림의 본 표시")
 
 
 func test_spot_counts_split_indoor_trees_and_made_and_clip_box() -> void:
