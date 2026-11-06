@@ -4,11 +4,14 @@ const RouteState = preload("res://game/train/route_state.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 const SliceSave = preload("res://game/sim/slice_save.gd")
-const TRAIN_PATH: String = "user://test_world_seed_1a_train.json"
 const STARTS: String = "res://tests/game/fixtures/campaign_starts.json"
-const FIX2_SLICE: String = "user://test_world_seed_1a_fix2_slice.json"
-const FIX2_TRAIN: String = "user://test_world_seed_1a_fix2_train.json"
-const FIX2_FIELD: String = "user://test_world_seed_1a_fix2_field.json"
+## A folder of this run's own, as test_field_save.gd keeps: another run of the trials at the same
+## time (another working copy) shares the user folder and would clear or write over the same slots.
+static var DIR: String = "user://test_world_seed_1a_%d" % OS.get_process_id()
+static var TRAIN_PATH: String = DIR + "/train.json"
+static var FIX2_SLICE: String = DIR + "/fix2_slice.json"
+static var FIX2_TRAIN: String = DIR + "/fix2_train.json"
+static var FIX2_FIELD: String = DIR + "/fix2_field.json"
 
 
 class FlowProbe extends SliceFlow:
@@ -19,9 +22,17 @@ class FlowProbe extends SliceFlow:
 		return []
 
 
+func before_all() -> void:
+	DirAccess.make_dir_recursive_absolute(DIR)
+
+
 func after_each() -> void:
-	for path: String in [FIX2_SLICE, FIX2_TRAIN, FIX2_FIELD]:
+	for path: String in [TRAIN_PATH, FIX2_SLICE, FIX2_TRAIN, FIX2_FIELD]:
 		SliceSave.clear(path)
+
+
+func after_all() -> void:
+	DirAccess.remove_absolute(DIR)
 
 
 func _started() -> Dictionary:
