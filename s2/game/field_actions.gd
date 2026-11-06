@@ -1161,11 +1161,32 @@ func take_all(p, id: String) -> void:
 	for item in SearchRules.take_order(c["items"]):
 		if not Wear.is_garment(String(item)):
 			left.append(item)
+	_take_these(p, id, c, left)
+
+
+## A box's stack held open, 「모두 ×n」 (결정 550): every thing showing as `key`
+## (FieldItems.shown_as — a hidden twin goes with its plain one), in the box's
+## order, as 「모두 담기」 takes them: each its own weight's time, the stick or a
+## blow stops the rest. Clothes are put on one at a time and stay.
+func take_kind(p, id: String, key: String) -> void:
+	var c: Dictionary = game.data["containers"].get(id, {})
+	if not SearchRules.can_take(c) or not _can_start(p, _container_at(c)):
+		return
+	var left: Array = []
+	for item in c["items"]:
+		if FieldItems.shown_as(String(item)) == key and not Wear.is_garment(String(item)):
+			left.append(item)
+	_take_these(p, id, c, left)
+
+
+## The queue 「모두 담기」 and a stack's 「모두」 share: `left` out of box `id` one
+## after another (_take_next), with one sound as the taking starts, however many
+## come out (card R3 가).
+func _take_these(p, id: String, c: Dictionary, left: Array) -> void:
 	if left.is_empty():
 		return
 	take_queue[p.get_instance_id()] = {"box": id, "left": left}
 	_take_next(p, id)
-	# One sound as the taking starts, however many come out (card R3 가).
 	if p == game.player and p.action == "take" and game.audio != null:
 		game.audio.box_sound(c, "take")
 

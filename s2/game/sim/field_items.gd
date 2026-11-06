@@ -232,6 +232,13 @@ static func silenced(id: String) -> String:
 	return String(row(id).get("looks_like", id)) if rings(id) else id
 
 
+## What `id` shows as before it is used: a twin with a hidden state (a dented tin
+## gone off, a watch still set) shows as its plain twin, anything else as itself.
+## Rows that gather things by kind gather by this, so they keep the secret.
+static func shown_as(id: String) -> String:
+	return String(row(id).get("looks_like", id))
+
+
 ## The bag a found pack is (or "").
 static func bag_of(id: String) -> String:
 	return String(row(id).get("bag", ""))
