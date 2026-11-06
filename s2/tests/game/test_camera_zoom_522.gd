@@ -277,3 +277,165 @@ func test_player_stays_on_screen_while_size_and_focus_are_interpolated() -> void
 			if frame == 0:
 				assert_gt(game.camera.size, 18.0)
 				assert_lt(game.camera.size, 36.0)
+
+
+## 복원 회귀는 실제 FieldGame의 _ready와 저장 직렬화 경로까지 사용한다.
+const FieldSave = preload("res://game/sim/field_save.gd")
+const StopCinema = preload("res://game/stop_cinema.gd")
+const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
+const SliceFlow = preload("res://game/slice_flow.gd")
+
+
+func _save_field(extra: Dictionary = {}):
+	var scene = FieldGame.new()
+	var opts := {"seed": 4, "auto_pause": false, "raiders": false, "arrive": false, "arrival_horde": false}
+	opts.merge(extra, true)
+	scene.opts = opts
+	scene.map_script = BareLine
+	# 같은 고정 화면 안에서 실제 _ready를 실행한다. 화면이 장면의 수명을 소유한다.
+	screen.add_child(scene)
+	scene.set_process(false)
+	return scene
+
+
+func _roundtrip_camera(base_size: float, near: bool, legacy: bool = false) -> Array:
+	var source = _save_field()
+	source.zombies.list.clear()
+	source.pending_spawn.clear()
+	source.player.position = Vector3(30, 0, 10)
+	source.cam_size = base_size
+	source.cam_focus = Vector3(32, 0, 11)
+	source.cam_push = Vector3(4, 0, 3)
+	if near:
+		source.zombies.spawn("dead", source.player.position + Vector3(4, 0, 0))
+	var focus: Vector3 = source.cam_focus
+	var saved := FieldSave.from_json(FieldSave.to_json(FieldSave.capture(source)))
+	assert_false(saved.is_empty(), "실제 필드 저장이 JSON 왕복을 통과해야 한다")
+	if legacy:
+		saved["version"] = 1
+		saved.erase("runtime")
+	var resumed = _save_field(FieldSave.resume_opts(saved))
+	assert_true(resumed.resume_pending, "재개 안내가 떠 있는 첫 화면")
+	assert_true(resumed.paused)
+	return [resumed, focus]
+
+
+func _assert_restored_camera(resumed, size: float, focus: Vector3) -> void:
+	assert_almost_eq(resumed.camera.size, size, 0.0001, "재개 전에 복원된 실제 크기")
+	assert_lt(resumed.cam_focus.distance_to(focus), 0.0001, "유효한 저장 초점을 player + cam_push로 바꾸지 않는다")
+	var eye: Vector3 = focus + FieldGame.cam_back() * 60.0
+	assert_lt(resumed.camera.position.distance_to(eye), 0.0001, "첫 화면 위치도 저장 초점에 맞는다")
+	resumed._process(1.0 / 30.0)
+	assert_true(resumed.resume_pending)
+	assert_almost_eq(resumed.camera.size, size, 0.0001, "재개 안내 중에도 같은 크기")
+
+
+func test_exact_save_shows_twenty_four_before_resume() -> void:
+	var restored := _roundtrip_camera(24.0, false)
+	assert_eq(restored[0].cam_size, 24.0)
+	_assert_restored_camera(restored[0], 24.0, restored[1])
+
+
+func test_exact_save_with_near_dead_keeps_selected_twenty_four_before_resume() -> void:
+	var restored := _roundtrip_camera(24.0, true)
+	assert_eq(restored[0].cam_size, 24.0)
+	_assert_restored_camera(restored[0], 24.0, restored[1])
+
+
+func test_exact_save_with_near_dead_shows_the_automatic_target_before_resume() -> void:
+	var restored := _roundtrip_camera(14.0, true)
+	assert_eq(restored[0].cam_size, 14.0)
+	_assert_restored_camera(restored[0], 22.0, restored[1])
+
+
+func test_legacy_restore_starts_at_its_effective_zoom_before_resume() -> void:
+	var restored := _roundtrip_camera(24.0, true, true)
+	var resumed = restored[0]
+	# 옛 판에는 runtime.cam_size 자체가 없으므로 기존 기본값 복원 계약을 지킨다.
+	assert_eq(resumed.cam_size, 20.0)
+	assert_almost_eq(resumed.camera.size, 22.0, 0.0001)
+	assert_true(resumed.resume_pending)
+
+
+func test_cinema_handoff_starts_at_the_received_size_then_eases_out() -> void:
+	assert_true(game.has_method("start_camera_at"), "넘겨받는 순간의 카메라 맞춤 경로")
+	if not game.has_method("start_camera_at"):
+		return
+	for hz in [30, 60]:
+		game._reset_camera_zoom()
+		game.zombies.list.clear()
+		var z := _dead(1.0)
+		_at(0.0)
+		z["pos"] = game.player.position + Vector3(16, 0, 0)
+		_at(1.0)
+		z["pos"] = game.player.position + Vector3(1, 0, 0)
+		_at(2.0)
+		game._update_camera(1.0)
+		assert_eq(game.camera.size, 22.0, "숨은 동안에는 자동 목표에 도달해 있다")
+		var state := [game.cam_size, game._cam_had_threat, game._cam_return_at, game._cam_zoom_clock]
+		game.call("start_camera_at", StopCinema.FIELD_VIEW_H)
+		assert_eq(game.camera.size, StopCinema.FIELD_VIEW_H)
+		assert_eq([game.cam_size, game._cam_had_threat, game._cam_return_at, game._cam_zoom_clock], state,
+			"선택값과 자동 줌 상태는 넘겨받기 전 그대로")
+		var previous: float = game.camera.size
+		for _frame in range(12):
+			game._update_camera(1.0 / float(hz))
+			assert_gte(game.camera.size, previous)
+			assert_lte(game.camera.size, 22.0)
+			previous = game.camera.size
+		assert_gt(game.camera.size, StopCinema.FIELD_VIEW_H)
+
+
+## 정차 장면 밑에서 숨어 지어진 필드가 망자 근처라 22로 가 있어도, 실제 넘기기
+## (SliceFlow._start_field)에서 보이는 그 순간의 크기는 장면이 끝난 크기다.
+func test_pending_field_receives_cinema_size_before_it_is_shown() -> void:
+	var flow = SliceFlow.new()
+	flow.opts = {"skip_field": true, "seed": 3, "cinema": false}
+	add_child_autofree(flow)
+	var built = FieldGame.new()
+	built.opts = {"seed": 4, "auto_pause": false, "raiders": false, "arrive": false, "arrival_horde": false}
+	built.map_script = BareLine
+	built.visible = false
+	flow.add_child(built)
+	built.set_process(false)
+	built.zombies.list.clear()
+	built.pending_spawn.clear()
+	built.zombies.spawn("dead", built.player.position + Vector3(4, 0, 0))
+	built._update_camera(1.0)
+	assert_eq(built.camera.size, 22.0, "숨은 동안 망자 근처라 자동 목표 22에 가 있다")
+	var shown_at: Array = []
+	var record := func() -> void:
+		if built.visible:
+			shown_at.append(built.camera.size)
+	built.visibility_changed.connect(record)
+	flow.pending_field = built
+	flow._start_field()
+	assert_eq(flow.field, built, "숨어 지어진 그 필드가 넘어간다")
+	assert_true(built.visible)
+	assert_eq(shown_at, [StopCinema.FIELD_VIEW_H], "보이는 순간의 크기는 장면이 끝난 크기")
+
+
+func test_zooming_out_keeps_each_current_frame_inside_the_edge_band() -> void:
+	var band := EdgeBand.view_band
+	for hz in [30, 60]:
+		for push in [Vector3.ZERO, Vector3(-100, 0, -100)]:
+			game._reset_camera_zoom()
+			game.zombies.list.clear()
+			game.player.position = Vector3(0.5, 0, 0.5)
+			game.cam_focus = game.player.position
+			game.cam_push = push
+			game.cam_size = 36.0
+			_loot(true)
+			game._update_camera(1.0)
+			assert_eq(game.camera.size, 18.0)
+			_loot(false)
+			for frame in range(hz * 2):
+				game._update_camera(1.0 / float(hz))
+				var half := EdgeBand.view_half(game.camera.size, 0.6, game.CAM_PITCH, game.CAM_YAW)
+				var note := "%d fps, frame %d, push %s" % [hz, frame, push]
+				assert_gte(game.cam_focus.x - half.x, -band - 0.0001, note)
+				assert_gte(game.cam_focus.z - half.y, -band - 0.0001, note)
+				assert_lte(game.cam_focus.x + half.x, float(game.grid.width) + band + 0.0001, note)
+				assert_lte(game.cam_focus.z + half.y, float(game.grid.height) + band + 0.0001, note)
+				if frame == 0:
+					assert_almost_eq(game.camera.size, 18.0 + 18.0 * 6.0 / float(hz), 0.0001, "크기 보간 속도 유지")

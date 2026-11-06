@@ -694,6 +694,8 @@ func _ready() -> void:
 		FieldSave.apply(self, opts["field_resume"])
 		# 저장된 바탕 줌은 보존하고, 복원 전 장면의 복귀 대기만 버린다.
 		_reset_camera_zoom()
+		# 재개 안내의 첫 화면부터 복원된 크기와 초점을 함께 보여 준다.
+		start_camera_at(_camera_target_size())
 		# A version-1 save kept no guard state: the brakes were heard before it was left.
 		if not FieldSave.exact(opts["field_resume"]):
 			train_guard.resumed()
@@ -3388,6 +3390,19 @@ func _camera_target_size() -> float:
 	return camera_zoom_target(cam_size, _camera_loot_open(), dead_near, now, _cam_return_at)
 
 
+## 현재 화면의 경계를 먼저 제한하고, 더 좁은 화면에도 대장을 남긴다.
+static func camera_frame_focus(focus: Vector3, at: Vector3, current_size: float, target_size: float, aspect: float, width: int, height: int, band: float) -> Vector3:
+	var half := EdgeBand.view_half(current_size, aspect, CAM_PITCH, CAM_YAW)
+	var limited := EdgeBand.clamp_focus(focus, half, width, height, band)
+	return EdgeBand.keep_on_screen(limited, at, minf(current_size, target_size), aspect, CAM_PITCH, CAM_YAW)
+
+
+## 첫 표시의 실제 크기만 맞춘다. 선택값과 자동 줌의 시계·대기는 건드리지 않는다.
+func start_camera_at(view_height: float) -> void:
+	camera.size = view_height
+	_place_camera(view_height)
+
+
 func _update_camera(delta: float) -> void:
 	var target_size := _camera_target_size()
 	var focus := player.position + cam_push
@@ -3402,16 +3417,22 @@ func _update_camera(delta: float) -> void:
 		map_edge.set_room(_open_room())
 	_set_sight_round()
 	camera.size = lerpf(camera.size, target_size, clampf(delta * 6.0, 0.0, 1.0))
-	# 크기와 초점의 보간 속도가 달라도 현재 화면과 목표 화면 모두에 대장을 둔다.
-	cam_focus = EdgeBand.keep_on_screen(cam_focus, player.position, minf(target_size, camera.size), aspect, CAM_PITCH, CAM_YAW)
+	_place_camera(target_size)
+	_update_storm()
+	_update_light()
+
+
+## 초점을 새 추적 위치로 당기지 않고 경계·화면 유지 보정과 실제 배치만 한다.
+func _place_camera(target_size: float) -> void:
+	var screen := get_viewport().get_visible_rect().size
+	var aspect := screen.x / maxf(screen.y, 1.0)
+	cam_focus = camera_frame_focus(cam_focus, player.position, camera.size, target_size, aspect, grid.width, grid.height, EdgeBand.view_band)
 	var back := cam_back() * 60.0
 	# A blow's kick moves the eye, not the place it follows (hit_feel.gd).
 	var kick: Vector3 = feel.camera_offset() * camera.size if feel != null else Vector3.ZERO
 	camera.position = cam_focus + back + kick
 	camera.look_at(cam_focus + kick, Vector3.UP)
 	snow.position = cam_focus + Vector3(0, 9, 0)
-	_update_storm()
-	_update_light()
 
 
 ## Which way the camera stands from what it looks at, one metre out: south-east
