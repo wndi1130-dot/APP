@@ -9,7 +9,13 @@ const SimNoise = preload("res://game/sim/noise.gd")
 const FieldCombat = preload("res://game/field_combat.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 
-const FOLLOW_OFFSETS: Array = [Vector2(-1.3, -1.2), Vector2(1.3, -1.2), Vector2(0.0, -2.4)]
+## One knob for how far the squad keeps from the chief while following (the 14 FOLLOW_* spacing
+## constants below are their 1.0 values times this). 1.3 since 11-07 (coordinator under decision 442,
+## inside the decision 406 formation; player review round 1 item 9: a stopped squad read as one lump).
+## The watch slots (LOOK_KEYS) are not scaled.
+const FOLLOW_SPREAD: float = 1.3
+const FOLLOW_OFFSETS: Array = [Vector2(-1.3, -1.2) * FOLLOW_SPREAD, Vector2(1.3, -1.2) * FOLLOW_SPREAD,
+	Vector2(0.0, -2.4) * FOLLOW_SPREAD]
 const THINK: float = 0.25
 const REACT_MIN: float = 0.4
 const REACT_MAX: float = 0.8
@@ -116,13 +122,13 @@ const LOOK_KEYS: Array[String] = ["watch_point", "watch_side", "watch_rear", "wa
 const LOOK_ANGLE_EPS: float = 0.000001
 const LOOK_HASH_MIN_UNIT: float = 0.001
 ## Decision 486: the slot is where to keep, the lead is where to walk toward.
-const FOLLOW_POINT_SIDE: float = 2.1
-const FOLLOW_SIDE := Vector2(2.4, -0.6)
-const FOLLOW_REAR_BACK: float = 2.5
-const FOLLOW_IDLE_POINT := Vector2(1.2, 1.6)
-const FOLLOW_IDLE_SIDE := Vector2(1.8, -0.8)
-const FOLLOW_IDLE_REAR := Vector2(0.0, -2.0)
-const FOLLOW_IDLE_ASIDE := Vector2(-2.0, -0.5)
+const FOLLOW_POINT_SIDE: float = 2.1 * FOLLOW_SPREAD
+const FOLLOW_SIDE := Vector2(2.4, -0.6) * FOLLOW_SPREAD
+const FOLLOW_REAR_BACK: float = 2.5 * FOLLOW_SPREAD
+const FOLLOW_IDLE_POINT := Vector2(1.2, 1.6) * FOLLOW_SPREAD
+const FOLLOW_IDLE_SIDE := Vector2(1.8, -0.8) * FOLLOW_SPREAD
+const FOLLOW_IDLE_REAR := Vector2(0.0, -2.0) * FOLLOW_SPREAD
+const FOLLOW_IDLE_ASIDE := Vector2(-2.0, -0.5) * FOLLOW_SPREAD
 const FOLLOW_LEAD_S: float = 1.0
 const FOLLOW_BUFFER_S: float = 0.6
 const FOLLOW_PATH_NEAR: float = 0.12
@@ -131,12 +137,12 @@ const FOLLOW_RUN_OFF: float = 2.5
 const FOLLOW_ROOM: float = 0.95
 const FOLLOW_SLOT_STEP: float = 1.0
 const FOLLOW_SETTLE: float = 0.3
-const FOLLOW_WALK_MIN: float = 2.0
-const FOLLOW_WALK_MAX: float = 4.0
-const FOLLOW_SIDE_MAX: float = 3.0
-const FOLLOW_REAR_MAX: float = 3.5
-const FOLLOW_IDLE_MIN: float = 1.5
-const FOLLOW_IDLE_MAX: float = 2.5
+const FOLLOW_WALK_MIN: float = 2.0 * FOLLOW_SPREAD
+const FOLLOW_WALK_MAX: float = 4.0 * FOLLOW_SPREAD
+const FOLLOW_SIDE_MAX: float = 3.0 * FOLLOW_SPREAD
+const FOLLOW_REAR_MAX: float = 3.5 * FOLLOW_SPREAD
+const FOLLOW_IDLE_MIN: float = 1.5 * FOLLOW_SPREAD
+const FOLLOW_IDLE_MAX: float = 2.5 * FOLLOW_SPREAD
 const FOLLOW_POINT_CLEAR: float = 1.5
 const FOLLOW_EPS: float = 0.001
 const FOLLOW_TRAIL_STEP: float = 0.6
