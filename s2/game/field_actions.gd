@@ -14,6 +14,7 @@ const Amputation = preload("res://game/sim/amputation.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 const DoorRules = preload("res://game/sim/door_rules.gd")
+const DoorWalk = preload("res://game/sim/door_walk.gd")
 const WindowRules = preload("res://game/sim/window_rules.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
@@ -144,8 +145,8 @@ func _after_blows() -> void:
 			call.call()
 
 
-func _in_reach(p, at: Vector3, boundary: bool = false) -> bool:
-	if game.level_of(p.position) != game.level_of(at) or p.position.distance_to(at) > INTERACT_REACH:
+func _in_reach(p, at: Vector3, boundary: bool = false, reach: float = INTERACT_REACH) -> bool:
+	if game.level_of(p.position) != game.level_of(at) or p.position.distance_to(at) > reach:
 		return false
 	var lg = game.grid_at(at)
 	var from_cell := FieldGrid.cell_of(p.position)
@@ -154,8 +155,8 @@ func _in_reach(p, at: Vector3, boundary: bool = false) -> bool:
 	return lg.line_clear(from_cell, to_cell) if boundary else lg.body_line_clear(from_cell, to_cell)
 
 
-func _can_start(p, at: Vector3, boundary: bool = false) -> bool:
-	return p.can_act() and p.action == "" and not striking(p) and _in_reach(p, at, boundary)
+func _can_start(p, at: Vector3, boundary: bool = false, reach: float = INTERACT_REACH) -> bool:
+	return p.can_act() and p.action == "" and not striking(p) and _in_reach(p, at, boundary, reach)
 
 
 func _target(work: Dictionary) -> Dictionary:
@@ -167,7 +168,7 @@ func _target(work: Dictionary) -> Dictionary:
 
 
 func _work_valid(p, work: Dictionary) -> bool:
-	if not p.can_act() or not _in_reach(p, work["at"], work["kind"] != "container"):
+	if not p.can_act() or not _in_reach(p, work["at"], work["kind"] != "container", float(work.get("reach", INTERACT_REACH))):
 		return false
 	if p.body.injured_at != work["injured_at"] or p.body.wounds.size() > int(work["wounds"]):
 		return false
@@ -183,10 +184,12 @@ func _work_valid(p, work: Dictionary) -> bool:
 
 
 func _begin_work(p, action: String, label: String, seconds: float, done: Callable,
-		kind: String, key, at: Vector3, needs_pry: bool = false) -> bool:
+		kind: String, key, at: Vector3, needs_pry: bool = false, reach: float = INTERACT_REACH) -> bool:
 	var work := {"kind": kind, "key": key, "at": at, "pry": needs_pry}
+	if action == "door_walk":
+		work["reach"] = reach
 	var target := _target(work)
-	if target.is_empty() or bool(target.get("busy", false)) or not _can_start(p, at, kind != "container"):
+	if target.is_empty() or bool(target.get("busy", false)) or not _can_start(p, at, kind != "container", reach):
 		return false
 	if needs_pry and not has_pry(p):
 		return false
@@ -344,9 +347,22 @@ func _do_goal(p) -> void:
 
 # ---------------------------------------------------------------- doors
 
-func open_door_on_way(p, c: Vector2i) -> void:
+func open_door_on_way(p, c: Vector2i, distance: float = -1.0, speed: float = 0.0) -> void:
 	var door: Dictionary = game.grid.doors.get(c, {})
-	if door.is_empty() or not _can_start(p, FieldGrid.center(c), true):
+	var at := FieldGrid.center(c)
+	var reach: float = INTERACT_REACH
+	if distance >= 0.0:
+		# Anticipation never unlocks or rattles a refused door early. A run can
+		# reach a threshold in 0.5 s from beyond the ordinary hand-work radius.
+		var rate: float = float(p.mults()["hands"])
+		if rate <= 0.0 or not DoorRules.can_toggle(door, "open"):
+			return
+		if not DoorWalk.should_start(distance, speed, DOOR_TIME / rate):
+			return
+		# The route may bend: distance to the cell edge plus its half diagonal
+		# bounds the centre distance all along this short approach.
+		reach = maxf(reach, distance + sqrt(0.5))
+	if door.is_empty() or not _can_start(p, at, true, reach):
 		return
 	if BuildingRules.planks_total(door) > 0:
 		p.stop()
@@ -362,10 +378,10 @@ func open_door_on_way(p, c: Vector2i) -> void:
 		return
 	if not DoorRules.can_toggle(door, "open"):
 		return
-	# Opening a door on the way keeps the walk going afterwards.
-	var keep: PackedVector3Array = p.path.duplicate()
-	var run: bool = p.running
-	_begin_work(p, "door", "문", DOOR_TIME, _door_on_way_done.bind(p, c, keep, run), "door", c, FieldGrid.center(c))
+	# A separate action id leaves the feet free and avoids the standing work
+	# clip in person_visual. The timer, reservation and completion stay work.
+	_begin_work(p, "door_walk", "문", DOOR_TIME, _door_on_way_done.bind(p, c),
+		"door", c, at, false, reach)
 
 
 ## The player told on the way that this door will not give ("boarded" or
@@ -382,11 +398,15 @@ func _tell_shut(c: Vector2i, why: String, note: String) -> void:
 		game.audio.shut_fast(c, why)
 
 
-func _door_on_way_done(p, c: Vector2i, keep: PackedVector3Array, run: bool) -> void:
-	if not _finished_work(p, "door"):
+func _door_on_way_done(p, c: Vector2i, keep: PackedVector3Array = PackedVector3Array(), run: bool = false) -> void:
+	# Old saves bound the suspended route and run to this four-argument callback.
+	# Keep that continuation readable; new work never replaces the current route.
+	var work: Dictionary = ongoing.get(p.get_instance_id(), {})
+	var walking: bool = String(work.get("action", "")) == "door_walk"
+	if not _finished_work(p, "door_walk" if walking else "door"):
 		return
 	_set_door(c, "open")
-	if game.grid.doors.has(c) and game.grid.doors[c]["state"] == "open" and p.can_act():
+	if not walking and game.grid.doors.has(c) and game.grid.doors[c]["state"] == "open" and p.can_act():
 		p.go_to(keep, run)
 
 

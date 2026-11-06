@@ -9,6 +9,7 @@ signal restart_requested
 signal built
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const DoorWalk = preload("res://game/sim/door_walk.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const StopGround = preload("res://game/world/stop_ground.gd")
 const StoryMaps = preload("res://game/world/story_maps.gd")
@@ -2255,7 +2256,7 @@ func _update_person(p: Person, delta: float) -> void:
 	var breaks: bool = (p.running and p.stick != Vector2.ZERO) if walking_work else p.stick.length() > 0.3
 	if breaks and STICK_BREAKS.has(p.action):
 		p.cancel_action()
-	if p.action != "":
+	if p.action != "" and p.action != "door_walk":
 		# Each action takes its body multiplier once, here (not also in its length).
 		var rate := 1.0 if p.action == "climb" else float(p.mults()["swap" if p.action == "swap" else "hands"])
 		if p.action == "search":
@@ -2269,14 +2270,76 @@ func _update_person(p: Person, delta: float) -> void:
 				done.call()
 		if not walking_work:
 			return
-	if p.stick != Vector2.ZERO or p.drive_speed > 0.0:
-		_drive(p, delta)
-	else:
-		_move_person(p, delta)
+	_walk_with_door(p, delta)
 
 
-## A door a walk stops at to deal with on the way (field_actions
-## open_door_on_way): a shut one, and for the player a locked one too, as a
+## Door work uses the same simulation delta and hand multiplier as other work.
+## Move while still shut, then issue the usual completion ticket. Splitting at
+## completion lets a long frame use its remainder without crossing early.
+func _walk_with_door(p: Person, delta: float) -> void:
+	if not is_finite(delta) or delta <= 0.0:
+		return
+	var left: float = delta
+	while left > 0.0:
+		var rate: float = maxf(0.0, float(p.mults()["hands"]))
+		var span: float = left
+		if rate > 0.0:
+			if p.action == "door_walk":
+				span = minf(span, maxf(0.0, p.action_t) / rate)
+			elif p.action == "":
+				# A new door work can start in the movement below, at this span's start.
+				span = minf(span, actions.DOOR_TIME / rate)
+		if span > 0.0:
+			if p.stick != Vector2.ZERO or p.drive_speed > 0.0:
+				_drive(p, span)
+			else:
+				_move_person(p, span)
+		if p.action == "door_walk":
+			actions.validate_work(p)
+			if p.action == "door_walk":
+				var finishes: bool = DoorWalk.finishes(p.action_t, span, rate)
+				p.action_t = 0.0 if finishes else maxf(0.0, p.action_t - span * rate)
+				if p.action_t <= 0.0:
+					actions.complete_work(p)
+					var done: Callable = p.action_done
+					p.cancel_action(true)
+					if done.is_valid():
+						done.call()
+		# Locked/key work and other ordinary work keep their existing stop.
+		if p.action != "" and p.action != "door_walk":
+			return
+		left = maxf(0.0, left - span)
+		if span <= 0.0 and p.action == "door_walk":
+			return
+
+
+## Shared by path walkers and the stick. Predict on the actual route; sweep
+## this step too, so an endpoint beyond a closed cell cannot tunnel through it.
+func _door_step(p: Person, route: PackedVector3Array, step: Vector3, speed: float) -> Vector3:
+	var rate: float = float(p.mults()["hands"])
+	if p.action == "" and rate > 0.0:
+		var ahead: Dictionary = DoorWalk.first_door(p.position, route, grid.doors,
+			speed * actions.DOOR_TIME / rate)
+		if not ahead.is_empty():
+			actions.open_door_on_way(p, ahead["cell"], float(ahead["distance"]), speed)
+	var dest: Vector3 = p.position + step
+	var barrier: Dictionary = DoorWalk.first_door(p.position,
+		PackedVector3Array([dest]), grid.doors, step.length())
+	if barrier.is_empty():
+		return dest
+	var cell: Vector2i = barrier["cell"]
+	var door: Dictionary = grid.doors[cell]
+	if _meets_door(p, door):
+		actions.open_door_on_way(p, cell)
+		if String(door["state"]) == "locked" or BuildingRules.planks_total(door) > 0:
+			p.drive_speed = 0.0
+			return p.position
+	var distance: float = DoorWalk.before_threshold(step.length(), float(barrier["distance"]))
+	return p.position + step.normalized() * distance
+
+
+## A door a walk deals with on the way (field_actions open_door_on_way):
+## a shut one, and for the player a locked one too, as a
 ## tap on it would — the key opens it, else 「잠김」 (the coordinator's call
 ## under decision 442, 2026-10-30). A companion's way goes round a locked
 ## door as before.
@@ -2332,11 +2395,13 @@ func _drive(p: Person, delta: float) -> void:
 		return
 	var step := p.drive_dir * p.drive_speed * delta * sled_mult
 	var dest := p.position + step
+	if lg == grid:
+		var speed: float = p.drive_speed * sled_mult
+		var rate: float = maxf(0.0001, float(p.mults()["hands"]))
+		var route := PackedVector3Array([p.position + p.drive_dir * speed * actions.DOOR_TIME / rate])
+		dest = _door_step(p, route, step, speed)
+		step = dest - p.position
 	var dc := FieldGrid.cell_of(dest)
-	if lg == grid and grid.doors.has(dc) and _meets_door(p, grid.doors[dc]):
-		p.drive_speed = 0.0
-		actions.open_door_on_way(p, dc)
-		return
 	if lg.blocks_body(dc):
 		dest = _slide(p.position, step)
 		# A wall may leave a small tangent; it does not take away the built-up drive.
@@ -2350,8 +2415,8 @@ func _drive(p: Person, delta: float) -> void:
 		actions.vault_window(p, dc)
 	var gone := Gait.signed_distance(p, dest - p.position)
 	Sled.before_move(self, p, dest)
+	p.moving = dest != p.position
 	p.position = dest
-	p.moving = true
 	_footsteps(p, delta, dc, gone)
 
 
@@ -2413,10 +2478,10 @@ func _move_person(p: Person, delta: float) -> void:
 		return
 	var step := d.normalized() * minf(spd * delta, d.length())
 	var dest := p.position + step
+	if lg == grid:
+		dest = _door_step(p, p.path, step, spd)
+		step = dest - p.position
 	var dc := FieldGrid.cell_of(dest)
-	if lg == grid and grid.doors.has(dc) and _meets_door(p, grid.doors[dc]):
-		actions.open_door_on_way(p, dc)
-		return
 	if lg.blocks_body(dc):
 		dest = _slide(p.position, step)
 	dc = FieldGrid.cell_of(dest)
@@ -2427,8 +2492,8 @@ func _move_person(p: Person, delta: float) -> void:
 	p.facing = face
 	var gone := Gait.signed_distance(p, dest - p.position)
 	Sled.before_move(self, p, dest)
+	p.moving = dest != p.position
 	p.position = dest
-	p.moving = true
 	_footsteps(p, delta, dc, gone)
 
 
