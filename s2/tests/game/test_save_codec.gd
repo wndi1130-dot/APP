@@ -21,6 +21,9 @@ static var TRAIN_AT: String = DIR + "/train.json"
 const BAD_INT_TEXTS: Array[String] = [
 	"", "x", "1.5", "1e3", "+7", "007", "00", "-0", "-007", "-", "+", "--1", "1-", " 7", "7 ", "12\n", "0x10", "１２",
 	"9223372036854775808", "-9223372036854775809", "99999999999999999999",
+	# 19 characters and over: the 64-bit edge, checked as text before to_int.
+	"0123456789012345678", "-0123456789012345678", "+123456789012345678", "-9999999999999999999",
+	"12345678901234567890", "123456789012345678x", "-12345678901234567890",
 ]
 ## Not text (JSON gives every number as a float, and no format wrote a number in an int tag).
 const BAD_INT_VALUES: Array = [7.0, 7, null, true, [], {}]
@@ -352,6 +355,9 @@ func test_keep_the_int64_edges_and_past_two_to_the_53rd_read_exactly() -> void:
 	assert_eq(_decoded(_tag("int", "9223372036854775807")), 9223372036854775807)
 	assert_eq(_decoded(_tag("int", "-9223372036854775808")), -9223372036854775807 - 1)
 	assert_eq(_decoded(_tag("int", "9007199254740993")), 9007199254740993)
+	assert_eq(_decoded(_tag("int", "1234567890123456789")), 1234567890123456789, "19 digits under the edge")
+	assert_eq(_decoded(_tag("int", "-123456789012345678")), -123456789012345678, "19 characters, 18 digits")
+	assert_eq(_decoded(_tag("int", "-9223372036854775807")), -9223372036854775807)
 	assert_eq(_decoded(_tag("int", "0")), 0)
 	assert_eq(_decoded(_tag("int", "-1")), -1)
 

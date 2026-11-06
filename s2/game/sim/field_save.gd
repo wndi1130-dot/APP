@@ -1396,10 +1396,9 @@ static func _decode_tag(v: Dictionary) -> Variant:
 	var type: Variant = v["$type"]
 	if not type is String or v.size() != 2:
 		return _bad()
-	if v.has("base64"):
-		return _unpack(type, v["base64"]) if type in BASE64_TAGS else _bad()
+	# A typed value is by far the most common tag (every int in a save): ask for it first.
 	if not v.has("value"):
-		return _bad()
+		return _unpack(type, v["base64"]) if v.has("base64") and type in BASE64_TAGS else _bad()
 	var value: Variant = v["value"]
 	if type == "int":
 		var n: Variant = _int_of_text(value)
@@ -1476,15 +1475,25 @@ static func _decode_pairs(value: Variant) -> Variant:
 static func _int_of_text(value: Variant) -> Variant:
 	if not value is String:
 		return null
+	# Checks by character code, no new string for the common short text: of three ways measured
+	# on this PC (11-06, 100 000 texts, least of 7) this was the cheapest, 1.19 us a text against
+	# 1.49 us for reading it back through str(); the old unchecked int() was 0.12 us.
 	var text: String = value
-	if text.length() > INT64_MIN_DIGITS.length() + 1 or not text.is_valid_int() or text.begins_with("+"):
+	var size: int = text.length()
+	if size > INT64_MIN_DIGITS.length() + 1 or not text.is_valid_int():
 		return null
-	var negative: bool = text.begins_with("-")
-	var digits: String = text.substr(1) if negative else text
-	if digits.begins_with("0") and (digits.length() > 1 or negative):
+	var first: int = text.unicode_at(0)
+	if first == 43:  # "+": the encoder never writes it
 		return null
-	var edge: String = INT64_MIN_DIGITS if negative else INT64_MAX_DIGITS
-	if digits.length() > edge.length() or (digits.length() == edge.length() and digits.casecmp_to(edge) > 0):
+	var start: int = 1 if first == 45 else 0  # after a "-"
+	# A leading zero ("007") or a negative zero ("-0") is not the encoder's text.
+	if text.unicode_at(start) == 48 and (size > start + 1 or start == 1):
+		return null
+	# The 64-bit edge: compare the digits as text before to_int, which would wrap or error.
+	var digits: int = size - start
+	if digits > INT64_MAX_DIGITS.length():
+		return null
+	if digits == INT64_MAX_DIGITS.length() and text.substr(start).casecmp_to(INT64_MIN_DIGITS if start == 1 else INT64_MAX_DIGITS) > 0:
 		return null
 	return text.to_int()
 
