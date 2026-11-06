@@ -182,17 +182,21 @@ static func snow_look_for(map_data: Dictionary) -> Dictionary:
 	return look
 
 
-## How white this map lies on the whole, 0..1: the stop's snow (stop_snow, the field's
-## fx_snow from Atmosphere ground_snow) raised or lowered by snow_look's shift, the same
-## sum world_vis makes for local_snow before its melt field moves the snow about the map
-## (that field averages out; at deep snow its clamp makes the true mean a little lower).
-## For what is built once per stop and must agree with the ground, as the trees' snowy
-## pairs (map-layout, 11-06). fx_snow may still change while the stop is played: the
-## shaders follow it, this does not. A stop_snow outside 0..1 is read as FxState clamps it.
-static func map_snow_mean(map_data: Dictionary, stop_snow: float) -> float:
-	if is_nan(stop_snow) or stop_snow <= 0.0:
+## This map's snow level, 0..1, before the melt field: the stop's snow (stop_snow, the
+## field's fx_snow from Atmosphere ground_snow) raised or lowered by snow_look's shift,
+## the same sum world_vis makes for local_snow before it adds the melt field. It is not
+## the area mean of local_snow (the melt field and its clamp move that, by up to about
+## 0.18 at deep snow under a strong field) nor the share of ground the snow covers
+## (smoothstep, paving, heaps and tracks come after). For what is built once per stop and
+## must follow the same level as the ground, as the trees' snowy pairs (map-layout,
+## 11-06). fx_snow may still change while the stop is played: the shaders follow it, this
+## does not. As world_vis, a stop_snow of 0.01 or less lays no snow; above 1 (or INF) it
+## is read as 1, as FxState clamps it. Pass the stop's snow_look_for result as look to
+## read the map's snow_look once (a wrong one warns each time it is read).
+static func map_snow_base(map_data: Dictionary, stop_snow: float, look: Dictionary = {}) -> float:
+	if is_nan(stop_snow) or stop_snow <= 0.01:
 		return 0.0
-	var shift := float(snow_look_for(map_data)["shift"])
+	var shift := float((look if look.has("shift") else snow_look_for(map_data))["shift"])
 	return clampf(minf(stop_snow, 1.0) * (1.0 + shift), 0.0, 1.0)
 
 
