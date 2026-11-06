@@ -712,24 +712,40 @@ void fragment() {
 	float chroma = max(base.r, max(base.g, base.b)) - min(base.r, min(base.g, base.b));
 	float cover = 0.0;
 	float local_snow = 0.0;
-	// Warped 0.15/m patches leave dark gaps; skip the new noise without snow.
+	// Separate world scales: broad 11 m drifts, 2.2 m detail and an 8 m warp.
+	// Skip the extra noise without snow.
 	if (fx_snow > 0.01) {
-		vec2 patch_p = (world_pos.xz + snow_phase) * 0.15;
-		vec2 warp = vec2(fx_vnoise(patch_p * 0.5 + vec2(17.1, 9.2)),
-			fx_vnoise(patch_p * 0.5 + vec2(3.7, 23.6))) - vec2(0.5);
-		// A finer octave breaks the round value-noise blobs into ragged drifts.
-		float snow_patch = 0.72 * fx_vnoise(patch_p + 0.7 * warp) + 0.28 * fx_vnoise(patch_p * 3.1 + 1.4 * warp + vec2(5.3, 11.9));
-		// Pixel width, at least 0.02, keeps the edge firm without shimmer.
-		float patch_w = max(fwidth(snow_patch), 0.02);
+		vec2 snow_p = world_pos.xz + snow_phase;
+		vec2 patch_p = snow_p * 0.09;
+		vec2 fine_p = snow_p * 0.45;
+		vec2 warp_p = snow_p * 0.125;
+		vec2 warp = vec2(fx_vnoise(warp_p + vec2(17.1, 9.2)),
+			fx_vnoise(warp_p + vec2(3.7, 23.6))) - vec2(0.5);
+		// Fine detail breaks the broad drifts' edges without setting their size.
+		float snow_patch = 0.8 * fx_vnoise(patch_p + 0.7 * warp) + 0.2 * fx_vnoise(fine_p + 1.4 * warp + vec2(5.3, 11.9));
 		// This map's spread of the stop's snow: a whiter or more melted map (snow_shift) and,
 		// across it, wide fields where the snow lies whole or has gone (snow_melt). One more
 		// noise a ground pixel, at the melt field's low frequency, and only on a map that sets
 		// it; multiplied, so a stop with no snow keeps none.
 		float melt = snow_melt > 0.0 ? fx_vnoise((world_pos.xz + 1.7 * snow_phase) / max(snow_melt_m, 4.0)) - 0.5 : 0.0;
 		local_snow = clamp(fx_snow * (1.0 + snow_shift + 1.4 * snow_melt * melt), 0.0, 1.0);
-		// Half the noise range at snow 0.5; every patch is filled by 0.95.
-		float snow_t = mix(1.0 + patch_w, -patch_w, smoothstep(0.05, 0.95, local_snow));
-		cover = 0.9 * smoothstep(snow_t - patch_w, snow_t + patch_w, snow_patch);
+		float snow_t = 1.0 - smoothstep(0.05, 0.95, local_snow);
+		float snow_edge = snow_patch - snow_t;
+		// Include the melt threshold's slope, before any per-pixel branch.
+		float patch_w = max(1.25 * fwidth(snow_edge), 0.002);
+		cover = smoothstep(-patch_w, patch_w, snow_edge);
+		// Guarantee both endpoints even when the pixel footprint is wide.
+		if (local_snow <= 0.05) {
+			cover = 0.0;
+		} else if (local_snow >= 0.95) {
+			cover = 1.0;
+		}
+		// UV2 marks ground only; the shared material keeps props readable.
+		if (ground_kind > 0.5) {
+			cover *= 0.97;
+		} else {
+			cover *= 0.9;
+		}
 	}
 	cover *= smoothstep(0.6, 0.9, up) * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
 	// The photo grain, one fetch for all four; its strength wanders so the
