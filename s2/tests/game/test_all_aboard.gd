@@ -160,10 +160,14 @@ func test_follow_and_wait_give_every_living_companion_that_order() -> void:
 	assert_eq(hud.wait_button.text, "대기")
 
 
-func test_a_radio_call_however_long_keeps_to_the_message_column() -> void:
+## 결정 569: a radio call, however long, is a subtitle in the bottom middle over
+## the squad's faces — on the screen, clear of the orders up top, of the faces, of
+## the stick's ring and of the state icons; a long one wraps between words.
+func test_a_radio_call_however_long_is_a_subtitle_over_the_faces() -> void:
 	_start()
 	hud.set_orders_open(true)
 	var view: Vector2 = hud._view_size()
+	var faces: Rect2 = hud.allies_box.get_global_rect()
 	for words in ["무리가 역 쪽으로 접근 중!", "무리 근접! 곧 출발! 모두 열차로! 무리 근접! 곧 출발! 모두 열차로! 무리 근접! 곧 출발!"]:
 		hud.radio(words)
 		hud.tick(0.02)
@@ -174,7 +178,20 @@ func test_a_radio_call_however_long_keeps_to_the_message_column() -> void:
 		assert_true(Rect2(Vector2.ZERO, view).encloses(radio), "on the screen: " + words)
 		for b: Button in [hud.lever_button, hud.all_aboard_button, hud.follow_button, hud.wait_button]:
 			assert_false(radio.intersects(b.get_global_rect()), "clear of the orders: " + words)
+		assert_gt(radio.position.y, view.y * 0.5, "in the lower half, the way ahead left open: " + words)
+		assert_lte(radio.end.y, faces.position.y, "over the faces: " + words)
+		# In the middle, unless that would reach the right thumb's pads (a 16:9 screen).
+		var bounds: Vector2 = hud.radio_bounds()
+		assert_almost_eq(radio.get_center().x, minf(view.x * 0.5, bounds.y - radio.size.x * 0.5), 1.0, "in the middle as far as the pads let it: " + words)
+		assert_lte(radio.end.x, bounds.y + 0.5, "short of the thumb's pads: " + words)
+		for b: Button in hud.pads:
+			if b.is_visible_in_tree():
+				assert_false(radio.intersects(b.get_global_rect()), "clear of %s: %s" % [b.tooltip_text + b.text, words])
+		assert_lte(radio.size.x, view.x * hud.RADIO_SHARE + 1.0, "no wider than its share: " + words)
+		assert_gt(radio.position.x, hud.stick_home().x + hud.STICK_RING, "clear of the stick's ring: " + words)
 		assert_lt(radio.end.x, hud.status_pads[0].get_global_rect().position.x, "left of the state icons: " + words)
+		if words.length() < 20:
+			assert_eq(hud.radio_label.get_line_count(), 1, "a short call is one line")
 	assert_gt(hud.radio_label.get_line_count(), 1, "the long call wrapped")
 
 
