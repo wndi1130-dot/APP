@@ -4,8 +4,11 @@ extends Node
 ## The format 2 sample is put in user:// by adb (run-as), not in git: a 6.6 MB field save from a
 ## local slice resume test, about 200 000 int tags. The format 3 sample is the same stop written
 ## again by the current encoder, made on a first launch that only prepares it (reading the
-## format 2 save there would warm the very first read the next launches time). Each result is
-## printed (adb logcat -s godot) and shown.
+## format 2 save there would warm the very first read the next launches time). The twelve cold
+## launches after it each time one first read (old or new codec, format 2 or 3, three times each
+## in turning order); the launches after those time repeats, a cut-off main file, old and new
+## whole reads taking turns, the codec alone in turns, and the int text check alone. Each result
+## is printed (adb logcat -s godot) and shown.
 
 const FieldSave = preload("res://game/sim/field_save.gd")
 ## main 489404a0's game/sim/field_save.gd, the codec before #1447 (the same blob).
@@ -14,8 +17,17 @@ const V2: String = "user://probe_v2.json"
 const V3: String = "user://probe_v3.json"
 const BROKEN: String = "user://probe_broken.json"
 const LAUNCH: String = "user://probe_launch.txt"
+const BUILD: String = "#1454 probe on main 55b9d94a"
+## The cold launches after the one that prepares: each does only the first read, with this codec
+## on this format; every pair of the four comes three times, the order turning each round.
+const COLD: Array = [
+	["old", "v2"], ["new", "v2"], ["old", "v3"], ["new", "v3"],
+	["new", "v2"], ["old", "v2"], ["new", "v3"], ["old", "v3"],
+	["old", "v2"], ["new", "v2"], ["old", "v3"], ["new", "v3"],
+]
 const REPEAT: int = 5
 const BROKEN_REPEAT: int = 3
+const READ_PAIR_RUNS: int = 6
 const PAIR_RUNS: int = 9
 const INT_TEXTS: int = 200000
 
@@ -46,23 +58,55 @@ func _run() -> void:
 		_prepare(head)
 		return
 	var launch: int = _next_launch()
-	_say("BENCH start launch %d · %s" % [launch, head])
-	# The first read in this process, the way boot meets a save: the format alternates by launch
-	# so each gets a cold first read over the runs.
-	var order: Array = [V2, V3] if launch % 2 == 1 else [V3, V2]
-	for path: String in order:
-		var started: int = Time.get_ticks_usec()
-		var read: Dictionary = FieldSave.read(path)
-		var took: int = Time.get_ticks_usec() - started
-		_say("BENCH launch %d first read %s: %.1f ms ok=%s" % [launch, _name(path), took / 1000.0, not read.is_empty()])
-		await get_tree().process_frame
+	_say("BENCH start launch %d · %s · %s" % [launch, BUILD, head])
+	if launch <= COLD.size():
+		_cold(launch, COLD[launch - 1][0], COLD[launch - 1][1])
+		_say("BENCH done launch %d" % launch)
+		return
 	for path: String in [V2, V3]:
 		await _repeat(launch, path)
 	await _broken(launch)
 	for path: String in [V2, V3]:
+		await _read_pairs(launch, path)
+	for path: String in [V2, V3]:
 		await _pairs(launch, path)
 	_int_texts(launch)
 	_say("BENCH done launch %d" % launch)
+
+
+## The first read in this process, the way boot meets a save, with one codec on one format.
+## Only this one read happens in a cold launch, so nothing before it warms the codec.
+func _cold(launch: int, which: String, format: String) -> void:
+	var path: String = V2 if format == "v2" else V3
+	var started: int = Time.get_ticks_usec()
+	var read: Dictionary = OldSave.read(path) if which == "old" else FieldSave.read(path)
+	var took: int = Time.get_ticks_usec() - started
+	_say("BENCH launch %d cold first read %s %s codec: %.1f ms ok=%s" % [launch, _name(path), which, took / 1000.0, not read.is_empty()])
+
+
+## Whole reads (file, JSON parse, codec, whole-save checks) with the old and the new codec
+## taking turns, old-new then new-old, so a slow stretch of the phone falls on both.
+func _read_pairs(launch: int, path: String) -> void:
+	var olds: Array[int] = []
+	var news: Array[int] = []
+	var gaps: Array = []
+	var ok: bool = true
+	for i: int in READ_PAIR_RUNS:
+		var turn: Array = ["old", "new"] if i % 2 == 0 else ["new", "old"]
+		var took: Dictionary = {}
+		for which: String in turn:
+			var started: int = Time.get_ticks_usec()
+			var read: Dictionary = OldSave.read(path) if which == "old" else FieldSave.read(path)
+			took[which] = Time.get_ticks_usec() - started
+			ok = ok and not read.is_empty()
+			await get_tree().process_frame
+		olds.append(int(took["old"]))
+		news.append(int(took["new"]))
+		gaps.append(float(int(took["new"]) - int(took["old"])) / float(maxi(int(took["old"]), 1)))
+	gaps.sort()
+	_say("BENCH launch %d read pairs %s (%d rounds, old-new/new-old): old median %.1f least %.1f ms · new median %.1f least %.1f ms · new vs old median %+.1f%% (least %+.1f%%, most %+.1f%%) ok=%s" % [
+		launch, _name(path), READ_PAIR_RUNS, _median(olds) / 1000.0, _least(olds) / 1000.0, _median(news) / 1000.0, _least(news) / 1000.0,
+		gaps[int(gaps.size() / 2.0)] * 100.0, gaps[0] * 100.0, gaps[gaps.size() - 1] * 100.0, ok])
 
 
 ## Makes the format 3 sample from the format 2 one: read with the current codec, written whole
