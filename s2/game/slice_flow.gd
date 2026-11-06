@@ -2470,10 +2470,7 @@ func _start_field() -> void:
 	if field_resume.is_empty():
 		field.opts = _field_opts()
 	else:
-		field.opts = field_resume
-		field.opts["field_save"] = bool(opts.get("save", false))
-		field.opts["field_save_path"] = String(opts.get("field_save_path", FieldSave.PATH))
-		field_resume = {}
+		field.opts = _resumed_field_opts()
 	if _is_campaign():
 		field.opts["map_data"] = _campaign_map
 		_campaign_map = {}
@@ -2528,6 +2525,18 @@ func _departure() -> Dictionary:
 	if contract.is_empty() or int(contract.get("segment", -1)) != int(train_g.get("seg", -2)):
 		contract = FieldDeparture.build(train_g, train_t, {"placeId": FieldMaps.resolve(_field_place())})
 	return contract
+
+
+## What a field stood up from its save (field_resume) starts with: what it was saved with,
+## this slice's save switch and path, and — it is the play's field as well — the kept settings
+## it lacks and the mark (field_prefs.gd; a save from before had none, so its changes went unkept).
+func _resumed_field_opts() -> Dictionary:
+	var o: Dictionary = field_resume
+	field_resume = {}
+	o["field_save"] = bool(opts.get("save", false))
+	o["field_save_path"] = String(opts.get("field_save_path", FieldSave.PATH))
+	FieldPrefs.fill(o)
+	return o
 
 
 ## What the slice's field goes out with: the train's departure contract (who goes, their
