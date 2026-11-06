@@ -61,6 +61,14 @@ static var _test_fail_step: String = ""
 static var _test_previous_parses: int = 0
 ## Tests only: actual file parse attempts in read(), including a broken primary.
 static var _test_reads: int = 0
+## Tests only: texts read by _int_of_text (a format 2 byte run's elements go by _byte_texts).
+static var _test_int_texts: int = 0
+## "0" to "255" → the byte: the encoder's text for each, filled once (_byte_table). A format 2
+## byte run's elements are looked up here instead of read by _int_of_text: one save holds over
+## 230 000 of them, and on the phone (SM-S906N, 11-07) the text check cost 0.6 us more than this
+## each, about 0.14 s more to read one such save. Only these 256 texts are keys, so "+7", "007",
+## "-0", "256", a number or anything else still misses and breaks the file, as _int_of_text did.
+static var _byte_texts: Dictionary = {}
 ## Process-local hashes of exact disk bytes already accepted by from_json().
 static var _known_good: Dictionary = {}
 
@@ -1462,9 +1470,16 @@ static func _decode_run(type: String, list: Array) -> Variant:
 	if type == "PackedByteArray":
 		var bytes := PackedByteArray()
 		bytes.resize(count)
+		var texts: Dictionary = _byte_table()
 		for i: int in count:
-			var b: Variant = _typed_int(list[i])
-			if b == null or b < 0 or b > 255:
+			var e: Variant = list[i]
+			if not e is Dictionary:
+				return _bad()
+			var tag: Dictionary = e
+			if tag.size() != 2 or tag.get("$type") != "int":
+				return _bad()
+			var b: Variant = texts.get(tag.get("value"))
+			if b == null:
 				return _bad()
 			bytes[i] = b
 		return bytes
@@ -1476,6 +1491,14 @@ static func _decode_run(type: String, list: Array) -> Variant:
 			return _bad()
 		ints[i] = n
 	return ints
+
+
+## The byte for each of the encoder's texts "0" to "255" (_byte_texts).
+static func _byte_table() -> Dictionary:
+	if _byte_texts.is_empty():
+		for b: int in 256:
+			_byte_texts[str(b)] = b
+	return _byte_texts
 
 
 ## A raw {"$type": "int", "value": text} element as its int, or null when it is not one.
@@ -1514,6 +1537,7 @@ static func _decode_pairs(value: Variant) -> Variant:
 ## nothing else) and two checks instead of a RegEx: a format 2 field save holds over 200 000
 ## int tags, and RegEx.search cost about ten times as much a tag (11-06, measured on this PC).
 static func _int_of_text(value: Variant) -> Variant:
+	_test_int_texts += 1
 	if not value is String:
 		return null
 	# Checks by character code, no new string for the common short text: of three ways measured
