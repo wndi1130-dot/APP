@@ -141,6 +141,7 @@ const TOAST_MAX: int = 4
 const TOAST_W: float = 560.0        # a note wider than this wraps onto a second line
 const RADIO_W: float = 480.0        # so does a radio call, or at the column's own room
 const RADIO_SHARE: float = 0.46     # the radio's subtitle at most this share of the screen wide (결정 569)
+const RADIO_LEAST: float = 80.0     # its words never wrap narrower than this (css)
 const SAY_S: float = 2.6            # a line over a companion's head stays this long
 const SAY_FONT: int = 20
 # A held train leaves: the field stands still and darkens, two lines come up,
@@ -1177,6 +1178,7 @@ func _toggle_card(i: int) -> void:
 	for j in ally_buttons.size():
 		(ally_buttons[j]["card"] as Control).visible = j == card_row
 	_place_allies()
+	_place_messages()   # the radio over the card, or back down, in this frame
 
 
 ## A tap on an open card: the companion's orders and state, the card folded.
@@ -1916,9 +1918,9 @@ func _ally_text(p, second: String) -> String:
 ## between the stick's ring and the right thumb's pads.
 func _place_allies() -> void:
 	var view: Vector2 = _view_size()
-	var one: bool = bool(game.opts.get("primary_one", false))
-	var right: float = view.x + AIM_AT.x - (0.0 if one else MANUAL_SIZE.x + 8.0) - 16.0
-	var left: float = stick_home().x + STICK_RING + UiFonts.px(SQUAD_GAP)
+	var bounds: Vector2 = radio_bounds()   # the same room between the thumbs as the radio's
+	var right: float = bounds.y
+	var left: float = bounds.x
 	var n: int = ally_buttons.size()
 	var row_w: float = n * CHIP_TOKEN + maxi(n - 1, 0) * CHIP_GAP
 	var x0: float = roundf(view.x * 0.5 - row_w * 0.5)
@@ -2028,6 +2030,8 @@ func _place_radio() -> void:
 	var bounds: Vector2 = radio_bounds()
 	var left: float = bounds.x
 	var right: float = bounds.y
+	# Its words never wrap narrower than RADIO_LEAST (_fit_radio): on a screen too narrow
+	# even for that, radio_spot lets the pill overhang both sides alike.
 	var room: float = roundf(minf(view.x * RADIO_SHARE, right - left))
 	if absf(room - radio_room) > 0.5:
 		radio_room = room
@@ -2037,31 +2041,53 @@ func _place_radio() -> void:
 		var card: Control = row["card"]
 		if card.visible:
 			floors.append(card.get_global_rect().position.y)
+	# The keys are taken out of the row as they go (_offer_pick): every one there stands.
 	for key: Node in offer_box.get_children():
 		floors.append((key as Control).get_global_rect().position.y)
-	var rs: Vector2 = radio_pill.size.max(radio_pill.get_combined_minimum_size())
-	radio_pill.global_position = radio_spot(rs, view, floors, left, right, UiFonts.px(MESSAGE_GAP)).position
+	# As small as its words are now: a call that wrapped onto fewer lines, or onto
+	# more, stands on the same foot (6 Pro 점검: the size only ever grew before).
+	radio_pill.reset_size()
+	radio_pill.global_position = radio_spot(radio_pill.size, view, floors, left, right, UiFonts.px(MESSAGE_GAP)).position
 
 
 ## The radio's subtitle keeps between these (x, screen px): the stick's ring and the
-## right thumb's pads, as an open card does (_place_allies). On a 16:9 screen a
-## wide call stands a little left of the middle rather than reach the pads.
+## right thumb's keys, as an open card does (_place_allies). On a 16:9 screen a
+## wide call stands a little left of the middle rather than reach the keys.
 func radio_bounds() -> Vector2:
-	var view: Vector2 = _view_size()
-	var one: bool = bool(game.opts.get("primary_one", false))
-	var left: float = stick_home().x + STICK_RING + UiFonts.px(SQUAD_GAP)
-	var right: float = view.x + AIM_AT.x - (0.0 if one else MANUAL_SIZE.x + 8.0) - 16.0
-	return Vector2(left, right)
+	return radio_bounds_for(_view_size(), stick_home().x, bool(game.opts.get("primary_one", false)))
+
+
+static func radio_bounds_for(view: Vector2, stick_x: float, one: bool) -> Vector2:
+	return Vector2(stick_x + STICK_RING + UiFonts.px(SQUAD_GAP), view.x + thumb_reach(one) - 16.0)
+
+
+## How far left the right thumb's keys reach (x from the screen's right edge): the
+## column of the context and depart keys, and the aim key with the manual key
+## beside it. A single primary key (`one`) has no manual key, but the column stays
+## (6 Pro 점검: the bound used to leave it out and reach 97 px into it).
+static func thumb_reach(one: bool) -> float:
+	return minf(minf(CONTEXT_AT.x, DEPART_AT.x), AIM_AT.x - (0.0 if one else MANUAL_SIZE.x + 8.0))
 
 
 ## Where a subtitle `pill` big stands on a `view` screen: centred, kept within
-## [left, right], its foot `gap` over the highest of `floors` (tops, screen y).
+## [left, right], its foot `gap` over the highest of `floors` (tops, screen y). A
+## pill wider than [left, right] (a screen narrower than any phone) overhangs both
+## sides alike and stays on the screen.
 static func radio_spot(pill: Vector2, view: Vector2, floors: Array[float], left: float, right: float, gap: float) -> Rect2:
 	var foot: float = view.y
 	for y: float in floors:
 		foot = minf(foot, y)
-	var x: float = clampf(view.x * 0.5 - pill.x * 0.5, left, maxf(right - pill.x, left))
+	var x: float
+	if pill.x <= right - left:
+		x = clampf(view.x * 0.5 - pill.x * 0.5, left, right - pill.x)
+	else:
+		x = clampf((left + right - pill.x) * 0.5, 0.0, maxf(view.x - pill.x, 0.0))
 	return Rect2(Vector2(roundf(x), roundf(foot - gap - pill.y)), pill)
+
+
+## The pill's own width round its words (its glass, the set's mark, the crackle).
+func _radio_chrome() -> float:
+	return radio_pill.get_combined_minimum_size().x - radio_label.get_combined_minimum_size().x
 
 
 ## How wide a note may be with its paper: TOAST_W, or the column's room.
@@ -2449,6 +2475,10 @@ func radio(text: String) -> void:
 	radio_label.visible = words != ""
 	_fit_radio()
 	radio_left = 8.0
+	# Up and placed at once, in the frame the call comes in (6 Pro 점검: its new
+	# size stood on the old spot until the next tick).
+	radio_pill.visible = radio_label.text != ""
+	_place_messages()
 
 
 ## A call no wider than its subtitle's room (_place_radio, RADIO_W at most): a
@@ -2459,8 +2489,7 @@ func _fit_radio() -> void:
 	if radio_label.visible:
 		var font: Font = radio_label.get_theme_font("font")
 		var words: float = font.get_string_size(radio_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, radio_label.get_theme_font_size("font_size")).x
-		var chrome: float = radio_pill.get_combined_minimum_size().x - radio_label.get_combined_minimum_size().x
-		var room: float = RADIO_W if radio_room < 0.0 else clampf(radio_room - chrome, UiFonts.px(80.0), RADIO_W)
+		var room: float = RADIO_W if radio_room < 0.0 else clampf(radio_room - _radio_chrome(), UiFonts.px(RADIO_LEAST), RADIO_W)
 		if words > room:
 			radio_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			radio_label.custom_minimum_size.x = room
@@ -2534,6 +2563,7 @@ func offer(list: Array) -> void:
 		offer_box.add_child(key)
 	offer_box.add_child(_offer_key("그만", _offer_pick.bind(Callable()), Vector2(100, 72), true))
 	_layout_offer()
+	_place_messages()   # the radio over them in this frame, not the next (_place_radio)
 
 
 ## A choice offered on the field: a glass pill of the field's (시안 .fglass) in
@@ -2555,6 +2585,7 @@ func _offer_pick(cb: Callable) -> void:
 	for c in offer_box.get_children():
 		offer_box.remove_child(c)
 		c.queue_free()
+	_place_messages()
 	if cb.is_valid():
 		cb.call()
 
