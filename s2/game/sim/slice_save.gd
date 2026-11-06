@@ -16,6 +16,9 @@ const CampaignRoute = preload("res://game/train/campaign_route.gd")
 const FieldReturn = preload("res://game/politics/field_return.gd")
 const STEPS: Array[String] = ["train", "stop_pick", "field", "receipt", "council", "travel", "arrive", "end"]
 
+## Tests only: actual parses of the train candidates in _train_read(), the slot or its backup.
+static var _test_train_parses: int = 0
+
 
 ## The train's fingerprint is of the board as write_train writes it (slot_board: a supplies
 ## run carries its slot version), so it matches the train file it stands beside.
@@ -189,19 +192,85 @@ static func clear(path: String = PATH) -> void:
 
 ## Read through S1's shape check without writing its global broken-save slot.
 static func _train(path: String, t: Dictionary, source: Dictionary = {}) -> Dictionary:
+	var result := _train_read(path, t)
+	var g: Dictionary = result["g"]
+	if not g.is_empty():
+		source["train_sha"] = String(result["sha"])
+	return g
+
+
+## The train's slot and its backup read once each, as one decision: what this build can take
+## (status "accepted", the first accepted board) and whether a candidate is newer than this
+## build ("newer"), which stops the start before anything is chosen.
+static func _train_read(path: String, t: Dictionary) -> Dictionary:
+	var found: bool = false
+	var accepted: bool = false
+	var newer: bool = false
+	var g: Dictionary = {}
+	var sha: String = ""
 	for at: String in [path, path + ".bak"]:
-		var loaded: Dictionary = TrainSave.read_save(_parse(at, source), t)
-		if bool(loaded.get("ok", false)):
-			var g: Dictionary = loaded["g"]
-			if g.has("campaign") and RouteState.problem(g, t) != "":
-				return {}
-			var valid: bool = true
-			for record: Variant in _returns(g).get("records", []):
-				if not record is Dictionary or not record.get("receiptId") is String or not (record.get("seg") is int or record.get("seg") is float):
-					valid = false
-			if valid:
-				return g
-	return {}
+		if not FileAccess.file_exists(at):
+			continue
+		found = true
+		_test_train_parses += 1
+		var text := FileAccess.get_file_as_string(at)
+		var json := JSON.new()
+		var raw: Variant = null
+		if json.parse(text) == OK:
+			raw = json.data
+		# The version is read before the codec: a newer save is newer even where this build's
+		# codec refuses one of its other values.
+		var version: Variant = _train_version(raw)
+		if version != null and float(version) > float(TrainSave.SAVE_VERSION):
+			newer = true
+			continue
+		var decoded: Variant = FieldSave.decode_checked(raw)
+		if not decoded is Dictionary:
+			continue
+		var loaded: Dictionary = TrainSave.read_save(decoded, t)
+		if not bool(loaded.get("ok", false)):
+			continue
+		var candidate: Dictionary = loaded["g"]
+		if candidate.has("campaign") and RouteState.problem(candidate, t) != "":
+			continue
+		if not _returns_whole(candidate):
+			continue
+		# The first accepted candidate stands: the backup is still read, but does not replace it.
+		if accepted:
+			continue
+		accepted = true
+		g = candidate
+		sha = text.sha256_text()
+	return {"status": "newer" if newer else ("accepted" if accepted else ("unacceptable" if found else "absent")),
+		"g": g, "sha": sha, "newer": newer}
+
+
+## The slot's version as a number, or null when the file has none. A JSON number comes back
+## as a float; a typed int tag keeps the encoder's text.
+static func _train_version(raw: Variant) -> Variant:
+	if not raw is Dictionary:
+		return null
+	var version: Variant = (raw as Dictionary).get("version")
+	if version is Dictionary:
+		var tag: Dictionary = version as Dictionary
+		if tag.size() == 2 and tag.get("$type") == "int":
+			return FieldSave._int_of_text(tag.get("value"))
+		return null
+	if not (version is int or version is float) or not is_finite(float(version)) or float(version) != floorf(float(version)):
+		return null
+	return version
+
+
+## The field returns' records as the resume reads them. read_save already made records a list
+## where fieldReturns is present; a list of anything else is not this build's.
+static func _returns_whole(g: Dictionary) -> bool:
+	var raw_records: Variant = _returns(g).get("records", [])
+	if not raw_records is Array:
+		return false
+	for record: Variant in raw_records:
+		if not record is Dictionary or not record.get("receiptId") is String or not (record.get("seg") is int or record.get("seg") is float):
+			return false
+	return true
 
 
 ## S1 keeps the whole canonical receipt as the applied id's fingerprint.
@@ -231,9 +300,42 @@ static func receipt_of_field(saved: Dictionary) -> Dictionary:
 
 
 static func pick(slice_path: String, train_path: String, t: Dictionary, field_path: String = FieldSave.PATH, read_context: Variant = null) -> Dictionary:
-	var d := read(slice_path)
 	var source: Dictionary = {}
 	var g := _train(train_path, t, source)
+	return _pick_with(read(slice_path), g, source, field_path, read_context)
+
+
+## Where the app starts, decided from one read of the train: "blocked" (a newer or unreadable
+## train), a slice or campaign resume, a field resume, or the menu. The layer above reads no
+## save of its own.
+static func boot_choice(slice_path: String, train_path: String, t: Dictionary, field_path: String, read_context: Variant = null) -> Dictionary:
+	var result := _train_read(train_path, t)
+	var status := String(result["status"])
+	if status == "newer" or status == "unacceptable":
+		push_warning("train save at %s is %s; resuming is held" % [train_path, status])
+		return {"kind": "blocked", "resume": {}, "why": status}
+	var g: Dictionary = result["g"]
+	var source: Dictionary = {}
+	if status == "accepted":
+		source["train_sha"] = String(result["sha"])
+	var picked := _pick_with(read(slice_path), g, source, field_path, read_context)
+	if not picked.is_empty():
+		return {"kind": "campaign" if picked.get("mode") == "campaign" else "slice", "resume": picked, "why": ""}
+	var save: Dictionary = FieldSave.read_for_start(field_path, read_context) if read_context is Dictionary else FieldSave.read(field_path)
+	# A board from before the returns (or a broken applied slot) has taken nothing in.
+	var applied_raw: Variant = _returns(g).get("applied")
+	var applied: Dictionary = {}
+	if applied_raw is Dictionary:
+		applied = applied_raw
+	var opts := FieldSave.pick_start_with(save, applied, field_path)
+	if not opts.is_empty():
+		return {"kind": "field", "resume": opts, "why": ""}
+	return {"kind": "menu", "resume": {}, "why": ""}
+
+
+## The slice's own decision, over a board the caller already read: the same board brings its
+## session back (a torn pair reads the train's step instead), else nothing.
+static func _pick_with(d: Dictionary, g: Dictionary, source: Dictionary, field_path: String, read_context: Variant = null) -> Dictionary:
 	if RouteState.is_campaign(g):
 		return _pick_campaign(d, g, source, field_path, read_context)
 	if d.is_empty():
@@ -242,7 +344,7 @@ static func pick(slice_path: String, train_path: String, t: Dictionary, field_pa
 		return {}
 	var saved_ids: Array = d["applied"].duplicate()
 	saved_ids.sort()
-	var torn: bool = int(d["seg"]) != int(g["seg"]) or saved_ids != applied_ids(g) or d["train_sha"] != source["train_sha"]
+	var torn: bool = int(d["seg"]) != int(g["seg"]) or saved_ids != applied_ids(g) or d["train_sha"] != source.get("train_sha")
 	var at := step_of_board(g) if torn else resume_step(g, String(d["step"]))
 	if at == "end":
 		return {}
