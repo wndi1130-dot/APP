@@ -182,6 +182,20 @@ static func snow_look_for(map_data: Dictionary) -> Dictionary:
 	return look
 
 
+## How white this map lies on the whole, 0..1: the stop's snow (stop_snow, the field's
+## fx_snow from Atmosphere ground_snow) raised or lowered by snow_look's shift, the same
+## sum world_vis makes for local_snow before its melt field moves the snow about the map
+## (that field averages out; at deep snow its clamp makes the true mean a little lower).
+## For what is built once per stop and must agree with the ground, as the trees' snowy
+## pairs (map-layout, 11-06). fx_snow may still change while the stop is played: the
+## shaders follow it, this does not. A stop_snow outside 0..1 is read as FxState clamps it.
+static func map_snow_mean(map_data: Dictionary, stop_snow: float) -> float:
+	if is_nan(stop_snow) or stop_snow <= 0.0:
+		return 0.0
+	var shift := float(snow_look_for(map_data)["shift"])
+	return clampf(minf(stop_snow, 1.0) * (1.0 + shift), 0.0, 1.0)
+
+
 func setup(map_data: Dictionary) -> void:
 	data = map_data
 	story_look = StoryLook.for_place(String(data.get("place_id", ""))) if story_look_enabled else {}
