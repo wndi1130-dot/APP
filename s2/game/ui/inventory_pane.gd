@@ -9,6 +9,7 @@ extends RefCounted
 ## callbacks.
 
 const GlassPane = preload("res://game/ui/glass_pane.gd")
+const HudSkin = preload("res://game/ui/hud_skin.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const HoldConfirm = preload("res://game/ui/hold_confirm.gd")
@@ -966,9 +967,8 @@ static func _near_rows(hud, p, at: Dictionary) -> Control:
 			for i: int in indices:
 				var g: Dictionary = game.ground_items[i]
 				var id: String = String(g["id"])
-				var word: String = game.item_name(id) + (" · 입기" if g.has("garment") else "")
 				var cb_g: Callable = hud._inv_pick.bind(i)
-				list.add_child(_row(hud, id, word, int(g["n"]), Carry.item_weight(id) * int(g["n"]), cb_g, false, "near", i))
+				list.add_child(_row(hud, id, game.item_name(id), int(g["n"]), Carry.item_weight(id) * int(g["n"]), cb_g, false, "near", i, ground_tags(g)))
 				if not opened_g and _expanded(hud, "near", id, i):
 					opened_g = true
 					list.add_child(_near_more(hud, id, Carry.item_weight(id) * int(g["n"]), int(g["n"]), cb_g))
@@ -1070,12 +1070,18 @@ static func _steady(x: Variant, y: Variant, a: int, b: int) -> bool:
 ## One row, COL_W × ROW_H: the thing's picture, its name on one line (cut with …
 ## when long), its count and its weight. A press moves it (`cb`); held LONG_S
 ## without moving, it opens under itself instead (`side` is the column).
-static func _row(hud, id: String, word: String, n: int, weight: float, cb: Callable, dim: bool, side: String, i: int = -1) -> Button:
+## `tags` (ground_tags) go on a smaller second line under the name and are never
+## cut: when the row is short of room only the name's end gives way (코디
+## 2026-11-06: a cut must not drop what the row means).
+static func _row(hud, id: String, word: String, n: int, weight: float, cb: Callable, dim: bool, side: String, i: int = -1, tags: Array = []) -> Button:
 	var b := Button.new()
 	b.focus_mode = Control.FOCUS_NONE
 	b.custom_minimum_size = Vector2(UiFonts.px(COL_W), UiFonts.px(ROW_H))
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	b.text = word if n <= 1 else "%s ×%d" % [word, n]
+	var said: String = word
+	for tag: Array in tags:
+		said += " · " + String(tag[0])
+	b.text = said if n <= 1 else "%s ×%d" % [said, n]
 	b.clip_text = true
 	b.tooltip_text = b.text
 	b.disabled = dim and side != "bag"
@@ -1107,7 +1113,10 @@ static func _row(hud, id: String, word: String, n: int, weight: float, cb: Calla
 	label.name = "Name"
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	row.add_child(label)
+	if tags.is_empty():
+		row.add_child(label)
+	else:
+		row.add_child(_name_and_tags(label, tags))
 	if n > 1:
 		var count := _number("×%d" % n, 13.0, GlassPane.INK)
 		count.name = "Count"
@@ -1128,6 +1137,61 @@ static func _row(hud, id: String, word: String, n: int, weight: float, cb: Calla
 			cb.call())
 	_long_press(hud, b, side, id, i)
 	return b
+
+
+## The name over its tags: a column filling the row's middle, the name cut with …
+## when long, the tags under it on one smaller line between dots, never cut.
+static func _name_and_tags(label: Label, tags: Array) -> Control:
+	var lines := VBoxContainer.new()
+	lines.name = "Lines"
+	lines.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lines.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lines.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	lines.add_theme_constant_override("separation", 0)
+	lines.add_child(label)
+	var under := GlassPane.row()
+	under.name = "Tags"
+	under.add_theme_constant_override("separation", GlassPane.px(3.0))
+	for k: int in tags.size():
+		if k > 0:
+			under.add_child(_tag_label("·", GlassPane.INK3))
+		var tag: Label = _tag_label(String(tags[k][0]), tags[k][1] as Color)
+		tag.name = String(tags[k][2])
+		under.add_child(tag)
+	lines.add_child(under)
+	return lines
+
+
+## A tag's word at 11 css: as wide as its text, so the row never cuts it.
+static func _tag_label(word: String, ink: Color) -> Label:
+	var tag: Label = _label(word, 11.0, ink)
+	tag.clip_text = false
+	return tag
+
+
+## What a thing lying on the floor tells beside its name, in order: 「입기」 for a
+## garment (a press puts it on), then how worn it is once that shows — a
+## garment's 해짐·너덜 (wear.gd), a weapon's 닳음·위험 or 망가짐 (weapons.gd), in
+## the colours of the weapon's line on the HUD (field_hud.gd). Each tag is
+## [word, ink, node name]; a thing as good as new tells nothing more.
+static func ground_tags(g: Dictionary) -> Array:
+	var tags: Array = []
+	if g.has("garment"):
+		tags.append(["입기", GlassPane.INK3, "Hint"])
+		var word: String = Wear.state_word(g["garment"] as Dictionary)
+		if word == Wear.STATE_WORDS[1]:
+			tags.append([word, HudSkin.HEED, "State"])
+		elif word == Wear.STATE_WORDS[2]:
+			tags.append([word, HudSkin.BAD, "State"])
+	elif g.has("weapon"):
+		var held: Dictionary = g["weapon"]
+		if bool(held.get("broken", false)):
+			tags.append(["망가짐", HudSkin.BAD, "State"])
+		else:
+			var level: int = W.condition_level(float(held.get("condition", 1.0)))
+			if level > 0:
+				tags.append([W.CONDITION_NAMES[level], [HudSkin.HEED, HudSkin.BAD][level - 1], "State"])
+	return tags
 
 
 ## Held LONG_S without a drag, a row opens under itself (or closes again); the
