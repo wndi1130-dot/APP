@@ -39,10 +39,22 @@ const NOT_START := ["field_save", "field_save_path", "field_resume", "departure"
 ## Version 1 did not store targets or timers; keep its original fallback.
 const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
 
-## Set by _decode when a base64 run is not one; from_json then takes the save as broken.
+## Set by _decode when a value is not one the encoder writes; from_json then takes the save as broken.
 static var _decode_bad: bool = false
 ## The whole string (\z: a line end before the end is not one), padding only at the end.
 static var _base64_line: RegEx = RegEx.create_from_string("^[A-Za-z0-9+/]*={0,2}\\z")
+## The digits of the signed 64-bit edges, compared as text so no value goes through a float.
+const INT64_MAX_DIGITS := "9223372036854775807"
+const INT64_MIN_DIGITS := "9223372036854775808"
+const INT32_MIN := -2147483648
+const INT32_MAX := 2147483647
+## Tag types and the length of their fixed number list.
+const NUMBER_TAGS := {"Vector3": 3, "Vector2": 2, "Color": 4}
+const INT_TAGS := {"Vector2i": 2, "Rect2i": 4}
+## The packed runs that may be one base64 line (format 3) instead of a typed list (format 2).
+const BASE64_TAGS := ["PackedByteArray", "PackedInt32Array"]
+## The packed runs that may be a typed list: of vectors, of text, or format 2's bytes and int32s.
+const LIST_TAGS := ["PackedVector3Array", "PackedStringArray", "PackedByteArray", "PackedInt32Array"]
 ## Tests only: fail one step of the next write; empty is off, reset on entry.
 static var _test_fail_step: String = ""
 ## Tests only: counts actual parses of the previous slot, not new-file validation.
@@ -1345,40 +1357,32 @@ static func _encode(v: Variant) -> Variant:
 	return v
 
 
+## A parsed value back as the encoder had it (_encode). Only what the encoder writes reads: a
+## value that is not (a typed int that is not its text, a vector a number short, an unknown
+## tag) sets _decode_bad and gives null, so a broken file is never half read into a guessed
+## board. A typed parent (a packed run, a typed map) checks each raw child's form before it
+## decodes it and stops at the first that fails, before building anything; a plain map or list
+## decodes all its children and then drops itself, before the dig_parts clean-up, if one failed.
+## decode_checked is the entrance.
 static func _decode(v: Variant) -> Variant:
 	if v is Dictionary:
-		# A packed tag is these two keys and nothing else (no old "value" beside it).
-		if v.has("$type") and v.has("base64"):
-			if v.size() != 2:
-				_decode_bad = true
-				return null
-			return _unpack(String(v["$type"]), v["base64"])
-		if v.has("$type") and v.has("value"):
-			var value: Variant = v["value"]
-			match String(v["$type"]):
-				"int": return int(value)
-				"float": return INF if value == "inf" else -INF
-				"Vector3": return Vector3(float(value[0]), float(value[1]), float(value[2]))
-				"Vector2": return Vector2(float(value[0]), float(value[1]))
-				"Vector2i": return Vector2i(int(value[0]), int(value[1]))
-				"Rect2i": return Rect2i(int(value[0]), int(value[1]), int(value[2]), int(value[3]))
-				"Color": return Color(float(value[0]), float(value[1]), float(value[2]), float(value[3]))
-				"PackedVector3Array": return PackedVector3Array(_decode(value))
-				"PackedByteArray": return PackedByteArray(_decode(value))
-				"PackedInt32Array": return PackedInt32Array(_decode(value))
-				"PackedStringArray": return PackedStringArray(_decode(value))
-				"Dictionary":
-					var dictionary: Dictionary = {}
-					for pair: Array in value:
-						dictionary[_decode(pair[0])] = _decode(pair[1])
-					return dictionary
+		# No game state has a "$type" key (saves of format 1 to 3, and the game's data): a map
+		# with one is a tag, and a tag that is not whole is a broken file.
+		if v.has("$type"):
+			return _decode_tag(v)
 		var out := {}
 		for k in v:
 			var e = v[k]
 			if k in VEC_KEYS and e is Array and e.size() == 3:
+				# Format 1 wrote a place as a bare [x, y, z] (it had no tags).
+				if not _numbers(e, 3):
+					return _bad()
 				out[k] = Vector3(float(e[0]), float(e[1]), float(e[2]))
 			else:
 				out[k] = _decode(e)
+		# A broken child left a null here and built nothing from it: stop before the clean-up.
+		if _decode_bad:
+			return null
 		if out.has("dig_parts"):
 			out["dig_parts"] = FieldWork.clean_dig_parts(out["dig_parts"], int(out.get("dig_wagon", -1)))
 		return out
@@ -1386,12 +1390,184 @@ static func _decode(v: Variant) -> Variant:
 		var out: Array = []
 		for e in v:
 			out.append(_decode(e))
-		return out
+		return null if _decode_bad else out
 	return v
 
 
-## A whole parsed save decoded (_decode), or null when a packed run in it is broken: the field
-## slot and the slice and train slots (slice_save.gd) read through here.
+## One typed value: exactly {"$type", "value"}, or {"$type", "base64"} for a packed run.
+static func _decode_tag(v: Dictionary) -> Variant:
+	var type: Variant = v["$type"]
+	if not type is String or v.size() != 2:
+		return _bad()
+	# A typed value is by far the most common tag (every int in a save): ask for it first.
+	if not v.has("value"):
+		return _unpack(type, v["base64"]) if v.has("base64") and type in BASE64_TAGS else _bad()
+	var value: Variant = v["value"]
+	if type == "int":
+		var n: Variant = _int_of_text(value)
+		return _bad() if n == null else n
+	if type == "float":
+		if value is String and value == "inf":
+			return INF
+		if value is String and value == "-inf":
+			return -INF
+		return _bad()
+	if NUMBER_TAGS.has(type):
+		if not _numbers(value, NUMBER_TAGS[type]):
+			return _bad()
+		match type:
+			"Vector3": return Vector3(float(value[0]), float(value[1]), float(value[2]))
+			"Vector2": return Vector2(float(value[0]), float(value[1]))
+		return Color(float(value[0]), float(value[1]), float(value[2]), float(value[3]))
+	if INT_TAGS.has(type):
+		if not value is Array or (value as Array).size() != INT_TAGS[type]:
+			return _bad()
+		for e: Variant in value:
+			if not _int_component(e, INT32_MIN, INT32_MAX):
+				return _bad()
+		if type == "Vector2i":
+			return Vector2i(int(value[0]), int(value[1]))
+		return Rect2i(int(value[0]), int(value[1]), int(value[2]), int(value[3]))
+	if type == "Dictionary":
+		return _decode_pairs(value)
+	if not type in LIST_TAGS or not value is Array:
+		return _bad()
+	return _decode_run(type, value)
+
+
+## A packed run written as a list: each raw element is checked for the one form the encoder
+## gives it before anything is decoded or built (never the general map path, whose dig_parts
+## clean-up reads other keys), and goes straight into the packed array in one pass.
+static func _decode_run(type: String, list: Array) -> Variant:
+	var count: int = list.size()
+	if type == "PackedStringArray":
+		for e: Variant in list:
+			if not e is String:
+				return _bad()
+		return PackedStringArray(list)
+	if type == "PackedVector3Array":
+		var places := PackedVector3Array()
+		places.resize(count)
+		for i: int in count:
+			var e: Variant = list[i]
+			if not e is Dictionary or (e as Dictionary).get("$type") != "Vector3":
+				return _bad()
+			var place: Variant = _decode_tag(e)
+			if _decode_bad:
+				return null
+			places[i] = place
+		return places
+	# Format 2 wrote byte and int32 runs as a list of typed ints (one run can hold tens of
+	# thousands): each is read where it lands, no list in between.
+	if type == "PackedByteArray":
+		var bytes := PackedByteArray()
+		bytes.resize(count)
+		for i: int in count:
+			var b: Variant = _typed_int(list[i])
+			if b == null or b < 0 or b > 255:
+				return _bad()
+			bytes[i] = b
+		return bytes
+	var ints := PackedInt32Array()
+	ints.resize(count)
+	for i: int in count:
+		var n: Variant = _typed_int(list[i])
+		if n == null or n < INT32_MIN or n > INT32_MAX:
+			return _bad()
+		ints[i] = n
+	return ints
+
+
+## A raw {"$type": "int", "value": text} element as its int, or null when it is not one.
+static func _typed_int(e: Variant) -> Variant:
+	if not e is Dictionary or (e as Dictionary).size() != 2 or (e as Dictionary).get("$type") != "int":
+		return null
+	return _int_of_text((e as Dictionary).get("value"))
+
+
+## A map with keys that are not all text: [key, value] pairs, each key once.
+static func _decode_pairs(value: Variant) -> Variant:
+	if not value is Array:
+		return _bad()
+	var dictionary: Dictionary = {}
+	for pair: Variant in value:
+		if not pair is Array or (pair as Array).size() != 2:
+			return _bad()
+		var key: Variant = _decode(pair[0])
+		if _decode_bad:
+			return null
+		# The encoder walks a map's keys once: a repeated key would drop the value before it.
+		# Only an infinite float key can repeat in its own output (it writes NaN as "-inf" too):
+		# that one keeps the last value, as before.
+		if dictionary.has(key) and not (key is float and is_inf(key)):
+			return _bad()
+		var item: Variant = _decode(pair[1])
+		if _decode_bad:
+			return null
+		dictionary[key] = item
+	return dictionary
+
+
+## The int an int tag's text stands for, or null when it is not the encoder's text (str(v): ASCII
+## digits, a minus only, no leading zero, no -0) inside signed 64 bits. Never through a float:
+## past 2^53 a float drops the last digits. is_valid_int (ASCII digits after one optional sign,
+## nothing else) and two checks instead of a RegEx: a format 2 field save holds over 200 000
+## int tags, and RegEx.search cost about ten times as much a tag (11-06, measured on this PC).
+static func _int_of_text(value: Variant) -> Variant:
+	if not value is String:
+		return null
+	# Checks by character code, no new string for the common short text: of three ways measured
+	# on this PC (11-06, 100 000 texts, least of 7) this was the cheapest, 1.19 us a text against
+	# 1.49 us for reading it back through str(); the old unchecked int() was 0.12 us.
+	var text: String = value
+	var size: int = text.length()
+	if size > INT64_MIN_DIGITS.length() + 1 or not text.is_valid_int():
+		return null
+	var first: int = text.unicode_at(0)
+	if first == 43:  # "+": the encoder never writes it
+		return null
+	var start: int = 1 if first == 45 else 0  # after a "-"
+	# A leading zero ("007") or a negative zero ("-0") is not the encoder's text.
+	if text.unicode_at(start) == 48 and (size > start + 1 or start == 1):
+		return null
+	# The 64-bit edge: compare the digits as text before to_int, which would wrap or error.
+	var digits: int = size - start
+	if digits > INT64_MAX_DIGITS.length():
+		return null
+	if digits == INT64_MAX_DIGITS.length() and text.substr(start).casecmp_to(INT64_MIN_DIGITS if start == 1 else INT64_MAX_DIGITS) > 0:
+		return null
+	return text.to_int()
+
+
+## A list of exactly n JSON numbers. Infinite ones read too: the encoder writes a vector's
+## components bare, and Vector3.INF (a stop with no train door, field_ai.gd _board_door) as 1e99999.
+static func _numbers(value: Variant, n: int) -> bool:
+	if not value is Array or (value as Array).size() != n:
+		return false
+	for e: Variant in value:
+		if not (e is float or e is int):
+			return false
+	return true
+
+
+## A whole, finite number from lo to hi (JSON brings every number back as a float).
+static func _int_component(e: Variant, lo: int, hi: int) -> bool:
+	if e is int:
+		return e >= lo and e <= hi
+	if not e is float or not is_finite(e) or e != floorf(e):
+		return false
+	return e >= lo and e <= hi
+
+
+static func _bad() -> Variant:
+	_decode_bad = true
+	return null
+
+
+## A whole parsed save decoded (_decode), or null when any value in it is not one the encoder
+## writes: the field slot, the slice and train slots (slice_save.gd) and the test-only train
+## loader (save_slot.gd) read through here, and so do the three writers judging the slot they
+## are about to set aside as .bak or .broken.
 static func decode_checked(v: Variant) -> Variant:
 	_decode_bad = false
 	var decoded: Variant = _decode(v)

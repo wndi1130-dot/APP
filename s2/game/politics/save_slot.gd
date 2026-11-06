@@ -248,7 +248,8 @@ static func load_slot(t: Dictionary, path: String = DEFAULT_PATH, broken_path: S
 	if parser.parse(raw) != OK:
 		read = {"ok": false, "why": "저장 글이 깨졌다"}
 	else:
-		# A broken packed run in it reads as no board (null), as a broken file does.
+		# A value the codec does not read (FieldSave.decode_checked) reads as no board (null), as a
+		# broken file does.
 		read = read_save(preload("res://game/sim/field_save.gd").decode_checked(parser.data), t)
 	if bool(read["ok"]):
 		return {"g": read["g"], "why": null}
