@@ -99,6 +99,7 @@ var drawn_at: Dictionary = {}          # id -> world place actually drawn this f
 var _submitted_last: Dictionary = {}   # snapshot of drawn_at; membership owns next frame's cap priority
 var _submitted_markers: Dictionary = {} # id -> visibility sent to the rising marker this frame
 var _submitted_axes: Dictionary = {}    # id -> custom data sent to the embedded axe this frame
+var _submitted_looks: Dictionary = {}   # id -> {body: Color, garment?: Color}, actual custom data submitted this frame
 var _shown: Dictionary = {}            # id -> sight visibility; never part of a saved body
 var _last_seen_draw: Dictionary = {}   # id -> last in-sight appearance, before packing visibility
 var _held_frames: Dictionary = {}      # id -> consecutive in-sight frames waiting for its appearance
@@ -208,6 +209,7 @@ func spawn(kind: String, at: Vector3, opts: Dictionary = {}) -> Dictionary:
 		"rise_t": 0.0, "name": String(opts.get("name", "")), "bang_t": 0.0, "depth": float(opts.get("depth", 1.0)),
 		"stun": 0.0, "speed": 0.0, "stander": game.rng.randf() < 0.55, "search_left": 0, "sense_t": 0.0, "smell_lock": 0.0,
 	}
+	z["look_code"] = DeadCast.look_code_for(int(game.opts.get("seed", game.rng.seed)), int(z["id"]))
 	next_id += 1
 	# Not the frozen, and not those sent in with a horde (a horde's runners are another rule).
 	# Keep the roll even for a drifter; zero share rolls nothing (decisions 134, 250, 387).
@@ -229,6 +231,7 @@ func _floor_y(at: Vector3) -> Vector3:
 ## A dead person becomes a corpse that stands up as "fresh" after RISE_TIME.
 func add_rising(at: Vector3, who_name: String) -> Dictionary:
 	var z := spawn("fresh", at, {"name": who_name})
+	z["look_code"] = 0   # every risen person keeps the old look, including unnamed people
 	z["state"] = "rising"
 	z["rise_t"] = RISE_TIME
 	# A risen person stands. Keep this second roll after spawn's (decisions 134, 250, 387).
@@ -270,6 +273,14 @@ func worn_of(z: Dictionary) -> Dictionary:
 		z["worn"] = kept[2] if _kept_for(kept, z) else _roll_worn(z)
 		_drawn_worn.erase(int(z["id"]))
 	return z["worn"]
+
+
+## Materialise old rows on the persistent record, not on a draw-only copy.
+## Reserved numbers remain saved as-is and are interpreted as the old look.
+func look_code_of(z: Dictionary) -> int:
+	if not z.has("look_code"):
+		z["look_code"] = DeadCast.look_code_migrated(int(game.opts.get("seed", game.rng.seed)), int(z["id"]), String(z.get("name", "")))
+	return DeadCast.active_look_code(int(z["look_code"]))
 
 
 func _roll_worn(z: Dictionary) -> Dictionary:
@@ -1508,7 +1519,10 @@ func _sight_draw(z: Dictionary, b: int, look: String, over: Dictionary, garment:
 	var pose_body: int = DeadCast.body_of(int(z["id"]), bodies_planned)
 	DeadBody.rounds = _pose_rounds[pose_body] if pose_body < _pose_rounds.size() else _pose_rounds[0]
 	record["transform"] = Transform3D(basis, pos)
-	record["custom"] = DeadBody.custom(z, down, frozen_anim, shade, baked)
+	var custom := DeadBody.custom(z, down, frozen_anim, shade, baked)
+	var code := look_code_of(z) if DeadBody.can_mix() else 0
+	custom.b = DeadCast.pack_still(custom.b, code)
+	record["custom"] = custom
 	record["color"] = DeadCast.tear_of(z, bool(node.get_meta(&"hands_marked", false)))
 	return record
 
@@ -1525,15 +1539,21 @@ func _submit_sight_draw(id: int, record: Dictionary, shown: float, counts: Array
 	mm.set_instance_transform(n, draw_transform)
 	mm.set_instance_custom_data(n, custom)
 	mm.set_instance_color(n, record["color"])
+	var submitted := {"body": custom}
+	_submitted_looks[id] = submitted
 	counts[b][look] = n + 1
 	drawn_at[id] = draw_transform.origin
 	var garment: MultiMeshInstance3D = record["garment"]
 	var worn_ids: Array = garments_drawn.get_or_add(garment, []) if garment != null else []
 	if garment != null and worn_ids.size() < garment.multimesh.instance_count:
 		var w: int = worn_ids.size()
+		var still := DeadCast.unpack_still(custom.b)
+		var shell_custom := custom
+		shell_custom.b = DeadCast.pack_still(still.x, DeadCast.shell_look_code(int(still.y), record["color"]))
 		garment.multimesh.set_instance_transform(w, draw_transform)
-		garment.multimesh.set_instance_custom_data(w, custom)
+		garment.multimesh.set_instance_custom_data(w, shell_custom)
 		garment.multimesh.set_instance_color(w, record["garment_color"])
+		submitted["garment"] = shell_custom
 		worn_ids.append(id)
 	if record.has("marker") and attachments.x < 32:
 		markers.multimesh.set_instance_transform(attachments.x, record["marker"])
@@ -1591,6 +1611,7 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 	drawn_at = {}
 	_submitted_markers.clear()
 	_submitted_axes.clear()
+	_submitted_looks.clear()
 	var attachments: Vector2i = Vector2i.ZERO
 	for z in list:
 		var id: int = int(z["id"])
@@ -1726,6 +1747,7 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 		garments_drawn.clear()
 		_submitted_markers.clear()
 		_submitted_axes.clear()
+		_submitted_looks.clear()
 		attachments = Vector2i.ZERO
 		for b: int in counts.size():
 			for look: String in counts[b]:

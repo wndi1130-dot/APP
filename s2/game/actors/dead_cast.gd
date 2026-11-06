@@ -24,6 +24,69 @@ const BODIES: Array[String] = ["n3-body_tracksuit", "n10-body_denim-m", "n10-bod
 const SETTING: String = "visuals/dead_bodies_max"
 
 
+## Saved outfit numbers and the common mix: set again from the clean outfit table (lead, 11-07)
+## in the P0 redo. Never renumber or reuse a removed row; leave its number empty.
+## P0 only transports these numbers; it does not recolour any pixels.
+const LOOK_MAX: int = 511
+const LOOK_OUTFITS: Dictionary = {}
+const COMMON_LOOK_WEIGHTS: Array[int] = []
+
+
+## Body/shell custom b: one hold bit and nine code bits. Negative b is the
+## train's shiver, never an outfit. The bound also keeps every fp16 decode exact.
+static func pack_still(still: float, code: int) -> float:
+	assert(code >= 0 and code <= LOOK_MAX, "look code must be within 0..511")
+	assert(is_finite(still) and (still == 0.0 or still == 1.0 or (still >= -0.5 and still < 0.0)),
+		"still must be 0 or 1, or a shiver in -0.5..0")
+	return still if still < 0.0 else still + 2.0 * code
+
+
+## The same arithmetic as dead_vat.gdshaderinc. Living fractional b below 1.5
+## remains unchanged; multiply before adding to stay exact in half arithmetic.
+static func unpack_still(b: float) -> Vector2:
+	assert(is_finite(b) and b >= -0.5 and b <= 1023.0, "packed still must be finite and within -0.5..1023")
+	var code := floorf(b * 0.5 + 0.25) if b >= 0.0 else 0.0
+	return Vector2(b - 2.0 * code, code)
+
+
+## Empty/reserved outfit rows keep their saved number, but draw the old look.
+static func active_look_code(code: int) -> int:
+	return code if code >= 0 and code <= LOOK_MAX and LOOK_OUTFITS.has(code >> 3) else 0
+
+
+## A pure weighted choice makes all hundred boundary tickets independently testable.
+static func outfit_for_roll(ticket: int) -> int:
+	assert(ticket >= 0 and ticket < 100, "look ticket must be within 0..99")
+	var left := ticket
+	for index: int in range(COMMON_LOOK_WEIGHTS.size() - 1):
+		if left < COMMON_LOOK_WEIGHTS[index]:
+			return index + 1
+		left -= COMMON_LOOK_WEIGHTS[index]
+	return COMMON_LOOK_WEIGHTS.size()
+
+
+## Its own stream: spawn, restoration and drawing never consume game.rng here.
+static func look_code_for(seed: int, id: int) -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = ("%d:look:%d" % [seed, id]).hash()
+	var outfit := outfit_for_roll(rng.randi_range(0, 99))
+	return outfit * 8 + rng.randi_range(0, 7)
+
+
+static func look_code_migrated(seed: int, id: int, name: String) -> int:
+	return 0 if name != "" else look_code_for(seed, id)
+
+
+## Shell b uses dirt 0..7, blood 0..7 and a stable pattern seed 0..7. Strengths
+## come from the last seen record's tear colour, never the current hidden body.
+static func shell_look_code(body_code: int, tear: Color) -> int:
+	if active_look_code(body_code) == 0:
+		return 0
+	var dirt := roundi(clampf(tear.g, 0.0, 1.0) * 7.0)
+	var blood := roundi(clampf(tear.r, 0.0, 1.0) * 7.0)
+	return dirt + 8 * blood + 64 * (body_code % 8)
+
+
 ## The folders the dead wear past the first: none when the first is not the
 ## build's own (a folder put in place of it to try a body, dead_body.gd assets).
 static func others() -> Array[String]:
