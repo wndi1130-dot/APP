@@ -9,6 +9,7 @@ const HudSkin = preload("res://game/ui/hud_skin.gd")
 const GlassPane = preload("res://game/ui/glass_pane.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const W = preload("res://game/sim/weapons.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 
 func _game() -> Node:
@@ -47,11 +48,55 @@ func _floor(game, things: Array) -> void:
 
 
 func _row(hud, id: String) -> Button:
+	var rows: Array = _rows(hud, id)
+	return rows[0] if not rows.is_empty() else null
+
+
+## Every row of `id` on the place's side, top to bottom.
+func _rows(hud, id: String) -> Array:
+	var found: Array = []
 	var near: Node = hud.modal.find_child("Near", true, false)
 	for b: Node in near.get_children():
 		if b is Button and String(b.get_meta("item_id", "")) == id:
+			found.append(b)
+	return found
+
+
+## The row of `id` whose state word is `word`.
+func _row_saying(hud, id: String, word: String) -> Button:
+	for b: Button in _rows(hud, id):
+		var state := b.find_child("State", true, false) as Label
+		if state != null and state.text == word:
 			return b
 	return null
+
+
+## Where on the ground the weapon `id` in `condition` lies (-1: not there).
+func _lying(game, id: String, condition: float) -> int:
+	for i: int in game.ground_items.size():
+		var g: Dictionary = game.ground_items[i]
+		if String(g["id"]) == id and g.has("weapon") and is_equal_approx(float(g["weapon"].get("condition", 1.0)), condition):
+			return i
+	return -1
+
+
+## Is the row's open panel (More) right under `row`?
+func _opens_under(row: Button) -> bool:
+	if row == null:
+		return false
+	var list: Node = row.get_parent()
+	var next: int = row.get_index() + 1
+	return next < list.get_child_count() and String(list.get_child(next).name) == "More"
+
+
+func _rect(row: Node, part: String) -> Rect2:
+	return (row.find_child(part, true, false) as Control).get_global_rect()
+
+
+## Is `inner` inside `outer`, half a pixel given?
+func _inside(inner: Rect2, outer: Rect2) -> bool:
+	return inner.position.x >= outer.position.x - 0.5 and inner.position.y >= outer.position.y - 0.5 \
+		and inner.end.x <= outer.end.x + 0.5 and inner.end.y <= outer.end.y + 0.5
 
 
 func _layout() -> void:
@@ -103,10 +148,28 @@ func test_a_weapon_tells_its_condition_in_the_hud_s_words() -> void:
 	var broken: Dictionary = _weapon("axe", 0.0)
 	broken["weapon"]["broken"] = true
 	assert_eq(_words(InventoryPane.ground_tags(broken)), ["망가짐"])
+	assert_eq(InventoryPane.ground_tags(broken)[0][1], HudSkin.BAD, "red, as the HUD's broken weapon")
 	# The same lines as the HUD's weapon (weapons.gd condition_level).
 	assert_eq(_words(InventoryPane.ground_tags(_weapon("axe", 0.61))), [])
 	assert_eq(_words(InventoryPane.ground_tags(_weapon("axe", 0.6))), [W.CONDITION_NAMES[1]])
 	assert_eq(_words(InventoryPane.ground_tags(_weapon("axe", 0.3))), [W.CONDITION_NAMES[2]])
+
+
+func test_a_state_left_out_or_broken_in_good_shape_still_tells_right() -> void:
+	# Broken goes before the condition: a weapon broken in good shape is 「망가짐」, red.
+	var broken_good: Dictionary = _weapon("axe", 1.0)
+	broken_good["weapon"]["broken"] = true
+	var tags: Array = InventoryPane.ground_tags(broken_good)
+	assert_eq(_words(tags), ["망가짐"], "broken whatever its condition")
+	assert_eq(tags[0][1], HudSkin.BAD)
+	# A weapon with no condition written is as good as new (the HUD's 1.0).
+	var no_condition: Dictionary = _weapon("axe", 0.0)
+	(no_condition["weapon"] as Dictionary).erase("condition")
+	assert_eq(InventoryPane.ground_tags(no_condition), [], "no condition: nothing to warn of")
+	# A garment with no wear written can still be put on, and tells no state.
+	var no_wear: Dictionary = _garment("jacket_short", 0.9)
+	(no_wear["garment"] as Dictionary).erase("wear")
+	assert_eq(_words(InventoryPane.ground_tags(no_wear)), ["입기"], "no wear: only 「입기」")
 
 
 func test_a_plain_thing_tells_nothing_more() -> void:
@@ -129,6 +192,7 @@ func test_the_tags_sit_under_the_name_and_the_row_still_says_it_all() -> void:
 	assert_eq(state.text, "해짐")
 	assert_eq(state.get_theme_color("font_color"), HudSkin.HEED)
 	assert_eq(coat.text, "%s · 입기 · 해짐" % game.item_name("jacket_short"), "the hidden text says it all for tips and tests")
+	assert_eq(coat.tooltip_text, coat.text, "and so does the tip")
 	assert_eq(((_row(game.hud, "crowbar").find_child("Tags", true, false) as Node).get_node("State") as Label).text, W.CONDITION_NAMES[1])
 	assert_null(_row(game.hud, "scrap").find_child("Tags", true, false), "nothing to tell: one line as before")
 	game.hud._close_modal()
@@ -145,6 +209,8 @@ func test_the_longest_garment_and_weapon_names_show_whole_with_their_tags() -> v
 		var row: Button = _row(game.hud, id)
 		var name_l := row.find_child("Name", true, false) as Label
 		assert_lte(_text_w(name_l), name_l.size.x + 0.5, "%s: the whole name shows (%.1f of %.1f)" % [id, _text_w(name_l), name_l.size.x])
+		assert_lte(_rect(row, "Name").end.y, _rect(row, "Tags").position.y + 0.5, "%s: the name over its tags" % id)
+		assert_true(_inside(_rect(row, "Name"), row.get_global_rect()), "%s: the name inside the row" % id)
 		for tag: Node in row.find_child("Tags", true, false).get_children():
 			var t := tag as Label
 			assert_false(t.clip_text, "a tag is never clipped")
@@ -167,7 +233,83 @@ func test_a_long_name_gives_way_before_its_tags() -> void:
 	await _layout()
 	assert_gt(_text_w(name_l), name_l.size.x, "the name no longer fits")
 	assert_eq(name_l.text_overrun_behavior, TextServer.OVERRUN_TRIM_ELLIPSIS, "so it is cut with …")
+	assert_gt(name_l.size.x, UiFonts.px(12.0), "a cut name still shows its start")
 	var state := row.find_child("State", true, false) as Label
 	assert_lte(_text_w(state), state.size.x + 0.5, "the state word stays whole")
 	assert_lte((row.find_child("Tags", true, false) as Control).get_global_rect().end.x, (row.find_child("Weight", true, false) as Control).get_global_rect().position.x + 0.5)
+	assert_true(_inside(_rect(row, "Tags"), row.get_global_rect()), "the tags inside the row")
 	game.hud._close_modal()
+
+
+## A tagged row with a count (two figures) and a heavy weight: every part inside
+## the row, none over another — the name over its tags, then the count, then the
+## weight — the name still wider than nothing (6 Pro 점검 보통 1).
+func test_a_tagged_row_with_a_count_keeps_every_part_inside_and_apart() -> void:
+	var game = _game()
+	var coat: String = _longest(game, Wear.KINDS.keys())
+	var gun: String = _longest(game, W.DATA.keys())
+	var coats: Dictionary = _garment(coat, Wear.RAGS_AT)
+	coats["n"] = 12
+	var guns: Dictionary = _weapon(gun, 0.15)
+	guns["n"] = 3
+	_floor(game, [coats, guns])
+	await _layout()
+	for want: Array in [[coat, 12, "%s · 입기 · 너덜 ×12" % game.item_name(coat)], [gun, 3, "%s · %s ×3" % [game.item_name(gun), W.CONDITION_NAMES[2]]]]:
+		var id: String = want[0]
+		var row: Button = _row(game.hud, id)
+		assert_eq(row.text, want[2], "%s: the hidden text with its tags and count" % id)
+		assert_eq(row.tooltip_text, row.text, "%s: the tip as well" % id)
+		var box: Rect2 = row.get_global_rect()
+		var name_r: Rect2 = _rect(row, "Name")
+		var tags_r: Rect2 = _rect(row, "Tags")
+		var count_r: Rect2 = _rect(row, "Count")
+		var kg_r: Rect2 = _rect(row, "Weight")
+		assert_eq((row.find_child("Count", true, false) as Label).text, "×%d" % int(want[1]))
+		for part: Array in [["Name", name_r], ["Tags", tags_r], ["Count", count_r], ["Weight", kg_r]]:
+			assert_true(_inside(part[1], box), "%s: %s inside the row (%s in %s)" % [id, part[0], part[1], box])
+		assert_gt(name_r.size.x, UiFonts.px(12.0), "%s: the name keeps room" % id)
+		assert_lte(name_r.end.y, tags_r.position.y + 0.5, "%s: the name over its tags" % id)
+		assert_lte(maxf(name_r.end.x, tags_r.end.x), count_r.position.x + 0.5, "%s: name and tags short of the count" % id)
+		assert_lte(count_r.end.x, kg_r.position.x + 0.5, "%s: the count short of the weight" % id)
+		for tag: Node in row.find_child("Tags", true, false).get_children():
+			assert_lte(_text_w(tag as Label), (tag as Label).size.x + 0.5, "%s: 「%s」 whole" % [id, (tag as Label).text])
+	game.hud._close_modal()
+
+
+## Two of one weapon in different states lie as two rows, each its own: held, the
+## one held opens (and stays open through a sort); pressed, that one is picked up
+## and the other stays (6 Pro 점검 보통 2).
+func test_two_of_one_weapon_in_different_states_keep_their_own_rows() -> void:
+	var game = _game()
+	game.player.hands.clear()
+	game.player.set_weapon_slots(game.player.hands)
+	_floor(game, [_weapon("axe", 0.5), _weapon("axe", 0.15)])
+	var worn_word: String = W.CONDITION_NAMES[1]
+	var risky_word: String = W.CONDITION_NAMES[2]
+	assert_eq(_rows(game.hud, "axe").size(), 2, "one row each: they do not stack")
+	var risky: Button = _row_saying(game.hud, "axe", risky_word)
+	assert_not_null(risky)
+	assert_not_null(_row_saying(game.hud, "axe", worn_word))
+	assert_eq(risky.tooltip_text, "%s · %s" % [game.item_name("axe"), risky_word])
+	# Held: the row's own long press opens it, the risky one.
+	risky.button_down.emit()
+	await get_tree().create_timer(InventoryPane.LONG_S + 0.15).timeout
+	# Opening lays the pane again: the held row is let go (freed now or soon), so
+	# nothing more is asked of it — the rows are found afresh below.
+	var risky_at: int = _lying(game, "axe", 0.15)
+	assert_eq(game.hud.inv_expand.get("i"), risky_at, "the held row opens, not the other axe")
+	for sort_turn: int in range(2):
+		risky = _row_saying(game.hud, "axe", risky_word)
+		assert_true(_opens_under(risky), "sort %d: the open panel under the risky axe" % sort_turn)
+		assert_false(_opens_under(_row_saying(game.hud, "axe", worn_word)), "sort %d: the worn axe stays shut" % sort_turn)
+		game.hud._inv_sort()
+	# Pressed: that one comes to hand, the other stays where it lay.
+	risky = _row_saying(game.hud, "axe", risky_word)
+	risky.set_meta("held_long", false)
+	risky.pressed.emit()
+	assert_eq(game.player.hands.size(), 1, "one axe in hand")
+	assert_almost_eq(float(game.player.hands[0].get("condition", 1.0)), 0.15, 0.001, "the risky one")
+	assert_eq(_lying(game, "axe", 0.15), -1, "gone from the ground")
+	assert_ne(_lying(game, "axe", 0.5), -1, "the worn axe still lies there")
+	if game.hud.modal_open:
+		game.hud._close_modal()
