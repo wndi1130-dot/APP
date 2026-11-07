@@ -499,21 +499,28 @@ class Footprint:
 ## A dark rim round each thing (T0-6): a quad flat on its floor, up to RIM wider
 ## than the thing on every side. Close neighbours narrow it to leave RIM_SPACE
 ## of bare floor between rims, without moving the things. It darkens the floor
-## (ground_rim.gdshader: black at RIM_STRENGTH over whatever the floor is, so
-## asphalt, boards and snow each go darker in their own colour, lighter on snow).
+## (ground_rim.gdshader: black at GROUND_RIM_STRENGTH over whatever the floor is,
+## so asphalt, boards and snow each go darker in their own colour).
 ## From above it is the outline of the flat things (a coat, a map, a knife) and
 ## the contact line of the taller ones, so a dark thing still stands off a
 ## street's grey asphalt at a phone's size; the things keep their colours (LOOKS).
 const RIM: float = 0.1
-## Provisional bare floor between drawn rims; tuned separately from placement.
+## Bare floor left between two drawn rims (they narrow to keep it).
 const RIM_SPACE: float = 0.01
 const RIM_LIFT: float = 0.004
+## Container and sled bars' rims (map_view._rim_quad's default), as before.
 const RIM_STRENGTH: float = 0.8
-## Keep the old shade until capture tuning enables the pale outer band.
+## A ground thing's rim at its full RIM width (rim_strength).
+const GROUND_RIM_STRENGTH: float = 0.8
+## A ground rim narrowed to nothing by a close neighbour (rim_strength): the
+## thinner it gets, the darker, so the line between two things still reads.
+const NARROW_RIM_STRENGTH: float = 1.0
+## ground_rim.gdshader controls: the share of the margin kept at full strength,
+## and what is left of the strength on deep snow out of doors. On the new thin
+## snow with grass showing (#1465) a light plank stood only 0.079 off the floor
+## with the bars' 0.5 (day bar 0.085); 0.85 keeps it at 0.108.
 const RIM_CORE: float = 0.6
-const RIM_SNOW_KEEP: float = 0.5
-const RIM_HALO: float = 0.0
-const RIM_HALO_FROM: float = 0.7
+const RIM_SNOW_KEEP: float = 0.85
 
 
 ## Largest common width that keeps these two rims RIM_SPACE apart (unclamped).
@@ -585,6 +592,13 @@ static func _rim_widths(out: Array) -> Array[float]:
 					widths[slot] = minf(widths[slot], width)
 					widths[other_slot] = minf(widths[other_slot], width)
 	return widths
+
+
+## How dark a ground thing's rim is drawn for its width (pieces()'s "rim"):
+## GROUND_RIM_STRENGTH at the full RIM, up to NARROW_RIM_STRENGTH as a close
+## neighbour narrows it, so a thin rim in a crowded spot keeps its outline.
+static func rim_strength(width: float) -> float:
+	return lerpf(NARROW_RIM_STRENGTH, GROUND_RIM_STRENGTH, clampf(width / RIM, 0.0, 1.0))
 
 
 ## The rim under one of pieces()'s boxes: {"lv", "at" (centre, on the floor),

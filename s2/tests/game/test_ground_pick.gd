@@ -35,7 +35,7 @@ func test_ground_rims_use_their_own_shared_material_and_keep_contact_users() -> 
 	if material == null:
 		return
 	assert_eq(material.shader.resource_path, "res://fx/shaders/ground_rim.gdshader")
-	var controls := {"core": GroundLook.RIM_CORE, "snow_keep": GroundLook.RIM_SNOW_KEEP, "halo": GroundLook.RIM_HALO, "halo_from": GroundLook.RIM_HALO_FROM}
+	var controls := {"core": GroundLook.RIM_CORE, "snow_keep": GroundLook.RIM_SNOW_KEEP}
 	for uniform_name: String in controls:
 		assert_eq(material.get_shader_parameter(uniform_name), controls[uniform_name], uniform_name)
 	assert_eq(material.render_priority, Material.RENDER_PRIORITY_MIN)

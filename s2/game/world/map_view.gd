@@ -988,7 +988,7 @@ func update_ground(items: Array) -> void:
 		_drawn_ground[int(piece["item"])] = drawn
 		var rim: Dictionary = GroundLook.rim(piece)
 		rim["sky"] = sky_alpha(grid, FieldGrid.cell_of(piece["at"])) if lv == 0 and grid != null else 0.0
-		_rim_quad(rims[lv], rim)
+		_rim_quad(rims[lv], rim, GroundLook.rim_strength(float(piece["rim"])))
 	for lv in tools:
 		if not ground_nodes.has(lv):
 			if _ground_rim_material == null:
@@ -996,8 +996,6 @@ func update_ground(items: Array) -> void:
 				_ground_rim_material.shader = preload("res://fx/shaders/ground_rim.gdshader")
 				_ground_rim_material.set_shader_parameter("core", GroundLook.RIM_CORE)
 				_ground_rim_material.set_shader_parameter("snow_keep", GroundLook.RIM_SNOW_KEEP)
-				_ground_rim_material.set_shader_parameter("halo", GroundLook.RIM_HALO)
-				_ground_rim_material.set_shader_parameter("halo_from", GroundLook.RIM_HALO_FROM)
 				_ground_rim_material.render_priority = Material.RENDER_PRIORITY_MIN
 			ground_nodes[lv] = _mesh_node(lv)
 			var rim_node := MeshInstance3D.new()

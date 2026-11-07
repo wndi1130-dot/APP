@@ -8,6 +8,8 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const TwoLids = preload("res://tests/game/fixtures/two_lids_map.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const GroundModels = preload("res://game/world/ground_models.gd")
+## A mesh keeps vertex colours in 8 bits a channel.
+const COLOUR_STEP: float = 1.0 / 255.0
 
 var _old_cache: Dictionary = {}
 
@@ -39,7 +41,8 @@ func test_ground_rim_shader_loads_with_four_float_controls() -> void:
 		uniforms[String(entry["name"])] = entry["type"]
 	# Unset defaults are not read back without a renderer (headless gives null),
 	# so the declared default is read from the source itself.
-	var defaults := {"core": 0.6, "snow_keep": 0.5, "halo": 0.0, "halo_from": 0.7}
+	# The shader's own defaults are the game's values, so a bare material looks the same.
+	var defaults := {"core": GroundLook.RIM_CORE, "snow_keep": GroundLook.RIM_SNOW_KEEP}
 	var declared := RegEx.create_from_string("uniform\\s+float\\s+(\\w+)\\s*:[^=;]*=\\s*([0-9.]+)\\s*;")
 	var found: Dictionary = {}
 	for hit: RegExMatch in declared.search_all(shader.code):
@@ -706,6 +709,20 @@ func test_rim_uses_explicit_width_including_zero_and_keeps_bar_default() -> void
 		assert_almost_eq(rim["inner"].y * rim["size"].y, 1.0, 0.000001)
 
 
+func test_a_narrowed_rim_is_drawn_darker_down_to_no_width() -> void:
+	assert_almost_eq(GroundLook.rim_strength(GroundLook.RIM), GroundLook.GROUND_RIM_STRENGTH, 0.000001, "full width")
+	assert_almost_eq(GroundLook.rim_strength(0.0), GroundLook.NARROW_RIM_STRENGTH, 0.000001, "no width")
+	assert_almost_eq(GroundLook.rim_strength(GroundLook.RIM * 2.0), GroundLook.GROUND_RIM_STRENGTH, 0.000001, "never lighter than full")
+	assert_almost_eq(GroundLook.rim_strength(-0.01), GroundLook.NARROW_RIM_STRENGTH, 0.000001, "never darker than none")
+	var last: float = GroundLook.rim_strength(0.0)
+	for step: int in range(1, 11):
+		var strength: float = GroundLook.rim_strength(GroundLook.RIM * step / 10.0)
+		assert_lte(strength, last, "thinner is never lighter")
+		last = strength
+	assert_lte(GroundLook.NARROW_RIM_STRENGTH, 1.0, "an alpha")
+	assert_gte(GroundLook.NARROW_RIM_STRENGTH, GroundLook.GROUND_RIM_STRENGTH)
+
+
 func test_item_numbers_far_spread_empty_glints_and_floors() -> void:
 	var at := Vector3(5.5, 0, 5.5)
 	var items: Array = [{"id": "no_art_550", "pos": at, "glint": true}]
@@ -845,6 +862,36 @@ func test_a_thing_put_down_shows_on_the_map_and_goes_when_picked_up() -> void:
 	game._update_zone(0.1)
 	assert_null(game.view.ground_nodes[0].mesh, "picked up, it is gone")
 	assert_null((game.view.ground_nodes[0].get_node("Rim") as MeshInstance3D).mesh, "its rim with it")
+
+
+func test_the_map_draws_each_rim_as_dark_as_its_width() -> void:
+	var game = FieldGame.new()
+	game.opts = {"seed": 4, "auto_pause": false}
+	game.map_script = TwoLids
+	add_child_autofree(game)
+	game.set_process(false)
+	var at: Vector3 = game.player.position + Vector3(0.4, 0, 0.4)
+	game.ground_items.append({"pos": at, "id": "plank", "n": 1})
+	game._update_zone(0.1)
+	var rim_node := game.view.ground_nodes[0].get_node("Rim") as MeshInstance3D
+	for c: Color in rim_node.mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]:
+		assert_almost_eq(c.b, GroundLook.GROUND_RIM_STRENGTH, COLOUR_STEP, "alone: full width, ground strength")
+	# Three on one cell: the spread lays them close, so some rims narrow.
+	game.ground_items.append({"pos": at, "id": "knife", "n": 1})
+	game.ground_items.append({"pos": at, "id": "can_beans", "n": 1})
+	game._update_zone(0.1)
+	var pieces: Array = game.view._drawn_ground.values()
+	pieces.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["order"]) < int(b["order"]))
+	var colours: PackedColorArray = rim_node.mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	assert_eq(colours.size(), pieces.size() * 6, "one quad each")
+	var narrowed: int = 0
+	for index: int in pieces.size():
+		var width: float = float(pieces[index]["rim"])
+		if width < GroundLook.RIM:
+			narrowed += 1
+		for corner: int in 6:
+			assert_almost_eq(colours[index * 6 + corner].b, GroundLook.rim_strength(width), COLOUR_STEP, "as dark as its width")
+	assert_gt(narrowed, 0, "the three lie close enough to narrow a rim")
 
 
 func _template() -> ArrayMesh:
