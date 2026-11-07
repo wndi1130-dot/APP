@@ -6,6 +6,8 @@ const SHADER_PATH := "res://game/world/world_vis.gdshader"
 const SENSITIVE_CALLS := ["fwidth", "dFdx", "dFdy", "texture"]
 const UNSUPPORTED_PREFIX := "검사기가 지원하지 않는 구문: "
 const UNSUPPORTED_SHADER_WORDS := ["discard", "while", "for", "do", "break", "continue", "inout", "switch"]
+const WRITE_OPERATORS := ["=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", "&=", "|=", "^=", "++", "--"]
+const DECLARATION_QUALIFIERS := ["const", "in", "out", "lowp", "mediump", "highp"]
 const DECLARATION_TYPES := [
 	"bool", "int", "uint", "float", "vec2", "vec3", "vec4", "ivec2", "ivec3", "ivec4",
 	"bvec2", "bvec3", "bvec4", "mat2", "mat3", "mat4", "sampler2D", "sampler2DArray",
@@ -24,7 +26,7 @@ func _code() -> String:
 	return _strip_comments(FileAccess.get_file_as_string(SHADER_PATH))
 
 
-func _strip_comments(source: String) -> String:
+func _strip_comments(source: String, keep_offsets := false) -> String:
 	# 문자열의 res:// 는 남긴다. 지운 자리는 공백으로 채워 식별자와 줄이 붙지 않게 한다.
 	var parts: PackedStringArray = []
 	var mode := CommentMode.CODE
@@ -64,6 +66,8 @@ func _strip_comments(source: String) -> String:
 				quote = ch
 				mode = CommentMode.QUOTED
 		i += 1
+	if keep_offsets:
+		return "".join(parts)
 	var lines: PackedStringArray = []
 	for line: String in "".join(parts).split("\n"):
 		lines.append(line.strip_edges())
@@ -71,14 +75,20 @@ func _strip_comments(source: String) -> String:
 
 
 func _tokens(source: String) -> Array[String]:
+	return _lex(source)["tokens"]
+
+
+func _lex(source: String) -> Dictionary:
 	var regex := RegEx.new()
-	var error := regex.compile("\"(?:\\\\.|[^\"\\\\])*\"|[A-Za-z_][A-Za-z_0-9]*|(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?|==|!=|<=|>=|&&|\\|\\||\\+\\+|--|\\+=|-=|\\*=|/=|<<|>>|[^\\s]")
+	var error := regex.compile("\"(?:\\\\.|[^\"\\\\])*\"|[A-Za-z_][A-Za-z_0-9]*|(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?|<<=|>>=|==|!=|<=|>=|&&|\\|\\||\\+\\+|--|\\+=|-=|\\*=|/=|%=|&=|\\|=|\\^=|<<|>>|[^\\s]")
 	var result: Array[String] = []
+	var offsets: Array[int] = []
 	if error != OK:
-		return result
+		return {"tokens": result, "offsets": offsets}
 	for found: RegExMatch in regex.search_all(source):
 		result.append(found.get_string())
-	return result
+		offsets.append(found.get_start())
+	return {"tokens": result, "offsets": offsets}
 
 
 func _paired_tokens(tokens: Array[String]) -> Dictionary:
@@ -100,50 +110,209 @@ func _paired_tokens(tokens: Array[String]) -> Dictionary:
 	return {"pairs": pairs}
 
 
-func _unsupported_syntax(tokens: Array[String]) -> PackedStringArray:
+func _unsupported_error(errors: PackedStringArray, syntax: String) -> void:
+	var message := UNSUPPORTED_PREFIX + syntax
+	if not errors.has(message):
+		errors.append(message)
+
+
+func _function_headers(tokens: Array[String], pairs: Dictionary) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var at := 0
+	while at + 1 < tokens.size():
+		if tokens[at].is_valid_identifier() and tokens[at + 1] == "(":
+			var close: int = pairs[at + 1]
+			if close + 1 < tokens.size() and tokens[close + 1] == "{":
+				var finish: int = pairs[close + 1]
+				result.append({"name": tokens[at], "parameters": at + 2, "start": close + 1, "end": finish + 1})
+				at = finish + 1
+				continue
+		at += 1
+	return result
+
+
+func _condition_start(tokens: Array[String], pairs: Dictionary, at: int, lower: int) -> int:
+	var i := at - 1
+	while i >= lower:
+		if tokens[i] in [")", "]"]:
+			i = int(pairs[i]) - 1
+		elif tokens[i] in [";", "{", "}", "(", ",", ":", "?"]:
+			return i + 1
+		else:
+			i -= 1
+	return lower
+
+
+func _unsupported_syntax(source: String, function_names: Dictionary, seen_includes: Dictionary) -> Dictionary:
+	# 지원 경계는 여기서만 판정한다. include의 허용·식별·읽기도 같은 토큰과 원문 위치를 쓴다.
 	var errors: PackedStringArray = []
+	var includes: Array[Dictionary] = []
+	var code := _strip_comments(source, true)
+	var lexed := _lex(code)
+	var tokens: Array[String] = lexed["tokens"]
+	var offsets: Array[int] = lexed["offsets"]
+	var paired := _paired_tokens(tokens)
+	if paired.has("error"):
+		return {"errors": PackedStringArray([String(paired["error"])]), "includes": includes}
+	var pairs: Dictionary = paired["pairs"]
+	var brace_depth := 0
+	var paren_depth := 0
+	var bracket_depth := 0
 	for i in tokens.size():
-		var syntax := ""
-		if tokens[i] == "#":
-			var directive := tokens[i + 1] if i + 1 < tokens.size() else ""
-			if directive != "include":
-				syntax = "#" + directive
-		elif tokens[i] in UNSUPPORTED_SHADER_WORDS:
-			syntax = tokens[i]
-		if not syntax.is_empty():
-			var message := UNSUPPORTED_PREFIX + syntax
-			if not errors.has(message):
-				errors.append(message)
-	return errors
+		var token := tokens[i]
+		if token == "{":
+			brace_depth += 1
+		elif token == "}":
+			brace_depth -= 1
+		elif token == "(":
+			paren_depth += 1
+		elif token == ")":
+			paren_depth -= 1
+		elif token == "[":
+			bracket_depth += 1
+		elif token == "]":
+			bracket_depth -= 1
+		if token in UNSUPPORTED_SHADER_WORDS or token == "struct":
+			_unsupported_error(errors, token)
+		if token in WRITE_OPERATORS and (paren_depth > 0 or bracket_depth > 0):
+			_unsupported_error(errors, "괄호 안 대입")
+		if token != "#":
+			continue
+		var directive := tokens[i + 1] if i + 1 < tokens.size() else ""
+		if directive != "include":
+			_unsupported_error(errors, "#" + directive)
+			continue
+		var line_start := source.rfind("\n", offsets[i]) + 1
+		var line_end := source.find("\n", offsets[i])
+		if line_end < 0:
+			line_end = source.length()
+		var valid := brace_depth == 0 and paren_depth == 0 and bracket_depth == 0 and i + 2 < tokens.size()
+		valid = valid and source.substr(line_start, offsets[i] - line_start).strip_edges().is_empty()
+		if valid:
+			valid = offsets[i + 1] == offsets[i] + 1 and source.substr(offsets[i], 8) == "#include"
+		var path := ""
+		if valid:
+			var quoted := tokens[i + 2]
+			var quote_end := offsets[i + 2] + quoted.length()
+			var gap := source.substr(offsets[i] + 8, offsets[i + 2] - offsets[i] - 8)
+			valid = quote_end <= line_end and not gap.is_empty() and gap.strip_edges().is_empty()
+			valid = valid and quoted.begins_with("\"res://") and quoted.ends_with("\"") and not quoted.contains("\\")
+			if valid:
+				valid = code.substr(quote_end, line_end - quote_end).strip_edges().is_empty()
+				path = quoted.substr(1, quoted.length() - 2)
+				valid = valid and path.simplify_path() == path
+		if not valid:
+			_unsupported_error(errors, "include 꼴")
+		elif not seen_includes.has(path):
+			var file := FileAccess.open(path, FileAccess.READ)
+			if file == null:
+				_unsupported_error(errors, "읽지 못한 include")
+			else:
+				var included_text := file.get_as_text()
+				var read_error := file.get_error()
+				file.close()
+				if read_error != OK and read_error != ERR_FILE_EOF:
+					_unsupported_error(errors, "읽지 못한 include")
+				else:
+					seen_includes[path] = true
+					includes.append({"path": path, "source": included_text})
+	var headers := _function_headers(tokens, pairs)
+	var parameter_tokens := {}
+	for info: Dictionary in headers:
+		var name: String = info["name"]
+		if function_names.has(name):
+			_unsupported_error(errors, "같은 이름 함수 둘: " + name)
+		function_names[name] = true
+		var parameter_end := int(info["start"]) - 1
+		var at := int(info["parameters"])
+		for i in range(at, parameter_end):
+			parameter_tokens[i] = true
+		while at < parameter_end:
+			while at < parameter_end and tokens[at] in DECLARATION_QUALIFIERS:
+				at += 1
+			if at < parameter_end and tokens[at] not in DECLARATION_TYPES:
+				_unsupported_error(errors, "목록 밖 인자 타입: " + tokens[at])
+			while at < parameter_end and tokens[at] != ",":
+				if tokens[at] in ["(", "["]:
+					at = int(pairs[at]) + 1
+				else:
+					at += 1
+			at += 1
+		var local_constants := {}
+		for i in range(int(info["start"]) + 1, int(info["end"]) - 3):
+			if tokens[i] != "const":
+				continue
+			var type_at := i + 1
+			while type_at < int(info["end"]) - 2 and tokens[type_at] in DECLARATION_QUALIFIERS:
+				type_at += 1
+			if type_at + 1 < int(info["end"]) and tokens[type_at + 1].is_valid_identifier():
+				local_constants[tokens[type_at + 1]] = true
+		if local_constants.is_empty():
+			continue
+		for i in range(int(info["start"]) + 1, int(info["end"]) - 1):
+			var first := -1
+			var last := i
+			if tokens[i] == "if" and tokens[i + 1] == "(":
+				first = i + 2
+				last = int(pairs[i + 1])
+			elif tokens[i] in ["?", "&&", "||"]:
+				first = _expression_start(tokens, _condition_start(tokens, pairs, i, int(info["start"]) + 1), i)
+			if first < 0:
+				continue
+			for at_condition in range(first, last):
+				if local_constants.has(tokens[at_condition]) and (at_condition == first or tokens[at_condition - 1] != "."):
+					_unsupported_error(errors, "지역 const 조건")
+	brace_depth = 0
+	for i in range(tokens.size() - 2):
+		if tokens[i] == "{":
+			brace_depth += 1
+		elif tokens[i] == "}":
+			brace_depth -= 1
+		if parameter_tokens.has(i) or not tokens[i].is_valid_identifier() or not tokens[i + 1].is_valid_identifier():
+			continue
+		if tokens[i] in DECLARATION_QUALIFIERS or tokens[i] in ["return", "else"]:
+			continue
+		if tokens[i] not in DECLARATION_TYPES:
+			if brace_depth > 0:
+				_unsupported_error(errors, "목록 밖 지역 타입: " + tokens[i])
+			continue
+		if tokens[i + 2] == "(":
+			continue
+		var finish := _statement_end(tokens, pairs, i, tokens.size())
+		var at := i + 2
+		var uniform_hint := false
+		var initializer := false
+		while at < finish:
+			if tokens[at] in ["(", "[", "{"]:
+				at = int(pairs[at]) + 1
+			else:
+				if tokens[at] == "=":
+					initializer = true
+					uniform_hint = false
+				elif tokens[at] == ":" and not initializer and brace_depth == 0 and i > 0 and tokens[i - 1] == "uniform":
+					uniform_hint = true
+				elif tokens[at] == "," and not uniform_hint:
+					_unsupported_error(errors, "여러 이름 선언")
+				at += 1
+	return {"errors": errors, "includes": includes}
 
 
 func _included_source(source: String) -> Dictionary:
-	# 포함 파일도 같은 검사 대상이다. 중복 읽기와 순환을 막고 읽기 실패를 통과시키지 않는다.
 	var texts: PackedStringArray = []
 	var queue: Array[Dictionary] = [{"path": SHADER_PATH, "source": source}]
 	var seen := {SHADER_PATH: true}
-	var include_regex := RegEx.new()
-	include_regex.compile("#include\\s+\"([^\"]+)\"")
+	var function_names := {}
 	var at := 0
 	while at < queue.size():
 		if queue.size() > 64:
 			return {"error": "include가 64개를 넘음"}
 		var unit: Dictionary = queue[at]
-		var code := _strip_comments(String(unit["source"]))
-		var unsupported := _unsupported_syntax(_tokens(code))
-		if not unsupported.is_empty():
-			return {"unsupported": unsupported}
-		texts.append(code)
-		for found: RegExMatch in include_regex.search_all(code):
-			var path := found.get_string(1)
-			if not path.begins_with("res://"):
-				path = String(unit["path"]).get_base_dir().path_join(path).simplify_path()
-			if seen.has(path):
-				continue
-			seen[path] = true
-			if not FileAccess.file_exists(path):
-				return {"error": "include 읽기 실패: " + path}
-			queue.append({"path": path, "source": FileAccess.get_file_as_string(path)})
+		var checked := _unsupported_syntax(String(unit["source"]), function_names, seen)
+		var errors: PackedStringArray = checked["errors"]
+		if not errors.is_empty():
+			return {"unsupported": errors}
+		texts.append(_strip_comments(String(unit["source"])))
+		queue.append_array(checked["includes"])
 		at += 1
 	return {"source": "\n".join(texts)}
 
@@ -191,11 +360,17 @@ func _statement_end(tokens: Array[String], pairs: Dictionary, start: int, end: i
 
 
 func _expression_start(tokens: Array[String], start: int, end: int) -> int:
-	# 선언·대입의 왼쪽은 조건의 일부가 아니다.
-	for i in range(end - 1, start - 1, -1):
-		if tokens[i] in ["=", "+=", "-=", "*=", "/="]:
-			return i + 1
-	return start + 1 if start < end and tokens[start] == "return" else start
+	# 최상위 선언·대입만 뺀다. 괄호 안 대입은 _unsupported_syntax에서 거절한다.
+	var first := start + 1 if start < end and tokens[start] == "return" else start
+	var depth := 0
+	for i in range(start, end):
+		if tokens[i] in ["(", "["]:
+			depth += 1
+		elif tokens[i] in [")", "]"]:
+			depth -= 1
+		elif depth == 0 and tokens[i] in WRITE_OPERATORS:
+			first = i + 1
+	return first
 
 
 func _scan_expression(state: Dictionary, start: int, end: int, guards: Array[String], depth := 0) -> void:
@@ -320,23 +495,8 @@ func _derivative_errors(source: String) -> PackedStringArray:
 		elif brace_depth == 0 and i + 2 < tokens.size() and tokens[i] in ["uniform", "const"]:
 			known[tokens[i + 2]] = true
 	var functions := {}
-	var at := 0
-	while at + 1 < tokens.size():
-		if tokens[at].is_valid_identifier() and tokens[at + 1] == "(":
-			var close: int = pairs[at + 1]
-			if close + 1 < tokens.size() and tokens[close + 1] == "{":
-				var finish: int = pairs[close + 1]
-				if functions.has(tokens[at]):
-					var message := UNSUPPORTED_PREFIX + "같은 이름 함수 둘: " + tokens[at]
-					if not errors.has(message):
-						errors.append(message)
-				else:
-					functions[tokens[at]] = {"parameters": at + 2, "start": close + 1, "end": finish + 1}
-				at = finish + 1
-				continue
-		at += 1
-	if not errors.is_empty():
-		return errors
+	for info: Dictionary in _function_headers(tokens, pairs):
+		functions[info["name"]] = info
 	for name: String in functions:
 		var info: Dictionary = functions[name]
 		var visible: Dictionary = known.duplicate()
@@ -432,6 +592,21 @@ func _grass_order_errors(source: String) -> PackedStringArray:
 	return errors
 
 
+func _write_statements(tokens: Array[String], pairs: Dictionary, start: int, end: int, name: String) -> Array[String]:
+	var result: Array[String] = []
+	for i in range(start, end):
+		if tokens[i] != name:
+			continue
+		if tokens[i + 1] not in WRITE_OPERATORS and tokens[i - 1] not in ["++", "--"]:
+			continue
+		var first := i
+		while first > start and tokens[first - 1] not in [";", "{", "}"]:
+			first -= 1
+		var last := _statement_end(tokens, pairs, first, end)
+		result.append("".join(PackedStringArray(tokens.slice(first, last))))
+	return result
+
+
 func _single_assignment_errors(source: String) -> PackedStringArray:
 	# 이 세 값은 선언과 최종 소비 두 자리만 허용한다. 별도 호출에 넘기는 것도 거절한다.
 	var errors: PackedStringArray = []
@@ -462,10 +637,33 @@ func _single_assignment_errors(source: String) -> PackedStringArray:
 			continue
 		var writes := 0
 		for at: int in uses:
-			if tokens[at + 1] in ["=", "+=", "-=", "*=", "/=", "++", "--"] or tokens[at - 1] in ["++", "--"]:
+			if tokens[at + 1] in WRITE_OPERATORS or tokens[at - 1] in ["++", "--"]:
 				writes += 1
 		if tokens[uses[0] - 1] != "float" or tokens[uses[0] + 1] != "=" or writes != 1:
 			errors.append("선언 뒤 덮어쓰기 또는 선언 전 사용: " + name)
+	# 71be4d57의 모든 최종 쓰기를 순서대로 잠근다. 정상 식 뒤의 추가 쓰기도 거절한다.
+	var expected_writes := {
+		"thin_snow": [
+			"floatthin_snow=smoothstep(0.25,0.4,local_snow)*(1.0-smoothstep(0.5,0.65,local_snow));",
+		],
+		"grass_holes": [
+			"floatgrass_holes=grass_share*thin_snow*grass_cut;",
+			"grass_holes*=1.0-smoothstep(0.0,0.25,max(pile,bank));",
+		],
+		"cover": [
+			"floatcover=0.0;",
+			"cover=is_ground?0.97*ground_cover:prop_cover;",
+			"cover*=smoothstep(0.6,0.9,up)*sky*(1.0-smoothstep(0.08,0.3,chroma));",
+			"cover*=0.25;",
+			"cover=max(cover,0.8*clamp(bank,0.0,1.0));",
+			"cover=max(cover,1.0*pile*heaped);",
+			"cover*=1.0-0.9*trodden;",
+			"cover*=1.0-grass_holes;",
+		],
+	}
+	for name: String in expected_writes:
+		if _write_statements(tokens, pairs, opening + 1, closing, name) != expected_writes[name]:
+			errors.append("쓰기 목록·순서 오류: " + name)
 	var body := "".join(PackedStringArray(tokens.slice(opening + 1, closing)))
 	if not body.contains("cover=is_ground?0.97*ground_cover:prop_cover;"):
 		errors.append("두 눈 덮임 값을 최종 cover에서 사용하지 않음")
@@ -546,7 +744,8 @@ func test_edge_width_tracks_the_continuous_noise_minus_threshold() -> void:
 
 func test_all_derivatives_and_implicit_reads_have_uniform_control_flow() -> void:
 	# 6378c2d8에서는 실패 예상: 도로·실내 균열, 웅덩이 하늘, 더미 법선의 분기가 검출된다.
-	var errors := _derivative_errors(_code())
+	# include 철자 판정에는 주석을 지우기 전 원문을 넘긴다.
+	var errors := _derivative_errors(FileAccess.get_file_as_string(SHADER_PATH))
 	assert_eq(errors.size(), 0, "\n".join(errors))
 
 
@@ -909,3 +1108,82 @@ func test_single_assignment_checker_rejects_cover_and_mask_overwrites() -> void:
 	var changed := source.replace(before_holes, "grass_cut = 0.0;\n" + before_holes)
 	assert_ne(changed, source)
 	assert_gt(_single_assignment_errors(changed).size(), 0)
+
+
+func test_final_snow_writes_reject_three_late_overwrites() -> void:
+	# 71be4d57에서는 실패 예상: thin_snow·grass_holes·마지막 cover 덮어쓰기를 놓친다.
+	var source := _code()
+	var thin := "float thin_snow = smoothstep(0.25, 0.4, local_snow) * (1.0 - smoothstep(0.5, 0.65, local_snow));"
+	var apply := "cover *= 1.0 - grass_holes;"
+	var paint := "base = mix(base, FX_SNOW"
+	for changed: String in [
+		source.replace(thin, thin + "\nthin_snow = 1.0;"),
+		source.replace(apply, "grass_holes = 0.0;\n" + apply),
+		source.replace(paint, "cover = 0.0;\n" + paint),
+	]:
+		assert_ne(changed, source)
+		assert_gt(_single_assignment_errors(changed).size(), 0)
+
+
+func test_cover_write_sequence_rejects_missing_or_reordered_steps() -> void:
+	# 71be4d57에서는 실패 예상: 최종 선택 외의 cover 쓰기 목록·순서를 검사하지 않는다.
+	var source := _code()
+	var cleared := "cover *= 0.25;"
+	var bank := "cover = max(cover, 0.8 * clamp(bank, 0.0, 1.0));"
+	var reordered := source.replace(cleared, "__swap_cover_write__").replace(bank, cleared).replace("__swap_cover_write__", bank)
+	var qualified := source.replace("float cover = 0.0;", "highp float cover = 0.0;")
+	for changed: String in [source.replace(cleared, ""), reordered, qualified]:
+		assert_ne(changed, source)
+		assert_gt(_single_assignment_errors(changed).size(), 0)
+
+
+func test_include_syntax_rejects_spacing_comments_and_nested_directives() -> void:
+	# 71be4d57에서는 실패 예상: 허용 토큰과 실제 읽기 정규식이 다른 꼴을 받아들인다.
+	var path := "\"res://fx/shaders/fx_common.gdshaderinc\""
+	for source: String in [
+		"# include " + path + "\nvoid fragment() {}",
+		"#/**/include " + path + "\nvoid fragment() {}",
+		"void fragment() {\n#include " + path + "\n}",
+		"void fragment() { if (true) {\n#include " + path + "\n} }",
+		"float x; #include " + path + "\nvoid fragment() {}",
+	]:
+		assert_true(_derivative_errors(source).has(UNSUPPORTED_PREFIX + "include 꼴"), source)
+	assert_true(_derivative_errors("#include \"res://__pr2c_missing_include__.gdshaderinc\"\nvoid fragment() {}").has(UNSUPPORTED_PREFIX + "읽지 못한 include"))
+
+
+func test_parenthesized_assignment_is_unsupported_in_a_condition() -> void:
+	# 71be4d57에서는 실패 예상: 안쪽 = 뒤만 조건으로 보고 sky 조건을 잃는다.
+	var source := "varying float sky; void fragment() { bool flag = false; float x = (sky > 0.5 && (flag = true)) ? fwidth(sky) : 0.0; }"
+	assert_true(_derivative_errors(source).has(UNSUPPORTED_PREFIX + "괄호 안 대입"))
+	for comparison: String in ["==", "!=", "<=", ">="]:
+		var compared := "uniform float amount; varying float sky; void fragment() { float x = (amount " + comparison + " 1.0) ? fwidth(sky) : 0.0; }"
+		assert_eq(_derivative_errors(compared).size(), 0, comparison)
+
+
+func test_multiple_declarations_cannot_hide_a_uniform_name() -> void:
+	# 71be4d57에서는 실패 예상: 둘째 선언 amount를 지역 변수로 수집하지 않는다.
+	var source := "uniform float amount; varying float sky; void fragment() { float a = 1.0, amount = sky; if (amount > 0.5) { float x = fwidth(sky); } }"
+	assert_true(_derivative_errors(source).has(UNSUPPORTED_PREFIX + "여러 이름 선언"))
+	var hinted := "uniform sampler2D tex : filter_nearest, repeat_disable; varying float sky; void fragment() { float x = texture(tex, vec2(sky)).r; }"
+	assert_eq(_derivative_errors(hinted).size(), 0, "uniform 힌트의 쉼표는 변수 선언이 아님")
+
+
+func test_unlisted_local_and_parameter_types_are_unsupported() -> void:
+	# 71be4d57에서는 실패 예상: 목록 밖 타입이 전역 uniform과 같은 이름을 가려도 놓친다.
+	var local := "uniform float amount; varying float sky; void fragment() { uvec2 amount = uvec2(1); if (amount.x > uint(0)) { float x = fwidth(sky); } }"
+	var parameter := "uniform float amount; varying float sky; float helper(uvec2 amount) { if (amount.x > uint(0)) { return fwidth(sky); } return 0.0; } void fragment() {}"
+	var custom := "struct Pair { float x; }; uniform float amount; varying float sky; float helper(Pair amount) { if (amount.x > 0.5) { return fwidth(sky); } return 0.0; } void fragment() {}"
+	assert_true(_derivative_errors(local).has(UNSUPPORTED_PREFIX + "목록 밖 지역 타입: uvec2"))
+	assert_true(_derivative_errors(parameter).has(UNSUPPORTED_PREFIX + "목록 밖 인자 타입: uvec2"))
+	assert_true(_derivative_errors(custom).has(UNSUPPORTED_PREFIX + "목록 밖 인자 타입: Pair"))
+
+
+func test_local_const_condition_has_an_explicit_unsupported_reason() -> void:
+	# 71be4d57에서는 실패 예상: 거절은 하지만 지역 const 조건이라는 이유를 구분하지 않는다.
+	for body: String in [
+		"const bool ready = true; if (ready) { float x = fwidth(sky); }",
+		"const highp float ready = 1.0; float x = ready > 0.5 ? fwidth(sky) : 0.0;",
+		"const bool ready = true; bool x = ready && fwidth(sky) > 0.0;",
+	]:
+		var source := "varying float sky; void fragment() { " + body + " }"
+		assert_true(_derivative_errors(source).has(UNSUPPORTED_PREFIX + "지역 const 조건"), body)
