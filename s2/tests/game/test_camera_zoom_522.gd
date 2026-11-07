@@ -357,6 +357,72 @@ func test_legacy_restore_starts_at_its_effective_zoom_before_resume() -> void:
 	assert_true(resumed.resume_pending)
 
 
+## 16:00 폭풍 한가운데: 분대 등불이 켜진다(test_field_fx.gd test_lamps_stay_readable_through_the_snow_fog).
+const STORM_LAMP_CLOCK := (960.0 - 630.0) * 60.0 / 15.0
+
+
+## 기본 지도의 폭풍 「during」 정차. 카메라 자리표시(CameraField)는 _update_storm을 비우므로 실제 필드를 쓴다.
+func _storm_field():
+	var field = FieldGame.new()
+	field.opts = {"seed": 5, "raiders": false, "auto_pause": false, "storm": "during"}
+	add_child_autofree(field)
+	field.set_process(false)
+	field.clock.elapsed = STORM_LAMP_CLOCK
+	return field
+
+
+## 셰이더에 들어간 폭풍 빛이 지금 카메라로 새로 계산한 storm_glows()와 같아야 한다.
+func _assert_storm_glows_fit(field, note: String) -> void:
+	assert_not_null(field.storm_screen, note + ": 폭풍 화면")
+	if field.storm_screen == null:
+		return
+	var glows: Array = field.storm_glows()
+	assert_gt(glows.size(), 0, note + ": 켜진 빛이 없으면 이 시험은 아무것도 못 본다")
+	if glows.is_empty():
+		return
+	var m := field.storm_screen.material as ShaderMaterial
+	assert_eq(int(m.get_shader_parameter("glow_count")), glows.size(), note + ": glow_count")
+	var shown = m.get_shader_parameter("glow")
+	assert_not_null(shown, note + ": glow")
+	if shown == null:
+		return
+	for i in range(glows.size()):
+		var want: Vector4 = glows[i]
+		var got: Vector4 = shown[i]
+		assert_lt((got - want).length(), 0.0001, "%s: 빛 %d 셰이더 %s, 지금 카메라 %s (camera.size %.2f)" % [note, i, got, want, field.camera.size])
+
+
+func test_starting_the_camera_refits_the_storm_lamp_glows() -> void:
+	# 폭풍 빛의 화면 위치와 반경(reach / camera.size)은 첫 표시 크기를 따라야 한다.
+	var field = _storm_field()
+	field.camera.size = 24.0
+	field._update_storm()
+	var before: Array = field.storm_glows()
+	assert_gt(before.size(), 0, "켜진 빛이 없으면 이 시험은 아무것도 못 본다")
+	field.start_camera_at(20.0)
+	assert_almost_eq(field.camera.size, 20.0, 0.0001)
+	assert_ne(field.storm_glows(), before, "크기가 바뀌면 빛 반경도 바뀌어야 비교에 뜻이 있다")
+	_assert_storm_glows_fit(field, "start_camera_at(20)")
+
+
+func test_exact_restore_refits_the_storm_glows_to_the_restored_zoom() -> void:
+	var source = _save_field({"storm": "during"})
+	source.zombies.list.clear()
+	source.pending_spawn.clear()
+	source.clock.elapsed = STORM_LAMP_CLOCK
+	source.cam_size = 24.0
+	var saved := FieldSave.from_json(FieldSave.to_json(FieldSave.capture(source)))
+	assert_false(saved.is_empty(), "실제 필드 저장이 JSON 왕복을 통과해야 한다")
+	assert_true(FieldSave.exact(saved), "정확 복원 경로")
+	var resumed = _save_field(FieldSave.resume_opts(saved))
+	assert_true(resumed.resume_pending, "재개 안내가 떠 있는 첫 화면")
+	assert_almost_eq(resumed.camera.size, 24.0, 0.0001, "복원된 줌으로 첫 화면")
+	_assert_storm_glows_fit(resumed, "정확 복원 뒤 재개 안내")
+	resumed._process(1.0 / 30.0)
+	assert_true(resumed.resume_pending)
+	_assert_storm_glows_fit(resumed, "재개 안내 중 한 장 뒤")
+
+
 func test_cinema_handoff_starts_at_the_received_size_then_eases_out() -> void:
 	assert_true(game.has_method("start_camera_at"), "넘겨받는 순간의 카메라 맞춤 경로")
 	if not game.has_method("start_camera_at"):

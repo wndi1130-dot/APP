@@ -982,6 +982,7 @@ const NORTH: Dictionary = {
 		{"kind":"coal_wagon","rect":[106,21,8,3],"solid":"wagon","facing":0,"note":"문이 열린 석탄만 담은 화차","level":0},
 		{"kind":"coal_heap","rect":[66,21,4,3],"solid":"low","facing":0,"note":"식은 석탄 더미","level":0},
 		{"kind":"coal_heap","rect":[70,21,4,3],"solid":"low","facing":0,"note":"식은 석탄 더미","level":0},
+		{"kind":"coal_heap","rect":[68,18,4,3],"solid":"low","facing":0,"note":"식은 석탄 더미","level":0},
 		{"kind":"coal_heap","rect":[68,2,4,3],"solid":"low","facing":0,"note":"식은 석탄 더미","level":0},
 		{"kind":"crate_stack","rect":[70,7,2,2],"solid":"low","facing":0,"note":"종류별 물자를 담은 나무 상자","level":0},
 		{"kind":"handcart","rect":[73,8,2,1],"solid":"low","facing":0,"note":"하역 문 곁 손수레","level":0},
@@ -1138,9 +1139,7 @@ const NORTH: Dictionary = {
 		48
 	],
 	"deep": "J",
-	"salvage": [
-		{"id":"north_coal","name":"야적장 석탄 자루","cell":[68,18],"material":"coal","amount":12}
-	]
+	"salvage": []
 }
 
 static func _build_plain() -> Dictionary:

@@ -17,7 +17,7 @@ const VERSION := 3
 const READ_VERSIONS: Array[int] = [1, 2, 3]
 const KIND := "s2_field"
 const PATH := "user://field_save.json"
-## The train's own save (politics/save_slot.gd DEFAULT_PATH): read here only for what it applied.
+## The train's own save (politics/save_slot.gd DEFAULT_PATH), boot's default train slot.
 const TRAIN_PATH := "user://s1a_game_v2.json"
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 const EatRules = preload("res://game/sim/eat_rules.gd")
@@ -30,6 +30,7 @@ const Sled = preload("res://game/sim/sled.gd")
 const SLED_PERSON_FIELDS: Array[String] = ["sled_id", "sled_stowed_for", "sled_weapon_stowed", "sled_rearm_t", "sled_serial", "sled_job"]
 const StopGround = preload("res://game/world/stop_ground.gd")
 const SidePath = preload("res://game/world/side_path.gd")
+const FURNISH_RULE: int = 0
 
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
 const VEC_KEYS := ["pos", "home"]
@@ -55,12 +56,41 @@ const INT_TAGS := {"Vector2i": 2, "Rect2i": 4}
 const BASE64_TAGS := ["PackedByteArray", "PackedInt32Array"]
 ## The packed runs that may be a typed list: of vectors, of text, or format 2's bytes and int32s.
 const LIST_TAGS := ["PackedVector3Array", "PackedStringArray", "PackedByteArray", "PackedInt32Array"]
+## The encoder's text for each byte, "0" to "255", and the byte. A format 2 byte run's elements
+## are looked up here (after the same String check _int_of_text makes) instead of read by
+## _int_of_text: one format 2 save holds over 230 000 of them, and on the phone (SM-S906N, 11-07)
+## _int_of_text, which #1447 put in place of an unchecked int(), cost 0.6 us more a text than
+## int(), about 0.14 s more to read one such save. Only these 256 texts are keys, so "+7", "007",
+## "-0", "256" or anything else still misses and breaks the file. A const, so read-only and whole
+## from the start.
+const BYTE_TEXTS := {
+	"0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "11": 11, "12": 12, "13": 13, "14": 14, "15": 15,
+	"16": 16, "17": 17, "18": 18, "19": 19, "20": 20, "21": 21, "22": 22, "23": 23, "24": 24, "25": 25, "26": 26, "27": 27, "28": 28, "29": 29, "30": 30, "31": 31,
+	"32": 32, "33": 33, "34": 34, "35": 35, "36": 36, "37": 37, "38": 38, "39": 39, "40": 40, "41": 41, "42": 42, "43": 43, "44": 44, "45": 45, "46": 46, "47": 47,
+	"48": 48, "49": 49, "50": 50, "51": 51, "52": 52, "53": 53, "54": 54, "55": 55, "56": 56, "57": 57, "58": 58, "59": 59, "60": 60, "61": 61, "62": 62, "63": 63,
+	"64": 64, "65": 65, "66": 66, "67": 67, "68": 68, "69": 69, "70": 70, "71": 71, "72": 72, "73": 73, "74": 74, "75": 75, "76": 76, "77": 77, "78": 78, "79": 79,
+	"80": 80, "81": 81, "82": 82, "83": 83, "84": 84, "85": 85, "86": 86, "87": 87, "88": 88, "89": 89, "90": 90, "91": 91, "92": 92, "93": 93, "94": 94, "95": 95,
+	"96": 96, "97": 97, "98": 98, "99": 99, "100": 100, "101": 101, "102": 102, "103": 103, "104": 104, "105": 105, "106": 106, "107": 107, "108": 108, "109": 109, "110": 110, "111": 111,
+	"112": 112, "113": 113, "114": 114, "115": 115, "116": 116, "117": 117, "118": 118, "119": 119, "120": 120, "121": 121, "122": 122, "123": 123, "124": 124, "125": 125, "126": 126, "127": 127,
+	"128": 128, "129": 129, "130": 130, "131": 131, "132": 132, "133": 133, "134": 134, "135": 135, "136": 136, "137": 137, "138": 138, "139": 139, "140": 140, "141": 141, "142": 142, "143": 143,
+	"144": 144, "145": 145, "146": 146, "147": 147, "148": 148, "149": 149, "150": 150, "151": 151, "152": 152, "153": 153, "154": 154, "155": 155, "156": 156, "157": 157, "158": 158, "159": 159,
+	"160": 160, "161": 161, "162": 162, "163": 163, "164": 164, "165": 165, "166": 166, "167": 167, "168": 168, "169": 169, "170": 170, "171": 171, "172": 172, "173": 173, "174": 174, "175": 175,
+	"176": 176, "177": 177, "178": 178, "179": 179, "180": 180, "181": 181, "182": 182, "183": 183, "184": 184, "185": 185, "186": 186, "187": 187, "188": 188, "189": 189, "190": 190, "191": 191,
+	"192": 192, "193": 193, "194": 194, "195": 195, "196": 196, "197": 197, "198": 198, "199": 199, "200": 200, "201": 201, "202": 202, "203": 203, "204": 204, "205": 205, "206": 206, "207": 207,
+	"208": 208, "209": 209, "210": 210, "211": 211, "212": 212, "213": 213, "214": 214, "215": 215, "216": 216, "217": 217, "218": 218, "219": 219, "220": 220, "221": 221, "222": 222, "223": 223,
+	"224": 224, "225": 225, "226": 226, "227": 227, "228": 228, "229": 229, "230": 230, "231": 231, "232": 232, "233": 233, "234": 234, "235": 235, "236": 236, "237": 237, "238": 238, "239": 239,
+	"240": 240, "241": 241, "242": 242, "243": 243, "244": 244, "245": 245, "246": 246, "247": 247, "248": 248, "249": 249, "250": 250, "251": 251, "252": 252, "253": 253, "254": 254, "255": 255,
+}
 ## Tests only: fail one step of the next write; empty is off, reset on entry.
 static var _test_fail_step: String = ""
 ## Tests only: counts actual parses of the previous slot, not new-file validation.
 static var _test_previous_parses: int = 0
 ## Tests only: actual file parse attempts in read(), including a broken primary.
 static var _test_reads: int = 0
+## Tests only: texts read by _int_of_text (a format 2 byte run's elements go by BYTE_TEXTS). Kept
+## in the shipped path as _test_reads is: one add for each text it reads (lone int tags and int32
+## run elements, about 1 000 in a save).
+static var _test_int_texts: int = 0
 ## Process-local hashes of exact disk bytes already accepted by from_json().
 static var _known_good: Dictionary = {}
 
@@ -335,6 +365,23 @@ static func _valid_bounds_rule(value: Variant) -> bool:
 	return value is float and is_finite(value) and value >= 0.0 and value < 9223372036854775808.0 and floor(value) == value
 
 
+## Campaign rules require int; old JSON field options may hold integral floats.
+## A negative seed-rule limit means the field does not read that campaign-only key.
+static func furnish_seed_problem(d: Dictionary, max_rule: int, max_seed_rule: int = -1, allow_float: bool = false) -> String:
+	if d.has("world_seed") and _int_of_text(d["world_seed"]) == null:
+		return "F-CAMPAIGN-ROUTE: world seed"
+	if max_seed_rule >= 0 and d.has("seed_rule"):
+		if not d["seed_rule"] is int or d["seed_rule"] < 0 or d["seed_rule"] > max_seed_rule:
+			return "F-CAMPAIGN-ROUTE: seed_rule"
+	if d.has("furnish_rule"):
+		var rule: Variant = d["furnish_rule"]
+		if not _valid_bounds_rule(rule) or (not allow_float and not rule is int) or rule > max_rule:
+			return "F-CAMPAIGN-ROUTE: furnish_rule"
+	if int(d.get("furnish_rule", 0)) >= 1 and not d.has("world_seed"):
+		return "F-CAMPAIGN-ROUTE: missing world seed"
+	return ""
+
+
 ## Sled rows as the restore reads them: a bad one sends the read to the backup
 ## before anything of the game changes. Saves from before sleds have none.
 static func _whole_sleds(d: Dictionary) -> bool:
@@ -353,7 +400,9 @@ static func _whole_sleds(d: Dictionary) -> bool:
 
 
 ## The saved start options may supply a squad instead of the default one.
-static func _whole_start(opts: Dictionary) -> bool:
+static func _whole_start(opts: Dictionary, max_furnish_rule: int = FURNISH_RULE) -> bool:
+	if furnish_seed_problem(opts, max_furnish_rule, -1, true) != "":
+		return false
 	if not _fields(opts, {}, {"squad": TYPE_ARRAY}):
 		return false
 	if opts.has("squad") and opts["squad"].is_empty():
@@ -452,29 +501,15 @@ static func should_resume(save: Dictionary, applied = {}) -> bool:
 	return not (applied as Array).has(id)
 
 
-## Where the app starts (S3 spec 4, user decision 296): the field save and the
-## train save are read, and a stop still being played whose return the train has
-## not taken in comes back. Returns the start options for it, or {} to start fresh.
-static func pick_start(field_path: String = PATH, train_path: String = TRAIN_PATH, read_context: Variant = null) -> Dictionary:
-	var save: Dictionary = read_for_start(field_path, read_context) if read_context is Dictionary else read(field_path)
-	if not should_resume(save, train_applied(train_path)):
+## Where a stop still being played comes back (S3 spec 4, user decision 296): a pure decision
+## over a save the caller already read and the receipt ids the train applied. Returns the start
+## options for it, or {} to start fresh.
+static func pick_start_with(save: Dictionary, applied: Dictionary, field_path: String) -> Dictionary:
+	if not should_resume(save, applied):
 		return {}
 	var opts := resume_opts(save)
 	opts["field_save_path"] = field_path
 	return opts
-
-
-## The receipt ids the train save has taken in (its fieldReturns.applied), {} when none.
-static func train_applied(train_path: String = TRAIN_PATH) -> Dictionary:
-	if not FileAccess.file_exists(train_path):
-		return {}
-	var json := JSON.new()
-	if json.parse(FileAccess.get_file_as_string(train_path)) != OK or not json.data is Dictionary:
-		return {}
-	var returns = (json.data as Dictionary).get("fieldReturns")
-	if not returns is Dictionary or not returns.get("applied") is Dictionary:
-		return {}
-	return returns["applied"]
 
 
 ## The options that build the same stop again and then put the save on it.
@@ -1463,8 +1498,18 @@ static func _decode_run(type: String, list: Array) -> Variant:
 		var bytes := PackedByteArray()
 		bytes.resize(count)
 		for i: int in count:
-			var b: Variant = _typed_int(list[i])
-			if b == null or b < 0 or b > 255:
+			var e: Variant = list[i]
+			if not e is Dictionary:
+				return _bad()
+			var tag: Dictionary = e
+			if tag.size() != 2 or tag.get("$type") != "int":
+				return _bad()
+			# Text only, as _int_of_text: a StringName "7" must not find the key "7".
+			var text: Variant = tag.get("value")
+			if not text is String:
+				return _bad()
+			var b: Variant = BYTE_TEXTS.get(text)
+			if b == null:
 				return _bad()
 			bytes[i] = b
 		return bytes
@@ -1514,6 +1559,7 @@ static func _decode_pairs(value: Variant) -> Variant:
 ## nothing else) and two checks instead of a RegEx: a format 2 field save holds over 200 000
 ## int tags, and RegEx.search cost about ten times as much a tag (11-06, measured on this PC).
 static func _int_of_text(value: Variant) -> Variant:
+	_test_int_texts += 1
 	if not value is String:
 		return null
 	# Checks by character code, no new string for the common short text: of three ways measured

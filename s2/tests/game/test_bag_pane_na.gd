@@ -11,6 +11,28 @@ const HudIcons = preload("res://game/ui/hud_icons.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 const HoldConfirm = preload("res://game/ui/hold_confirm.gd")
 
+## Picture lookups a test blanked (InventoryPane._art_found is shared by every
+## test): key → [whether it was there, its value]. after_each puts them back,
+## also when a test stopped half way.
+var _blanked_art: Dictionary = {}
+
+
+func after_each() -> void:
+	for key: String in _blanked_art:
+		var held: Array = _blanked_art[key]
+		if bool(held[0]):
+			InventoryPane._art_found[key] = held[1]
+		else:
+			InventoryPane._art_found.erase(key)
+	_blanked_art.clear()
+
+
+## The thing (its art_texture key) shows no baked picture until after_each.
+func _blank_art(key: String) -> void:
+	if not _blanked_art.has(key):
+		_blanked_art[key] = [InventoryPane._art_found.has(key), InventoryPane._art_found.get(key)]
+	InventoryPane._art_found[key] = null
+
 
 func _game(viewport: SubViewport = null) -> Node:
 	var game = FieldGame.new()
@@ -215,8 +237,12 @@ func test_the_bag_beside_a_box_sends_its_row_to_the_box() -> void:
 ## the count — the multiple nearest the line icon's size that fits the row.
 func test_pixel_art_is_nearest_at_whole_device_multiples_with_a_line_fallback() -> void:
 	var game = _game()
-	# The luxury bundle has no baked picture: it keeps its line icon. The can opener
-	# has none of its own but takes the one baked for its line icon (it_opener).
+	# A thing whose bake is missing keeps its line icon. Every thing found in the
+	# field has a picture now (test_item_art.gd), so the luxury bundle's is taken
+	# away here for this test: the lookup's remembered answer is "none". The can
+	# opener has none of its own but takes the one baked for its line icon (it_opener).
+	var unbaked: String = "luxury_pack|" + String(game.item_icon("luxury_pack"))
+	_blank_art(unbaked)
 	var id: String = _box(game, ["food_pack", "luxury_pack", "can_opener"])
 	var picture := Image.create(32, 32, false, Image.FORMAT_RGBA8)
 	picture.fill(Color("ffc66c"))
@@ -1426,7 +1452,7 @@ func test_a_long_journal_fits_above_the_foot_at_720_high() -> void:
 ## shows the same picture.
 func test_baked_pictures_are_smooth_and_fill_the_art_square() -> void:
 	var game = _game()
-	var id: String = _box(game, ["can_beans", "rusk", "can_opener"])
+	var id: String = _box(game, ["can_beans", "note_side", "can_opener"])
 	game.hud.loot(id)
 	await _layout()
 	var beans := _row(game.hud, "Near", "can_beans").find_child("ItemIcon", true, false) as TextureRect
@@ -1437,8 +1463,9 @@ func test_baked_pictures_are_smooth_and_fill_the_art_square() -> void:
 	assert_eq(beans.texture_filter, CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS)
 	assert_almost_eq(beans.size.x, UiFonts.px(InventoryPane.ART), 1.0)
 	assert_almost_eq(beans.size.y, UiFonts.px(InventoryPane.ART), 1.0)
-	var rusk := _row(game.hud, "Near", "rusk").find_child("ItemIcon", true, false) as TextureRect
-	assert_eq(rusk.texture, InventoryPane.art_texture("hardtack"), "rusk shares the hardtack's picture")
+	var side := _row(game.hud, "Near", "note_side").find_child("ItemIcon", true, false) as TextureRect
+	assert_eq(side.texture, InventoryPane.art_texture("note_map"), "the note on the side shows the note's picture (both 「쪽지」)")
+	assert_ne(InventoryPane.art_texture("rusk"), InventoryPane.art_texture("hardtack"), "the rusk has its own now")
 	assert_null(InventoryPane.art_texture("can_opener"))
 	game.hud._close_modal()
 
@@ -1473,11 +1500,13 @@ func test_a_thing_without_its_own_picture_takes_its_line_icons_bake() -> void:
 	assert_not_null(beans)
 	assert_eq(InventoryPane.art_texture("no_such_thing", "can_beans"), beans, "the line icon's bake")
 	assert_eq(InventoryPane.art_texture("can_beans", "medkit"), beans, "its own picture first")
-	assert_eq(InventoryPane.art_texture("rusk", "medkit"), InventoryPane.art_texture("hardtack"), "then its alias")
+	assert_eq(InventoryPane.art_texture("note_side", "medkit"), InventoryPane.art_texture("note_map"), "then its alias")
 	assert_null(InventoryPane.art_texture("no_such_thing", "no_such_icon"))
 	assert_null(InventoryPane.art_texture("no_such_thing"))
-	# A line icon drawn like a baked thing (ICON_ALIAS): notes take the document's.
-	assert_eq(InventoryPane.art_texture("note_map", "papers"), InventoryPane.art_texture("document"))
+	# A thing that shares on purpose (ART_ALIAS) comes before its line icon: the
+	# note on the side shows the note's, not a document's.
+	assert_eq(InventoryPane.art_texture("note_side", "papers"), InventoryPane.art_texture("note_map"))
+	assert_ne(InventoryPane.art_texture("note_map", "papers"), InventoryPane.art_texture("document"), "the note has its own")
 	# The herbal's line icon "book" is the plain book's id: each keeps its own picture.
 	var plain_book: Texture2D = InventoryPane.art_texture("book", "it_book")
 	var herbal: Texture2D = InventoryPane.art_texture("rare_herbal", "book")

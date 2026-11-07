@@ -497,6 +497,19 @@ func test_meter_buttons_draw_the_model_have_finger_targets_and_toggle() -> void:
 	assert_eq((strip.find_child("Head", true, false) as Label).text.replace(UiFonts.WORD_JOINER, ""), "지난 정산 뒤 바뀐 것 없음")
 
 
+func test_putting_a_meter_slip_up_and_down_leaves_no_orphan_nodes() -> void:
+	# The slip measured each line with a label it never freed (132 orphan Labels in a GUT shard,
+	# and the RID leaks at exit that came with them, 2026-11-07).
+	var strip: Control = _meter_strip()
+	await wait_process_frames(1)
+	for key: String in ["trust", "tension", "trust"]:
+		_tap_meter(strip, key)
+	_tap_meter(strip, "trust")
+	await wait_process_frames(2)
+	assert_null(strip.find_child("Why", true, false))
+	assert_no_new_orphans("meter slips up and down")
+
+
 func test_meter_slips_share_one_place_with_the_thermometer_and_keep_focus() -> void:
 	var strip: Control = _meter_strip()
 	for key: String in ["outside", "tension", "trust", "outside", "trust", "tension"]:

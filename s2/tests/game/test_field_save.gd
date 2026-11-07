@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const RouteState = preload("res://game/train/route_state.gd")
 const FieldWork = preload("res://game/field_work.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const Pose = preload("res://game/actors/person_pose.gd")
@@ -203,6 +204,80 @@ func test_invalid_side_path_rule_falls_back_to_the_previous_save() -> void:
 		file.store_string(FieldSave.to_json(current))
 		file.close()
 		assert_eq(FieldSave.read(AT), previous, str(rule))
+
+
+func test_furnish_seed_start_options_validate_whole_save() -> void:
+	var saved: Dictionary = _sample()
+	saved["start_opts"] = {"world_seed": "-9223372036854775808", "furnish_rule": 0}
+	assert_true(FieldSave._whole(saved))
+	assert_eq(FieldSave.from_json(FieldSave.to_json(saved)), saved)
+	for rule: Variant in [-1, 1, 0.5, "0", true, null, INF, NAN]:
+		var bad: Dictionary = saved.duplicate(true)
+		bad["start_opts"]["furnish_rule"] = rule
+		assert_false(FieldSave._whole(bad), "furnish_rule: %s" % str(rule))
+		assert_eq(FieldSave.from_json(FieldSave.to_json(bad)), {}, "furnish_rule: %s" % str(rule))
+	for seed: Variant in ["garbage", "", "+1", "01", "-0", "9223372036854775808", 1, 1.0]:
+		var bad: Dictionary = saved.duplicate(true)
+		bad["start_opts"]["world_seed"] = seed
+		assert_false(FieldSave._whole(bad), "world_seed: %s" % str(seed))
+		assert_eq(FieldSave.from_json(FieldSave.to_json(bad)), {}, "world_seed: %s" % str(seed))
+	var missing: Dictionary = saved.duplicate(true)
+	missing["start_opts"].erase("world_seed")
+	missing["start_opts"]["furnish_rule"] = 1
+	assert_false(FieldSave._whole_start(missing["start_opts"], 1), "supported rule 1 still requires a seed")
+	missing["start_opts"]["world_seed"] = "0"
+	assert_true(FieldSave._whole_start(missing["start_opts"], 1), "supported rule 1 with seed")
+	var integral_float: Dictionary = saved.duplicate(true)
+	integral_float["start_opts"]["furnish_rule"] = 0.0
+	assert_true(FieldSave._whole(integral_float), "legacy integral JSON number")
+
+
+## The seed check takes text only (_int_of_text): a field that wrote the seed as a number would send
+## every real save to the backup. So the route's own seed text goes through a real field game,
+## capture, the slot and back, and is still text the whole check takes.
+func test_a_real_field_with_the_routes_seed_saves_and_reads_back_whole() -> void:
+	var route_seed: String = RouteState.world_seed_for_run("run_1a")
+	var a = _game({"world_seed": route_seed, "furnish_rule": RouteState.FURNISH_RULE})
+	var saved: Dictionary = FieldSave.capture(a)
+	assert_eq(saved.get("start_opts", {}).get("world_seed"), route_seed)
+	assert_true(FieldSave.write(saved, AT))
+	var back: Dictionary = FieldSave.read(AT)
+	assert_false(back.is_empty(), "the slot reads whole, not nothing")
+	var opts: Dictionary = back.get("start_opts", {})
+	assert_true(opts.get("world_seed") is String)
+	assert_eq(opts.get("world_seed"), route_seed)
+	assert_eq(int(opts.get("furnish_rule", -1)), RouteState.FURNISH_RULE)
+	assert_eq(FieldSave.resume_opts(back).get("world_seed"), route_seed)
+
+
+func test_broken_furnish_seed_fields_fall_back_to_backup() -> void:
+	var previous: Dictionary = _sample()
+	previous["start_opts"] = {"world_seed": "-1", "furnish_rule": 0}
+	assert_true(FieldSave.write(previous, AT))
+	var current: Dictionary = previous.duplicate(true)
+	current["clock"]["elapsed"] = 99.0
+	assert_true(FieldSave.write(current, AT))
+	for invalid_opts: Dictionary in [{"world_seed": "-1", "furnish_rule": 1},
+			{"world_seed": "garbage", "furnish_rule": 0}]:
+		current["start_opts"] = invalid_opts
+		var file := FileAccess.open(AT, FileAccess.WRITE)
+		assert_not_null(file)
+		if file == null:
+			return
+		file.store_string(FieldSave.to_json(current))
+		file.close()
+		assert_eq(FieldSave.from_json(FieldSave.to_json(current)), {})
+		assert_eq(FieldSave.read(AT), previous)
+
+
+func test_legacy_field_save_without_furnish_seed_options_reads() -> void:
+	var old: Dictionary = _sample()
+	assert_true(FieldSave._whole(old))
+	assert_true(FieldSave.write(old, AT))
+	assert_eq(FieldSave.read(AT), old)
+	old["start_opts"] = {}
+	assert_true(FieldSave._whole(old))
+	assert_eq(FieldSave.from_json(FieldSave.to_json(old)), old)
 
 
 func test_invalid_bounds_rule_falls_back_to_the_previous_save() -> void:

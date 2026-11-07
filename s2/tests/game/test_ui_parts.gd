@@ -124,9 +124,9 @@ func test_a_sheet_leans_from_its_bottom_left_and_writes_inside_its_margins() -> 
 
 
 func test_chips_are_touched_44_high_whatever_is_drawn() -> void:
-	assert_almost_eq(Paper.chip("꼬리", false).custom_minimum_size.y, UiFonts.px(44.0), 0.01, "34 drawn, 5 more above and below")
-	assert_almost_eq(Paper.target_chip("석탄", true, -1.0).custom_minimum_size.y, UiFonts.px(44.0), 0.01, "38 drawn, 3 more above and below")
-	var st: Label = Paper.stamp("고른 것과 같음")
+	assert_almost_eq(autofree(Paper.chip("꼬리", false)).custom_minimum_size.y, UiFonts.px(44.0), 0.01, "34 drawn, 5 more above and below")
+	assert_almost_eq(autofree(Paper.target_chip("석탄", true, -1.0)).custom_minimum_size.y, UiFonts.px(44.0), 0.01, "38 drawn, 3 more above and below")
+	var st: Label = autofree(Paper.stamp("고른 것과 같음"))
 	assert_almost_eq(st.custom_minimum_size.y, UiFonts.px(20.0), 0.01)
 
 
