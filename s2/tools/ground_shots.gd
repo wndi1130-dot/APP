@@ -1074,7 +1074,7 @@ func _write_reports() -> bool:
 	for closeup: Dictionary in _report["closeups"]:
 		if closeup.get("kind", "") == "clothes_cell":
 			markdown.append("\nclothes_cell %s: 넷 중 그릴 수 있는 셋에서 그려짐 %d · 안 그려짐 %d." % [closeup["name"], closeup["drawn"], closeup["omitted"]])
-	markdown.append("\n재구성 시간은 빈 목록 뒤 전체 목록으로 한 번 다시 만든 값이며 템플릿 캐시는 데워진 상태다. 한 칸 셋의 낮·밤 사진은 줌 18이다.")
+	markdown.append("\n재구성 시간은 빈 목록 뒤 전체 목록으로 다시 만들기를 %d번 잰 가운데 값이며(표본은 JSON) 템플릿 캐시는 데워진 상태다. 한 칸 셋의 낮·밤 사진은 줌 18이다." % REBUILD_SAMPLES)
 	markdown.append("\nclothes_cell 낮·밤 사진(줌 18)은 한 칸에 coat_long·shirt_flannel·trousers_work·boots_work 넷을 넣는다. 첫 셋과 넷을 넣은 뒤의 메시를 대조해 넷째가 그림을 더하지 않는지 확인한다.")
 	if not _write_text("ground_shots.json", json_text) or not _write_text("ground_shots.md", "\n".join(markdown) + "\n"):
 		return false
