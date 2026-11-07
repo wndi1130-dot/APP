@@ -367,7 +367,8 @@ func test_boot_choice_is_field_for_an_unapplied_stop() -> void:
 
 func test_boot_choice_is_campaign_for_a_campaign_board() -> void:
 	var g: Dictionary = _board({})
-	var routed: Dictionary = RouteState.start(g, "boot_read_campaign")
+	# A new campaign carries the run's world seed (decision 563, route_state.gd start).
+	var routed: Dictionary = RouteState.start(g, "boot_read_campaign", RouteState.world_seed_for_run("boot_read_campaign"))
 	# A route with no visit yet stands on the way (route_state.gd problem).
 	routed["phase"] = "travel"
 	assert_eq(RouteState.problem(routed, _table()), "")
