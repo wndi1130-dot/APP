@@ -9,6 +9,7 @@ signal restart_requested
 signal built
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const DoorWalk = preload("res://game/sim/door_walk.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const StopGround = preload("res://game/world/stop_ground.gd")
 const StoryMaps = preload("res://game/world/story_maps.gd")
@@ -2255,7 +2256,7 @@ func _update_person(p: Person, delta: float) -> void:
 	var breaks: bool = (p.running and p.stick != Vector2.ZERO) if walking_work else p.stick.length() > 0.3
 	if breaks and STICK_BREAKS.has(p.action):
 		p.cancel_action()
-	if p.action != "":
+	if p.action != "" and p.action != "door_walk":
 		# Each action takes its body multiplier once, here (not also in its length).
 		var rate := 1.0 if p.action == "climb" else float(p.mults()["swap" if p.action == "swap" else "hands"])
 		if p.action == "search":
@@ -2269,14 +2270,87 @@ func _update_person(p: Person, delta: float) -> void:
 				done.call()
 		if not walking_work:
 			return
-	if p.stick != Vector2.ZERO or p.drive_speed > 0.0:
-		_drive(p, delta)
-	else:
-		_move_person(p, delta)
+	_walk_with_door(p, delta)
 
 
-## A door a walk stops at to deal with on the way (field_actions
-## open_door_on_way): a shut one, and for the player a locked one too, as a
+## Door work uses the same simulation delta and hand multiplier as other work.
+## Move while still shut, then issue the usual completion ticket. Splitting at
+## completion lets a long frame use its remainder without crossing early.
+func _walk_with_door(p: Person, delta: float) -> void:
+	if not is_finite(delta) or delta <= 0.0:
+		return
+	var left: float = delta
+	while left > 0.0:
+		if not p.can_act():
+			actions.validate_work(p)
+			return
+		var rate: float = maxf(0.0, float(p.mults()["hands"]))
+		var span: float = left
+		if rate > 0.0:
+			if p.action == "door_walk":
+				span = minf(span, maxf(0.0, p.action_t) / rate)
+			elif p.action == "":
+				# A new door work can start in the movement below, at this span's start.
+				span = minf(span, actions.DOOR_TIME / rate)
+		if span > 0.0:
+			if p.stick != Vector2.ZERO or p.drive_speed > 0.0:
+				_drive(p, span)
+			else:
+				_move_person(p, span)
+		# Cover idle slices too. The footsteps already contributed moving slices;
+		# this cumulative-time tail only supplies any as-yet unsampled time.
+		_update_ground_gait(p, delta - left + span)
+		if not p.can_act():
+			actions.validate_work(p)
+			return
+		if p.action == "door_walk":
+			actions.validate_work(p)
+			if p.action == "door_walk":
+				var finishes: bool = DoorWalk.finishes(p.action_t, span, rate)
+				p.action_t = 0.0 if finishes else maxf(0.0, p.action_t - span * rate)
+				if p.action_t <= 0.0:
+					actions.complete_work(p)
+					var done: Callable = p.action_done
+					p.cancel_action(true)
+					if done.is_valid():
+						done.call()
+		# Locked/key work and other ordinary work keep their existing stop.
+		if p.action != "" and p.action != "door_walk":
+			return
+		left = maxf(0.0, left - span)
+		if span <= 0.0 and p.action == "door_walk":
+			return
+
+
+## Shared by path walkers and the stick. Predict on the actual route; sweep
+## this step too, so an endpoint beyond a closed cell cannot tunnel through it.
+func _door_step(p: Person, route: PackedVector3Array, step: Vector3, speed: float) -> Vector3:
+	var rate: float = float(p.mults()["hands"])
+	if p.action == "" and rate > 0.0:
+		var ahead: Dictionary = DoorWalk.first_door(p.position, route, grid.doors,
+			speed * actions.DOOR_TIME / rate, grid.windows)
+		if not ahead.is_empty():
+			actions.open_door_on_way(p, ahead["cell"], float(ahead["distance"]), speed)
+	var dest: Vector3 = p.position + step
+	var barrier: Dictionary = DoorWalk.first_door(p.position,
+		PackedVector3Array([dest]), grid.doors, step.length())
+	if barrier.is_empty():
+		return dest
+	var cell: Vector2i = barrier["cell"]
+	var door: Dictionary = grid.doors[cell]
+	var clear_approach: Dictionary = DoorWalk.first_door(p.position,
+		PackedVector3Array([dest]), grid.doors, step.length(), grid.windows)
+	if _meets_door(p, door) and not clear_approach.is_empty():
+		var in_reach: bool = actions._in_reach(p, FieldGrid.center(cell), true)
+		actions.open_door_on_way(p, cell)
+		if in_reach and (String(door["state"]) == "locked" or BuildingRules.planks_total(door) > 0):
+			p.drive_speed = 0.0
+			return p.position
+	return DoorWalk.clamp_step(p.position, step, grid.doors)
+
+
+## A door a walk deals with on the way (field_actions open_door_on_way):
+## a shut one, and for the player a locked one too, as a
 ## tap on it would — the key opens it, else 「잠김」 (the coordinator's call
 ## under decision 442, 2026-10-30). A companion's way goes round a locked
 ## door as before.
@@ -2332,11 +2406,13 @@ func _drive(p: Person, delta: float) -> void:
 		return
 	var step := p.drive_dir * p.drive_speed * delta * sled_mult
 	var dest := p.position + step
+	if lg == grid:
+		var speed: float = p.drive_speed * sled_mult
+		var rate: float = maxf(0.0001, float(p.mults()["hands"]))
+		var route := PackedVector3Array([p.position + p.drive_dir * speed * actions.DOOR_TIME / rate])
+		dest = _door_step(p, route, step, speed)
+		step = dest - p.position
 	var dc := FieldGrid.cell_of(dest)
-	if lg == grid and grid.doors.has(dc) and _meets_door(p, grid.doors[dc]):
-		p.drive_speed = 0.0
-		actions.open_door_on_way(p, dc)
-		return
 	if lg.blocks_body(dc):
 		dest = _slide(p.position, step)
 		# A wall may leave a small tangent; it does not take away the built-up drive.
@@ -2350,8 +2426,8 @@ func _drive(p: Person, delta: float) -> void:
 		actions.vault_window(p, dc)
 	var gone := Gait.signed_distance(p, dest - p.position)
 	Sled.before_move(self, p, dest)
+	p.moving = dest != p.position
 	p.position = dest
-	p.moving = true
 	_footsteps(p, delta, dc, gone)
 
 
@@ -2413,10 +2489,10 @@ func _move_person(p: Person, delta: float) -> void:
 		return
 	var step := d.normalized() * minf(spd * delta, d.length())
 	var dest := p.position + step
+	if lg == grid:
+		dest = _door_step(p, p.path, step, spd)
+		step = dest - p.position
 	var dc := FieldGrid.cell_of(dest)
-	if lg == grid and grid.doors.has(dc) and _meets_door(p, grid.doors[dc]):
-		actions.open_door_on_way(p, dc)
-		return
 	if lg.blocks_body(dc):
 		dest = _slide(p.position, step)
 	dc = FieldGrid.cell_of(dest)
@@ -2427,8 +2503,8 @@ func _move_person(p: Person, delta: float) -> void:
 	p.facing = face
 	var gone := Gait.signed_distance(p, dest - p.position)
 	Sled.before_move(self, p, dest)
+	p.moving = dest != p.position
 	p.position = dest
-	p.moving = true
 	_footsteps(p, delta, dc, gone)
 
 
@@ -2451,9 +2527,13 @@ func _slide(at: Vector3, step: Vector3) -> Vector3:
 	var lg := grid_at(at)
 	var r := at
 	var cand := r + Vector3(step.x, 0, 0)
+	if lg == grid:
+		cand = DoorWalk.clamp_step(r, cand - r, grid.doors)
 	if not lg.blocks_body(FieldGrid.cell_of(cand)):
 		r.x = cand.x
 	cand = r + Vector3(0, 0, step.z)
+	if lg == grid:
+		cand = DoorWalk.clamp_step(r, cand - r, grid.doors)
 	if not lg.blocks_body(FieldGrid.cell_of(cand)):
 		r.z = cand.z
 	return r
@@ -2490,24 +2570,37 @@ func _begin_motion_tick() -> void:
 	_motion_clock = clock.elapsed
 
 
-## Moving feet sample before their round; idle ticks decay the same filter.
-func _update_ground_gait(p: Person, delta: float, gone: float = 0.0) -> void:
+## Each prefix of a split tick uses total distance/time from the original
+## filter state. The final idle call fills only missing time, never twice.
+func _update_ground_gait(p: Person, delta: float, gone: float = 0.0, segment: bool = false) -> void:
 	var tick: float = clock.elapsed
 	if tick < float(p.ground_sample.get("clock", -INF)):
 		p.brain.erase(Gait.GROUND_RUN)
 		p.ground_sample.clear()
 		p.motion_epoch += 1
-	if int(p.ground_sample.get("tick", -1)) == _motion_tick and float(p.ground_sample.get("clock", -INF)) == tick:
-		return
+	var same_tick: bool = int(p.ground_sample.get("tick", -1)) == _motion_tick \
+		and float(p.ground_sample.get("clock", -INF)) == tick
+	var elapsed: float = delta if is_finite(delta) and delta > 0.0 else 0.0
+	var distance: float = absf(gone) if is_finite(gone) else 0.0
+	var basis: Dictionary = p.brain.get(Gait.GROUND_RUN, {}).duplicate()
+	if same_tick:
+		var sampled: float = float(p.ground_sample.get("elapsed", 0.0))
+		if not segment and elapsed <= sampled:
+			return
+		elapsed = sampled + elapsed if segment else elapsed
+		distance += float(p.ground_sample.get("distance", 0.0))
+		basis = p.ground_sample["basis"]
 	var floor_kind: int = grid_at(p.position).floor_at(FieldGrid.cell_of(p.position))
-	Gait.update_ground_run(p, gone, delta, floor_kind)
+	p.brain[Gait.GROUND_RUN] = basis
+	Gait.update_ground_run(p, distance, elapsed, floor_kind)
 	var state: Dictionary = p.brain[Gait.GROUND_RUN]
 	state["tick"] = tick if is_finite(tick) else -1.0
-	p.ground_sample = {"tick": _motion_tick, "clock": tick}
+	p.ground_sample = {"tick": _motion_tick, "clock": tick, "basis": basis,
+		"elapsed": elapsed, "distance": distance}
 
 
 func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> void:
-	_update_ground_gait(p, delta, gone)
+	_update_ground_gait(p, delta, gone, true)
 	var running := Gait.ground_runs(p)
 	var lg := grid_at(p.position)
 	var floor_kind := lg.floor_at(cell)

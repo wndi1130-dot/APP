@@ -1,11 +1,15 @@
 # rust-exception: existing — tests the CI's Python GUT check (.github/gut_check.py) in the same language
 """python3 .github/test_gut_check.py — runs in CI before GUT so a broken check cannot wave a shard through."""
+import contextlib
+import io
+import json
 import pathlib
 import subprocess
 import sys
-import tempfile
 import unittest
+from unittest import mock
 
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import gut_check  # noqa: E402
 
@@ -35,6 +39,14 @@ def report(*cases):
 
 
 WHOLE = report(case(A, 'test_one'), case(A, 'test_two'), case(B, 'test_three'))
+OUTSIDE_ERRORS = [
+    {'type': 'engine-0', 'code': '엔진 오류', 'rationale': '설명',
+     'file': 'res://tests/한글 파일.gd', 'function': 'before_all', 'line': 12},
+    {'type': 'push_error', 'code': 'second error', 'rationale': '',
+     'file': 'res://tests/test_a.gd', 'function': 'push_error', 'line': 24},
+]
+OUTSIDE_TWO = json.dumps({'count': 2, 'errors': OUTSIDE_ERRORS}, ensure_ascii=False)
+OUTSIDE_EMPTY = '{"count": 0, "errors": []}'
 
 
 class CheckTests(unittest.TestCase):
@@ -122,23 +134,157 @@ class CheckTests(unittest.TestCase):
         self.assertIn('(4 cases)', line)
 
 
+class LexingTests(unittest.TestCase):
+    def test_commented_triple_quotes_keep_real_tests(self):
+        for quotes in ('"""', "'''"):
+            with self.subTest(quotes=quotes):
+                source = (f'extends GutTest\nfunc test_visible():\n\tpass\n# {quotes}\n'
+                          f'func test_hidden():\n\tpass\n# {quotes}\n')
+                self.assertEqual(gut_check.expected_tests({A: source})[A],
+                                 {'test_visible', 'test_hidden'})
+                found = gut_check.problems({A: source}, report(case(A, 'test_visible')), '')
+                self.assertEqual(len(found), 1, found)
+                self.assertIn('test_hidden', found[0])
+
+    def test_literal_forms_keep_following_test(self):
+        cases = []
+        for prefix in ('', 'r', '&', '^'):
+            for quote in ('"', "'"):
+                cases.append((prefix + quote, prefix + quote + 'a # b' + quote))
+        for quote in ('"""', "'''"):
+            cases.append((quote, quote + '\nfunc test_x():\n\tpass\n' + quote))
+        for label, literal in cases:
+            with self.subTest(literal=label):
+                source = f'extends GutTest\nconst TEXT = {literal}\nfunc test_y():\n\tpass\n'
+                self.assertEqual(gut_check.expected_tests({A: source})[A], {'test_y'})
+
+    def test_single_line_quotes_do_not_hide_following_tests(self):
+        cases = (
+            ('triple double in single', '\'"""\''),
+            ('triple single in double', '"\'\'\'"'),
+            ('escaped double quotes', r'"a \"\"\" b"'),
+            ('escaped single quotes', r"'a \'\'\' b'"),
+            ('escaped backslash', r'"a \\"'),
+            ('raw escaped quote', r'r"a \" # b"'),
+        )
+        for label, literal in cases:
+            with self.subTest(literal=label):
+                source = (f'extends GutTest\nconst FIRST = {literal}\nfunc test_y():\n\tpass\n'
+                          f'const LAST = {literal}\n')
+                self.assertEqual(gut_check.expected_tests({A: source})[A], {'test_y'})
+
+    def test_unclosed_strings_hide_rest(self):
+        for prefix in ('', 'r', '&', '^'):
+            for quote in ('"', "'", '"""', "'''"):
+                with self.subTest(prefix=prefix, quote=quote):
+                    source = (f'func test_before():\n\tpass\nconst TEXT = {prefix}{quote}unfinished\n'
+                              'func test_hidden():\n\tpass\n')
+                    self.assertEqual(gut_check.expected_tests({A: source})[A], {'test_before'})
+
+    def test_mask_preserves_positions_and_newlines(self):
+        cases = (
+            ('# """\r\nfunc test_y():\n', '     \r\nfunc test_y():\n'),
+            ('const S = r"a # b"\r\n', 'const S =         \r\n'),
+            ('const S = &"name"\n', 'const S =        \n'),
+            ('const S = ^"path"\n', 'const S =        \n'),
+            ('const S = """a\r\nb"""\n', 'const S =     \r\n    \n'),
+        )
+        for source, expected in cases:
+            with self.subTest(source=source):
+                self.assertEqual(gut_check._code(source), expected)
+
+    def test_inner_class_text_in_strings_is_ignored(self):
+        for quote in ('"""', "'''"):
+            for base in ('GutTest', '"res://addons/gut/test.gd"'):
+                with self.subTest(quote=quote, base=base):
+                    source = (f'extends GutTest\nconst TEXT = {quote}\nclass Hidden extends {base}:\n'
+                              f'\tpass\n{quote}\nfunc test_one():\n\tpass\n')
+                    self.assertEqual(gut_check.problems({A: source}, report(case(A, 'test_one')), ''), [])
+
+
+class OutsideTests(unittest.TestCase):
+    def test_missing_file_fails(self):
+        found = gut_check.outside_problems(None)
+        self.assertEqual(len(found), 1, found)
+        self.assertIn('hook did not run', found[0])
+
+    def test_broken_json_fails(self):
+        for text in ('', 'not json', '{'):
+            with self.subTest(text=text):
+                self.assertEqual(len(gut_check.outside_problems(text)), 1)
+
+    def test_invalid_report_shape_fails(self):
+        for value in (None, [], 3, {}, {'count': 0}, {'count': 0, 'errors': {}},
+                      {'count': 0, 'errors': None}):
+            with self.subTest(value=value):
+                self.assertEqual(len(gut_check.outside_problems(json.dumps(value))), 1)
+
+    def test_count_must_be_an_integer(self):
+        for count in (True, False, 0.0, '0', None):
+            with self.subTest(count=count):
+                text = json.dumps({'count': count, 'errors': []})
+                self.assertEqual(len(gut_check.outside_problems(text)), 1)
+
+    def test_count_must_match_errors(self):
+        for count in (-1, 0, 1, 3):
+            with self.subTest(count=count):
+                text = json.dumps({'count': count, 'errors': OUTSIDE_ERRORS})
+                self.assertEqual(len(gut_check.outside_problems(text)), 1)
+
+    def test_invalid_error_entry_fails(self):
+        for entry in (None, 'error', {}, {**OUTSIDE_ERRORS[0], 'code': 3},
+                      {**OUTSIDE_ERRORS[0], 'line': True}):
+            with self.subTest(entry=entry):
+                text = json.dumps({'count': 1, 'errors': [entry]})
+                self.assertEqual(len(gut_check.outside_problems(text)), 1)
+
+    def test_zero_errors_pass(self):
+        self.assertEqual(gut_check.outside_problems(OUTSIDE_EMPTY), [])
+
+    def test_each_outside_error_is_a_problem_with_its_code(self):
+        found = gut_check.outside_problems(OUTSIDE_TWO)
+        self.assertEqual(len(found), 2, found)
+        for error in OUTSIDE_ERRORS:
+            self.assertTrue(any(error['code'] in p for p in found), found)
+
+    def test_rationale_is_optional_and_limited_to_200_characters(self):
+        base = 'engine-0 엔진 오류 (res://tests/한글 파일.gd:12 before_all)'
+        for rationale in ('', '한글 원인 설명', '가' * 200, '가' * 200 + '끝'):
+            with self.subTest(length=len(rationale)):
+                error = {**OUTSIDE_ERRORS[0], 'rationale': rationale}
+                expected = base + (' — ' + rationale[:200] if rationale else '')
+                self.assertEqual(gut_check._outside_line(error), expected)
+                text = json.dumps({'count': 1, 'errors': [error]}, ensure_ascii=False)
+                self.assertEqual(gut_check.outside_problems(text), ['outside-test error: ' + expected])
+                self.assertEqual(gut_check._outside_report(text)['errors'][0]['rationale'], rationale)
+
+
 class MainTests(unittest.TestCase):
     """The command line: reads s2/<script> from the working directory, exit 0/1/2."""
 
-    def run_main(self, files, shard_lines, xml, log, bom=False):
-        with tempfile.TemporaryDirectory(prefix='gut check ') as root:
-            base = pathlib.Path(root)
-            for rel, text in files.items():
-                p = base / 's2' / rel
-                p.parent.mkdir(parents=True, exist_ok=True)
-                p.write_text(('﻿' if bom else '') + text, encoding='utf-8')
-            (base / 'shard.txt').write_text(''.join(f'res://{s}\n' for s in shard_lines), encoding='utf-8')
-            if xml is not None:
-                (base / 'r.xml').write_text(xml, encoding='utf-8')
-            if log is not None:
-                (base / 'gut.log').write_text(log, encoding='utf-8')
-            return subprocess.run([sys.executable, str(pathlib.Path(gut_check.__file__)), 'shard.txt', 'r.xml', 'gut.log'],
-                                  cwd=base, capture_output=True, text=True, timeout=60)
+    def run_main(self, files, shard_lines, xml, log, bom=False, outside=OUTSIDE_EMPTY):
+        # Keep fixtures in memory: running the check's tests must not write outside its checkout.
+        contents = {str(pathlib.Path('s2') / rel): ('\ufeff' if bom else '') + text
+                    for rel, text in files.items()}
+        contents['shard.txt'] = ''.join(f'res://{s}\n' for s in shard_lines)
+        for name, text in (('r.xml', xml), ('gut.log', log), ('outside.json', outside)):
+            if text is not None:
+                contents[name] = text
+
+        def read_text(path, encoding=None, errors=None):
+            text = contents[str(path)]
+            if isinstance(text, Exception):
+                raise text
+            return text.removeprefix('\ufeff') if encoding == 'utf-8-sig' else text
+
+        argv = ['shard.txt', 'r.xml', 'gut.log', 'outside.json']
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(pathlib.Path, 'is_file', autospec=True,
+                               side_effect=lambda path: str(path) in contents), \
+                mock.patch.object(pathlib.Path, 'read_text', autospec=True, side_effect=read_text), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = gut_check.main(argv)
+        return subprocess.CompletedProcess(argv, code, stdout.getvalue(), stderr.getvalue())
 
     def test_pass_and_fail_exit_codes(self):
         ok = self.run_main(SOURCES, [A, B], WHOLE, '')
@@ -161,8 +307,73 @@ class MainTests(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
 
     def test_wrong_arguments(self):
-        p = subprocess.run([sys.executable, str(pathlib.Path(gut_check.__file__))], capture_output=True, text=True, timeout=60)
+        p = subprocess.run([sys.executable, '-X', 'utf8', '-I', '-B', str(pathlib.Path(gut_check.__file__))],
+                           capture_output=True, text=True, encoding='utf-8', timeout=60)
         self.assertEqual(p.returncode, 2)
+
+    def test_three_arguments_exit_2(self):
+        p = subprocess.run([sys.executable, '-X', 'utf8', '-I', '-B', str(pathlib.Path(gut_check.__file__)),
+                            'shard.txt', 'r.xml', 'gut.log'],
+                           capture_output=True, text=True, encoding='utf-8', timeout=60)
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        self.assertIn('<gut-outside-errors.json>', p.stderr)
+
+    def test_missing_outside_file_fails(self):
+        p = self.run_main(SOURCES, [A, B], WHOLE, '', outside=None)
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn('hook did not run', p.stdout)
+
+    def test_invalid_outside_file_fails(self):
+        for outside in ('broken', '{"count": 1, "errors": []}'):
+            with self.subTest(outside=outside):
+                p = self.run_main(SOURCES, [A, B], WHOLE, '', outside=outside)
+                self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+                self.assertIn('outside', p.stdout)
+
+    def test_unreadable_outside_file_fails(self):
+        for error in (OSError('cannot read'), UnicodeDecodeError('utf-8', b'\xff', 0, 1, 'invalid byte')):
+            with self.subTest(error=type(error).__name__):
+                p = self.run_main(SOURCES, [A, B], WHOLE, '', outside=error)
+                self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+                self.assertIn('not readable', p.stdout)
+
+    def test_outside_count_follows_pass_summary(self):
+        p = self.run_main(SOURCES, [A, B], WHOLE, '', outside=OUTSIDE_EMPTY)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertTrue(p.stdout.startswith('GUT report:'), p.stdout)
+        self.assertEqual(p.stdout.splitlines()[1], 'GUT outside-test errors: 0')
+
+    def test_outside_list_printed_on_failure(self):
+        for xml, log in ((report(case(A, 'test_one')), ''), (WHOLE, 'SCRIPT ERROR: bad'),
+                         (None, ''), (WHOLE, None)):
+            with self.subTest(xml=xml, log=log):
+                p = self.run_main(SOURCES, [A, B], xml, log, outside=OUTSIDE_TWO)
+                self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+                self.assertIn('GUT outside-test errors: 2', p.stdout)
+                for error in OUTSIDE_ERRORS:
+                    self.assertIn(error['code'], p.stdout)
+
+    def test_outside_errors_alone_fail_the_shard_and_are_listed(self):
+        # Every test passes and the log is clean; only the hook found errors outside test bodies.
+        p = self.run_main(SOURCES, [A, B], WHOLE, '', outside=OUTSIDE_TWO)
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn('GUT check failed (2):', p.stdout)
+        self.assertIn('GUT outside-test errors: 2', p.stdout)
+        self.assertIn('  engine-0 엔진 오류 (res://tests/한글 파일.gd:12 before_all)', p.stdout)
+        self.assertIn('  push_error second error (res://tests/test_a.gd:24 push_error)', p.stdout)
+
+
+    def test_rationale_is_printed_in_outside_list(self):
+        for rationale in ('', '한글 원인 설명', '가' * 200 + '끝'):
+            with self.subTest(length=len(rationale)):
+                error = {**OUTSIDE_ERRORS[0], 'rationale': rationale}
+                text = json.dumps({'count': 1, 'errors': [error]}, ensure_ascii=False)
+                p = self.run_main(SOURCES, [A, B], WHOLE, '', outside=text)
+                self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+                expected = '  engine-0 엔진 오류 (res://tests/한글 파일.gd:12 before_all)'
+                if rationale:
+                    expected += ' — ' + rationale[:200]
+                self.assertEqual(p.stdout.splitlines()[-1], expected)
 
 
 if __name__ == '__main__':
