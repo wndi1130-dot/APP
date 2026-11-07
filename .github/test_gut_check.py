@@ -171,17 +171,10 @@ class OutsideTests(unittest.TestCase):
                 self.assertEqual(len(gut_check.outside_problems(text)), 1)
 
     def test_zero_errors_pass(self):
-        for fail in (False, True):
-            with self.subTest(fail=fail), mock.patch.object(gut_check, 'FAIL_ON_OUTSIDE', fail):
-                self.assertEqual(gut_check.outside_problems(OUTSIDE_EMPTY), [])
+        self.assertEqual(gut_check.outside_problems(OUTSIDE_EMPTY), [])
 
-    def test_nonzero_errors_are_report_only(self):
-        self.assertIs(gut_check.FAIL_ON_OUTSIDE, False)
-        self.assertEqual(gut_check.outside_problems(OUTSIDE_TWO), [])
-
-    def test_enabled_failure_includes_both_codes(self):
-        with mock.patch.object(gut_check, 'FAIL_ON_OUTSIDE', True):
-            found = gut_check.outside_problems(OUTSIDE_TWO)
+    def test_each_outside_error_is_a_problem_with_its_code(self):
+        found = gut_check.outside_problems(OUTSIDE_TWO)
         self.assertEqual(len(found), 2, found)
         for error in OUTSIDE_ERRORS:
             self.assertTrue(any(error['code'] in p for p in found), found)
@@ -265,16 +258,11 @@ class MainTests(unittest.TestCase):
                 self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
                 self.assertIn('not readable', p.stdout)
 
-    def test_outside_list_follows_pass_summary(self):
-        for outside, count in ((OUTSIDE_EMPTY, 0), (OUTSIDE_TWO, 2)):
-            with self.subTest(count=count):
-                p = self.run_main(SOURCES, [A, B], WHOLE, '', outside=outside)
-                self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-                self.assertTrue(p.stdout.startswith('GUT report:'), p.stdout)
-                self.assertEqual(p.stdout.splitlines()[1], f'GUT outside-test errors: {count}')
-                if count:
-                    self.assertIn('  engine-0 엔진 오류 (res://tests/한글 파일.gd:12 before_all)', p.stdout)
-                    self.assertIn('  push_error second error (res://tests/test_a.gd:24 push_error)', p.stdout)
+    def test_outside_count_follows_pass_summary(self):
+        p = self.run_main(SOURCES, [A, B], WHOLE, '', outside=OUTSIDE_EMPTY)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertTrue(p.stdout.startswith('GUT report:'), p.stdout)
+        self.assertEqual(p.stdout.splitlines()[1], 'GUT outside-test errors: 0')
 
     def test_outside_list_printed_on_failure(self):
         for xml, log in ((report(case(A, 'test_one')), ''), (WHOLE, 'SCRIPT ERROR: bad'),
@@ -286,12 +274,14 @@ class MainTests(unittest.TestCase):
                 for error in OUTSIDE_ERRORS:
                     self.assertIn(error['code'], p.stdout)
 
-    def test_enabled_failure_prints_outside_list(self):
-        with mock.patch.object(gut_check, 'FAIL_ON_OUTSIDE', True):
-            p = self.run_main(SOURCES, [A, B], WHOLE, '', outside=OUTSIDE_TWO)
+    def test_outside_errors_alone_fail_the_shard_and_are_listed(self):
+        # Every test passes and the log is clean; only the hook found errors outside test bodies.
+        p = self.run_main(SOURCES, [A, B], WHOLE, '', outside=OUTSIDE_TWO)
         self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
         self.assertIn('GUT check failed (2):', p.stdout)
         self.assertIn('GUT outside-test errors: 2', p.stdout)
+        self.assertIn('  engine-0 엔진 오류 (res://tests/한글 파일.gd:12 before_all)', p.stdout)
+        self.assertIn('  push_error second error (res://tests/test_a.gd:24 push_error)', p.stdout)
 
 
 if __name__ == '__main__':

@@ -14,8 +14,10 @@
   runtime script error inside a test does not by itself fail the test in GUT, and GUT's stdout and the
   engine's stderr share one pipe, so the text can land mid-line. Engine `ERROR:` lines are not counted;
   some tests write broken files on purpose (34 such lines a main run, 2026-11-07).
-- The post-run hook's outside-test report must be present and valid. Its errors are listed, but only
-  fail the shard when FAIL_ON_OUTSIDE is enabled.
+- The post-run hook's outside-test report must be present and valid, and hold no error: GUT fails a
+  test for an unhandled engine error, push_error or GUT error inside its body, but one raised outside
+  any test body (before_each/after_each/before_all/after_all, script load, another thread after the
+  test) is only kept under NO_TEST. A main run with the hook counted 0 on every shard (2026-11-07, #1474).
 Exit 0 with the pass summary and outside-test list, 1 with every problem listed, 2 for wrong arguments.
 """
 import json
@@ -23,8 +25,6 @@ import pathlib
 import re
 import sys
 import xml.etree.ElementTree as ET
-
-FAIL_ON_OUTSIDE = False
 
 STRINGS = re.compile(r'"""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'')
 TEST_FUNC = re.compile(r'(?m)^func\s+(test_\w+)\s*\(')
@@ -120,14 +120,12 @@ def _outside_line(error: dict) -> str:
 
 
 def outside_problems(text: str | None) -> list[str]:
-    """Missing/broken hook reports fail; nonzero counts are report-only in phase one."""
+    """A missing or broken hook report is one problem; otherwise each outside-test error is one."""
     try:
         data = _outside_report(text)
     except ValueError as e:
         return [str(e)]
-    if FAIL_ON_OUTSIDE:
-        return [f'outside-test error: {_outside_line(error)}' for error in data['errors']]
-    return []
+    return [f'outside-test error: {_outside_line(error)}' for error in data['errors']]
 
 
 def _print_outside(text: str | None) -> None:
