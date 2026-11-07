@@ -497,8 +497,43 @@ static func _vertex_count(geometry: Dictionary, level: Variant) -> Vector2i:
 		(geometry[level]["rim"] as PackedVector3Array).size())
 
 
-## Prefixes determine counts only; every projected position comes from the final rebuild.
+## Rows contain level -> Vector2i(body, rim); an absent level has zero vertices.
+## Return the first differing zero-based row, level and counts without changing inputs.
+## Unequal row totals return the first missing row, level null and row maps (or null).
+static func row_counts_consistent(alone: Array, added: Array) -> Dictionary:
+	for index: int in mini(alone.size(), added.size()):
+		var expected: Dictionary = alone[index]
+		var actual: Dictionary = added[index]
+		var levels: Dictionary = expected.duplicate()
+		for level: Variant in actual:
+			levels[level] = true
+		for level: Variant in levels:
+			var own: Vector2i = expected.get(level, Vector2i.ZERO)
+			var delta: Vector2i = actual.get(level, Vector2i.ZERO)
+			if delta != own:
+				return {"ok": false, "row": index, "level": level, "alone": own, "added": delta}
+	if alone.size() != added.size():
+		var index: int = mini(alone.size(), added.size())
+		return {"ok": false, "row": index, "level": null,
+			"alone": alone[index] if index < alone.size() else null,
+			"added": added[index] if index < added.size() else null}
+	return {"ok": true}
+
+
+## Prefix counts must match each row alone; positions come from the final rebuild.
 func _item_polygons(game: FieldGame, rows: Array[Dictionary], image_size: Vector2i) -> Dictionary:
+	var alone: Array[Dictionary] = []
+	for row: Dictionary in rows:
+		if not _alive():
+			return {}
+		_put(game, [row])
+		var geometry: Dictionary = _ground_geometry(game)
+		if _failed:
+			return {}
+		var own: Dictionary = {}
+		for level: Variant in geometry:
+			own[level] = _vertex_count(geometry, level)
+		alone.append(own)
 	var prefix: Array[Dictionary] = []
 	var previous: Dictionary = {}
 	var counts: Array[Dictionary] = []
@@ -519,13 +554,15 @@ func _item_polygons(game: FieldGame, rows: Array[Dictionary], image_size: Vector
 			var before: Vector2i = previous.get(level, Vector2i.ZERO)
 			var after: Vector2i = _vertex_count(geometry, level)
 			var delta: Vector2i = after - before
-			if delta.x < 0 or delta.y < 0:
-				_fail("prefix vertex count decreased at level %s, row %s: %s -> %s (body, rim)" %
-					[level, row["id"], before, after])
-				return {}
 			added[level] = delta
 			previous[level] = after
 		counts.append(added)
+	var consistent: Dictionary = row_counts_consistent(alone, counts)
+	if not bool(consistent["ok"]):
+		var index: int = int(consistent["row"])
+		_fail("row %d (%s) added %s but draws %s alone at level %s (body, rim): the drawn set changed (a row displaced or left undrawn), so rows cannot be told apart" %
+			[index, rows[index]["id"], consistent["added"], consistent["alone"], consistent["level"]])
+		return {}
 	_put(game, [])
 	var update_ms: float = _put(game, rows)
 	var final_geometry: Dictionary = _ground_geometry(game)
