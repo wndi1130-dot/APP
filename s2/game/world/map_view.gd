@@ -783,7 +783,8 @@ func _bake_container_chunk(key: Vector3i) -> void:
 	for id: String in chunk["ids"]:
 		marked = _bake_container(st, rims, id) or marked
 	node.mesh = st.commit()
-	# The empty marks' dark rims, a child drawn with contact_shade (as update_ground's).
+	# The empty marks' dark rims, a child drawn with contact_shade at RIM_STRENGTH
+	# (the ground things' rims have their own ground_rim.gdshader).
 	var rim_node := node.get_node_or_null("Rim") as MeshInstance3D
 	if marked and rim_node == null:
 		rim_node = MeshInstance3D.new()
@@ -857,9 +858,6 @@ static func _empty_rims(st: SurfaceTool, at: Vector3, sky: float) -> void:
 		_rim_quad(st, rim)
 
 
-## What lies on the ground (game.ground_items, shapes from ground_look.gd): one
-## mesh a level, made again only when the list has changed; under it the things'
-## dark rims (ground_look.rim), a child mesh drawn with contact_shade.gdshader.
 func update_sleds(sleds: Array, people: Array) -> void:
 	if not level_roots.has(0) or (sleds.is_empty() and sled_mesh == null):
 		return
@@ -934,6 +932,10 @@ static func _ground_signature(items: Array, roots: Dictionary) -> int:
 var _ground_rim_material: ShaderMaterial
 
 
+## What lies on the ground (game.ground_items, shapes from ground_look.gd): one
+## mesh a level, made again only when the list or the floors have changed; under
+## it the things' dark rims (ground_look.rim), a child mesh drawn with
+## ground_rim.gdshader, each as dark as its width (ground_look.rim_strength).
 func update_ground(items: Array) -> void:
 	var sig: int = _ground_signature(items, level_roots)
 	if not level_roots.is_empty() and sig == _ground_sig and sig == _drawn_ground_sig:
@@ -1040,7 +1042,8 @@ static func _append_ground(batch: GroundModels.Batch, piece: Dictionary) -> void
 ## One rim quad (ground_look.rim) flat on the floor: the thing's share of it, the
 ## strength and whether it lies open to the sky (rim "sky", 1 if not given; 0
 ## under a roof, as the floors' vertex alpha) go in the vertex colour
-## (contact_shade.gdshader keeps it full indoors whatever the season).
+## (contact_shade.gdshader and ground_rim.gdshader keep it full indoors whatever
+## the season). The empty marks' bars take the default strength.
 static func _rim_quad(st: SurfaceTool, rim: Dictionary, strength: float = GroundLook.RIM_STRENGTH) -> void:
 	var at: Vector3 = rim["at"]
 	var h: Vector2 = (rim["size"] as Vector2) * 0.5

@@ -904,6 +904,17 @@ func _template() -> ArrayMesh:
 	return surface.commit()
 
 
+func test_empty_mark_rims_keep_the_bars_strength() -> void:
+	# Only the ground things' rims darken as they narrow; the empty marks' bars keep theirs.
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	MapView._empty_rims(st, Vector3(2, 0, 3), 1.0)
+	var colours: PackedColorArray = st.commit().surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	assert_eq(colours.size(), 8 * 6, "eight bars, a quad each")
+	for c: Color in colours:
+		assert_almost_eq(c.b, GroundLook.RIM_STRENGTH, COLOUR_STEP)
+
+
 func test_model_name_footprint_yaw_and_floor_are_from_the_shared_template() -> void:
 	assert_true(GroundModels.cache_template("knife", _template()))
 	var items: Array = [{"id": "knife", "n": 1, "pos": Vector3(5.5, 3, 7.5)}]
