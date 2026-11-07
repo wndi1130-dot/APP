@@ -93,6 +93,13 @@ const vec3 GRAVEL = vec3(0.55, 0.52, 0.47);
 // at the dry grass's lightness (linear 0.215 to its 0.22).
 const vec3 LATE_GREEN = vec3(0.46, 0.52, 0.40);
 
+// 코디 2026-11-07: 얇은 눈이 두꺼운 눈과 갈려 보이도록 바탕 풀빛을 되살린다.
+// 근거: 35c73dc8은 먼 거리에서 얇은 눈에 PNG 알파 면적만큼 풀빛을 섞었다 — 문턱 0.65에서 0.188,
+// 7.7 m 흔들림 0.59~0.71에서 0.286~0.113, 가운데 0.19~0.22. 처음 넣은 그 절반 0.11은
+// 71be4d57 대비 화소 1~4 %만 바뀌어 얇은 눈이 두꺼운 눈과 갈리지 않았다(줌 20, 23자리).
+// 그래서 그 가운데의 아래 끝 0.19로 올린다(코디 11-07 11:5x).
+const float THIN_SNOW_GRASS_BASE = 0.19;
+
 // Decision 496: metres per layer; the K1 row is road, patch, pavement, grass.
 // Later bands add rows here. Until then every band uses the K1 materials.
 // The two asphalt photos hold their pattern three times over each way, so one
@@ -131,6 +138,20 @@ vec4 ground_layer(int layer, vec2 p, vec2 dx, vec2 dy) {
 // width of a fract() would jump where it wraps and draw every cell's edge).
 float band(float d, float w, float aa) {
 	return 1.0 - smoothstep(w - aa, w + aa, abs(d));
+}
+
+// Cubic value-noise calibration: 262144 uniform corner/phase samples, seed 0x12345678;
+// LCG 1664525/1013904223 modulo 2^32, six draws per sample: x, y, a, b, c, d.
+// 17055 samples with abs(value - 0.5) < 0.02 had mean abs(dvalue/daxis) 0.310137.
+// px = abs(dx) + abs(dy), in metres/pixel: 0.31 * frequency * sum(px) approximates
+// the old fwidth(vein), without differentiating inside a material branch.
+// Keep the original value-space half widths (road 0.012, screed 0.01).
+// 카메라 35도 기울기라 화면 미분의 비등방 비 r = 1/sin(35도) = 1.74345.
+// CAM_YAW 45도, 같은 평균 기울기 크기(sqrt(2)*0.31), 1e-4 바닥 제외:
+// 방향에 따른 근사/실제 폭 비는 (1+r)/sqrt(1+r*r)..(1+r) = 1.365..2.744.
+// 이는 화면 미분 방향의 차이이며, 개별 노이즈 기울기가 0인 점의 절대 상한은 아니다.
+float noise_edge_width(vec2 px, float frequency) {
+	return 0.31 * frequency * (px.x + px.y) + 1e-4;
 }
 
 // How far a point of a road cell lies from the cell's kerb, in cells (1 with no kerb in the
@@ -195,7 +216,8 @@ vec3 slabs(vec3 c, vec2 p, vec2 px, int along, float size) {
 	return c * tone * (1.0 - 0.1 * joint);
 }
 
-vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 dx, vec2 dy) {
+vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 dx, vec2 dy, out float grass_share) {
+	grass_share = 0.0;
 	vec2 f = fract(p);
 	vec2 px = abs(dx) + abs(dy);
 	ivec4 layers = GROUND_BAND_LAYERS[clamp(region_band - 1, 0, GROUND_BAND_LAYERS.length() - 1)];
@@ -238,11 +260,13 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 d
 			edge += (fx_vnoise(p * 0.8 + vec2(19.1, 3.7)) - 0.5) * 0.15 + bias;
 			float aa = 0.08 + min(0.12, max(px.x, px.y) * 0.15);
 			float bare = smoothstep(-aa, aa, edge);
+			grass_share = 1.0 - bare;
 			return mix(grass * grass_detail.rgb, SOIL * soil_detail.rgb, bare);
 		}
 		grass *= 0.92 + 0.16 * fx_vnoise(p * 2.3);
 		float bare = smoothstep(0.52, 0.68, patch) * 0.7;
 		bare = max(bare, smoothstep(0.3, 0.6, clamp(detail, 0.0, 1.0) + (patch - 0.5) * 0.5));
+		grass_share = 1.0 - bare;
 		return mix(grass, SOIL * (0.92 + 0.16 * grain.a), bare);
 	} else if (kind == 1) {
 		int bits = int(detail + 0.5);
@@ -267,7 +291,7 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 d
 			// Aged asphalt: wide worn patches, a few cracks.
 			c = ASPHALT * (0.9 + 0.18 * fx_fbm2(p * 0.18 + 11.0)) * (0.96 + 0.08 * fx_vnoise(p * 3.7));
 			float vein = fx_vnoise(p * 0.9 + 2.0) - 0.5;
-			float crack = band(vein, 0.012, fwidth(vein) + 1e-4) * smoothstep(0.55, 0.7, fx_vnoise(p * 0.3 + 5.0));
+			float crack = band(vein, 0.012, noise_edge_width(px, 0.9)) * smoothstep(0.55, 0.7, fx_vnoise(p * 0.3 + 5.0));
 			c *= 1.0 - 0.3 * crack;
 		}
 		// The kerb (light stone) and gutter (dark, silted) on the sides at open ground.
@@ -455,7 +479,7 @@ vec3 room_bricks(vec3 tone, vec3 joint, vec2 p, vec2 px) {
 vec3 room_screed(vec3 tone, vec2 p, vec2 px) {
 	vec3 c = tone * (0.9 + 0.16 * fx_fbm2(p * 0.5 + 6.0)) * (0.96 + 0.06 * fx_vnoise(p * 5.0));
 	float vein = fx_vnoise(p * 0.8 + 3.0) - 0.5;
-	c *= 1.0 - 0.2 * band(vein, 0.01, fwidth(vein) + 1e-4) * smoothstep(0.6, 0.72, fx_vnoise(p * 0.35));
+	c *= 1.0 - 0.2 * band(vein, 0.01, noise_edge_width(px, 0.8)) * smoothstep(0.6, 0.72, fx_vnoise(p * 0.35));
 	return c * (1.0 - 0.12 * smoothstep(0.66, 0.8, fx_fbm2(p * 0.4 + 1.0)));
 }
 
@@ -712,24 +736,39 @@ void fragment() {
 	float chroma = max(base.r, max(base.g, base.b)) - min(base.r, min(base.g, base.b));
 	float cover = 0.0;
 	float local_snow = 0.0;
-	// Warped 0.15/m patches leave dark gaps; skip the new noise without snow.
+	float snow_fine = 0.5;
+	vec2 snow_fine_p = vec2(0.0);
+	bool is_ground = ground_kind > 0.5;
+	// Ground: 11 m drifts, 0.9 m detail, 8 m warp. Props keep the 921e3efd pattern.
+	// Select coordinates/weights before the shared noise calls; no per-kind derivative branch.
 	if (fx_snow > 0.01) {
-		vec2 patch_p = (world_pos.xz + snow_phase) * 0.15;
-		vec2 warp = vec2(fx_vnoise(patch_p * 0.5 + vec2(17.1, 9.2)),
-			fx_vnoise(patch_p * 0.5 + vec2(3.7, 23.6))) - vec2(0.5);
-		// A finer octave breaks the round value-noise blobs into ragged drifts.
-		float snow_patch = 0.72 * fx_vnoise(patch_p + 0.7 * warp) + 0.28 * fx_vnoise(patch_p * 3.1 + 1.4 * warp + vec2(5.3, 11.9));
-		// Pixel width, at least 0.02, keeps the edge firm without shimmer.
-		float patch_w = max(fwidth(snow_patch), 0.02);
+		vec2 snow_p = world_pos.xz + snow_phase;
+		vec2 patch_p = snow_p * (is_ground ? 0.09 : 0.15);
+		vec2 fine_p = is_ground ? snow_p * 1.1 : patch_p * 3.1;
+		vec2 warp_p = is_ground ? snow_p * 0.125 : patch_p * 0.5;
+		vec2 warp = vec2(fx_vnoise(warp_p + vec2(17.1, 9.2)),
+			fx_vnoise(warp_p + vec2(3.7, 23.6))) - vec2(0.5);
+		// Fine detail breaks the broad drifts' edges without setting their size.
+		snow_fine_p = fine_p + 1.4 * warp + vec2(5.3, 11.9);
+		snow_fine = fx_vnoise(snow_fine_p);
+		float snow_patch = (is_ground ? 0.8 : 0.72) * fx_vnoise(patch_p + 0.7 * warp) + (is_ground ? 0.2 : 0.28) * snow_fine;
 		// This map's spread of the stop's snow: a whiter or more melted map (snow_shift) and,
 		// across it, wide fields where the snow lies whole or has gone (snow_melt). One more
 		// noise a ground pixel, at the melt field's low frequency, and only on a map that sets
 		// it; multiplied, so a stop with no snow keeps none.
 		float melt = snow_melt > 0.0 ? fx_vnoise((world_pos.xz + 1.7 * snow_phase) / max(snow_melt_m, 4.0)) - 0.5 : 0.0;
 		local_snow = clamp(fx_snow * (1.0 + snow_shift + 1.4 * snow_melt * melt), 0.0, 1.0);
-		// Half the noise range at snow 0.5; every patch is filled by 0.95.
-		float snow_t = mix(1.0 + patch_w, -patch_w, smoothstep(0.05, 0.95, local_snow));
-		cover = 0.9 * smoothstep(snow_t - patch_w, snow_t + patch_w, snow_patch);
+		float snow_blend = smoothstep(0.05, 0.95, local_snow);
+		float snow_edge = snow_patch - (1.0 - snow_blend);
+		// Differentiate the continuous ground edge and the legacy prop noise unconditionally.
+		float ground_w = max(1.25 * fwidth(snow_edge), 0.002);
+		float prop_w = max(fwidth(snow_patch), 0.02);
+		float patch_w = is_ground ? ground_w : prop_w;
+		// Extending the threshold by w gives exact 0/1 endpoints without a depth branch.
+		float snow_t = mix(1.0 + patch_w, -patch_w, snow_blend);
+		float ground_cover = smoothstep(-patch_w, patch_w, snow_patch - snow_t);
+		float prop_cover = 0.9 * smoothstep(snow_t - patch_w, snow_t + patch_w, snow_patch);
+		cover = is_ground ? 0.97 * ground_cover : prop_cover;
 	}
 	cover *= smoothstep(0.6, 0.9, up) * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
 	// The photo grain, one fetch for all four; its strength wanders so the
@@ -741,11 +780,35 @@ void fragment() {
 	vec2 ground_dy = dFdy(world_pos.xz);
 	float ground_k = smoothstep(0.6, 0.9, up) * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
 	float wander = 0.55 + 0.9 * fx_vnoise(world_pos.xz * 0.13 + 7.0);
+	// 덤불 위치는 이미 읽은 잔 결의 낮은 꼬리, 크기는 같은 비틀린 좌표의 반경으로 제한.
+	// Python float32로 기존 hash/noise 식을 그대로 계산한 2026-11-07 표본(렌더 아님):
+	// 8m 정사각형 16개, 5mm 간격(40960000점), phase (0,0)/(37,113)/(211,401)/(479,73),
+	// 원점 (0,0)/(16,8)/(32,24)/(48,40). PNG alpha는 bilinear repeat, 8방향 연결 성분.
+	// 지름은 등가원 2*sqrt(area/pi), 표본 테두리에 닿은 성분만 지름 집계에서 제외.
+	// grass_edge>0 면적 1.652014%, 중앙 지름 0.2317m, 구멍 면적의 99.8488%가 0.10..0.30m.
+	// 잔 톱니를 빼고 본체만 재면 지름 P10/P50/P90 = 0.2193/0.2343/0.2483m.
+	// 바탕 풀빛을 제외한 덤불 마스크만의 기본 20m 줌 CPU 표본(렌더 아님):
+	// local_snow 0.4..0.5, grass_share=1, pile/bank/tracks=0.
+	// 512x512점/phase, 중심 (64,64), PNG trilinear mip + 2x2 fwidth 모사에서 마스크 1.743%(H780),
+	// 1.771%(H1080). 바탕 풀빛 없이 줄어든 눈 덮임은 각각 0.102..0.446, 0.099..0.343 %p.
+	float grass_threshold = 0.30 + clamp((wander - 1.0) * (0.02 / 0.45), -0.02, 0.02);
+	float grass_cell_edge = 0.13 - length(fract(snow_fine_p + vec2(0.5)) - vec2(0.5));
+	float grass_edge = min(grass_threshold - snow_fine, grass_cell_edge) + (grain.a - 0.5) * 0.01;
+	float grass_w = max(1.25 * fwidth(grass_edge), 0.002);
+	float grass_px = max(length(ground_dx), length(ground_dy));
+	// field_hud._zoom은 14..36m, CAM_PITCH=35도: 먼 36m에서 10..30cm 덤불의 세로 크기는
+	// H780: 1.243..3.728px, H1080: 1.721..5.162px(가로는 각각 2.167..6.5, 3..9px).
+	// 작은 10cm 덤불이 2→1px가 되는 0.05..0.10m/px에서만 옅게. 기본 20m는 두 화면 모두 1.
+	float grass_resolve = 1.0 - smoothstep(0.05, 0.1, grass_px);
+	float grass_cut = smoothstep(-grass_w, grass_w, grass_edge) * grass_resolve;
 	// Keep the kind's dark bare look in snow gaps, even in deep winter.
 	float bare_k = sky * smoothstep(0.6, 0.9, up);
 	int kind = int(ground_kind + 0.5) - 1;
+	float grass_share = 0.0;
 	if (ground_kind > 0.5 && bare_k > 0.001) {
-		base = mix(base, bare_ground(kind, ground_detail, base, world_pos.xz, grain, ground_dx, ground_dy), bare_k);
+		base = mix(base, bare_ground(kind, ground_detail, base, world_pos.xz, grain, ground_dx, ground_dy, grass_share), bare_k);
+		// Holes open only as far as the grass look is mixed in (a slope or a part roof keeps the vertex colour).
+		grass_share *= bare_k;
 	}
 	// A furnished room's floor under its roof (room_finish; 0 elsewhere keeps the kind's colour).
 	// The floor itself only, at a storey's height: what lies on it (a coat, a map, the empty mark)
@@ -781,6 +844,7 @@ void fragment() {
 			float as_seen = 0.6 * dot(tone_l, luma) + 0.4 * max(tone_l.r, max(tone_l.g, tone_l.b));
 			unseen_k = mix(1.0, 0.93 * mix(was, as_seen, UNSEEN_FOLLOW) / max(as_seen, 0.001), away);
 			base = mix(finish, tone, 0.5 * away);
+			grass_share = 0.0;
 		}
 	}
 	base = floor_to_linear(base) * unseen_k;
@@ -821,15 +885,22 @@ void fragment() {
 			kerb_d = kerb_distance(kerb_bits, fract(world_pos.xz));
 		}
 	}
+	float pile = 0.0;
 	if (heaped > 0.001) {
-		float pile = smoothstep(0.2, 0.65, foot + 0.6 * (drift - 0.5)) * smoothstep(0.0, 0.15, foot);
+		pile = smoothstep(0.2, 0.65, foot + 0.6 * (drift - 0.5)) * smoothstep(0.0, 0.15, foot);
 		if (kerbed) {
 			pile = max(pile, 1.0 - smoothstep(0.15, 0.4, kerb_d + 0.2 * (drift - 0.5)));
 		}
-		cover = max(cover, 0.85 * pile * heaped);
+		// A full pile covers the ground completely, above the flat-ground cap.
+		cover = max(cover, 1.0 * pile * heaped);
 	}
 	cover *= 1.0 - 0.9 * trodden;
 	base *= 1.0 - 0.3 * trodden * clamp(fx_snow, 0.0, 1.0);
+	// Grass shows only through thin snow, never through soil, paving or a snow bank.
+	float thin_snow = smoothstep(0.25, 0.4, local_snow) * (1.0 - smoothstep(0.5, 0.65, local_snow));
+	float grass_holes = grass_share * thin_snow * mix(THIN_SNOW_GRASS_BASE, 1.0, grass_cut);
+	grass_holes *= 1.0 - smoothstep(0.0, 0.25, max(pile, bank));
+	cover *= 1.0 - grass_holes;
 	// The ground before the snow: what a frozen pool shows through its ice.
 	vec3 under_snow = base;
 	base = mix(base, FX_SNOW * mix(1.0, 0.75, wet) * (1.0 + (grain.r - 0.5) * 0.35 * wander), cover);
@@ -848,13 +919,16 @@ void fragment() {
 	}
 	float water = clamp(max(fx_wet * 1.2, fx_cold.y * 0.85), 0.0, 1.0);
 	float standing = 0.0;
+	// Take the sky coordinates' gradients before either per-pixel pool branch.
+	vec2 suv = vec2(world_pos.x * 0.015 + TIME * 0.002, 0.2 + 0.6 * abs(fract(world_pos.z * 0.0075) * 2.0 - 1.0));
+	vec2 suv_dx = dFdx(suv);
+	vec2 suv_dy = dFdy(suv);
 	// Noise only where a pool could show (phone budget).
 	if (level_k * water > 0.01) {
 		standing = fx_pool(world_pos.xz) * level_k * water;
 		if (standing > 0.001) {
 			// The photo sky's clouds in the water, at the hour's light (fx_sky).
-			vec2 suv = vec2(world_pos.x * 0.015 + TIME * 0.002, 0.2 + 0.6 * abs(fract(world_pos.z * 0.0075) * 2.0 - 1.0));
-			float shape = dot(texture(fx_sky_tex, suv).rgb, vec3(0.3, 0.59, 0.11));
+			float shape = dot(textureGrad(fx_sky_tex, suv, suv_dx, suv_dy).rgb, vec3(0.3, 0.59, 0.11));
 			float mean_l = max(dot(textureLod(fx_sky_tex, vec2(0.5), 10.0).rgb, vec3(0.3, 0.59, 0.11)), 0.02);
 			vec3 refl = fx_sky.rgb * clamp(shape / mean_l, 0.4, 1.8);
 			base = mix(base, fx_pool_color(base, under_snow, world_pos.xz, TIME, fx_cold.y, fx_wet * (1.0 - fx_cold.y), refl, max(room_px.x, room_px.y)), standing);
@@ -909,9 +983,10 @@ void fragment() {
 	// Tactical pause (fx_fade) fades the world before the sight mask darkens it.
 	ALBEDO = fx_photo(mix(dimmed, vec3(0.86, 0.88, 0.9), frost), fx_fade) * lit;
 	ROUGHNESS = mix(1.0, 0.4, wet * (1.0 - cover));
+	vec3 bank_normal = cross(dFdy(VERTEX), dFdx(VERTEX));
 	if (bank > 0.002) {
 		// The bank's own slope, so the light picks it out.
-		NORMAL = normalize(cross(dFdy(VERTEX), dFdx(VERTEX)));
+		NORMAL = normalize(bank_normal);
 	}
 	// A lamp out of sight still shows faintly, so mates can be found in the dark.
 	float lamp = cell.b * lamp_gain * lamp_here * mix(0.4, 1.0, reveal) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0));
