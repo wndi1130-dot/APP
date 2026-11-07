@@ -88,6 +88,7 @@ const BLOW_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", 
 
 ## Transient order ownership belongs to the person, not to a HUD-wide held flag.
 const MELEE_ORDER: StringName = &"melee_input_order"
+const NO_APPROACH_ISSUE: int = 0
 var _melee_serial: int = 0
 var game
 ## Decision 501: only live inside _strike -> swing; empty between calls.
@@ -285,7 +286,7 @@ func fight(p, target, hold: bool) -> void:
 
 func _begin_melee_order(p) -> void:
 	_melee_serial += 1
-	p.set_meta(MELEE_ORDER, {"id": _melee_serial, "path": PackedVector3Array()})
+	p.set_meta(MELEE_ORDER, {"id": _melee_serial, "path_issue": NO_APPROACH_ISSUE})
 
 
 func _melee_order(p) -> Dictionary:
@@ -300,22 +301,16 @@ func owns_melee_order(p, order_id: int) -> bool:
 	return order_id > 0 and melee_order_id(p) == order_id
 
 
-## Movement removes points from the front; a different route is not this approach.
-static func _remaining_approach(path: PackedVector3Array, issued: PackedVector3Array) -> bool:
-	if path.is_empty() or path.size() > issued.size():
-		return false
-	var offset: int = issued.size() - path.size()
-	for i: int in range(path.size()):
-		if path[i] != issued[offset + i]:
-			return false
-	return true
+## Consuming points keeps the issuance; even identical newly issued routes differ.
+static func _remaining_approach(current_issue: int, issued_issue: int) -> bool:
+	return issued_issue > NO_APPROACH_ISSUE and current_issue == issued_issue
 
 
 func _approach_melee(p, path: PackedVector3Array) -> void:
 	p.go_to(path, p.running)
 	if p.has_meta(MELEE_ORDER):
 		var order: Dictionary = p.get_meta(MELEE_ORDER)
-		order["path"] = path.duplicate()
+		order["path_issue"] = p.path_issue
 
 
 ## The finger holding the swing is gone: finish this swing, then stop.
@@ -323,8 +318,8 @@ func stop_holding(p) -> void:
 	# A repeating order ends here, without touching the blow already in strike_at.
 	# A one-swing order (hold=false) still owes its first accepted blow.
 	if p.hold_attack:
-		var issued: PackedVector3Array = _melee_order(p).get("path", PackedVector3Array())
-		if not p.brain.has("goal") and _remaining_approach(p.path, issued):
+		var issued: int = int(_melee_order(p).get("path_issue", NO_APPROACH_ISSUE))
+		if not p.brain.has("goal") and _remaining_approach(p.path_issue, issued):
 			p.path = PackedVector3Array()
 		# A later walking goal, the stick and its drive speed are not this order's.
 		_end_melee_order(p)

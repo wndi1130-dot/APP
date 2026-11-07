@@ -1158,3 +1158,153 @@ func test_melee_cancel_keeps_a_replacement_path_and_its_goal() -> void:
 	assert_false(game.player.hold_attack)
 	assert_eq(game.player.path, replacement, "뒤에 받은 별도 이동 경로는 남긴다")
 	assert_eq(game.player.brain.get("goal"), goal, "전투가 소유하지 않은 이동 목표 보존")
+
+
+func _aim_hand_press(index: int = 7) -> Vector2:
+	var target := _target()
+	game._update_camera(1.0)
+	var at: Vector2 = game.hud._project(target["pos"])
+	assert_true(game.hud.finger_down(index, at))
+	assert_eq(game.hud.fingers.get(index, {}).get("kind", ""), "hand")
+	assert_true(game.hud.aiming)
+	assert_true(game.player.aim.active)
+	return at
+
+
+func test_old_hand_release_preserves_the_new_pad_aim() -> void:
+	_field()
+	_gun_for_fingers()
+	var hand_at := _aim_hand_press()
+	var pad_at := _pad_press(game.hud.aim_button, 8)
+	assert_true(game.hud.finger_up(7, hand_at + Vector2(300, 0)))
+	assert_true(_recorder().shots.is_empty(), "옛 hand의 정상 뗌은 발사하지 않는다")
+	assert_true(game.hud.aiming)
+	assert_true(game.hud.auto_aim)
+	assert_true(game.player.aim.active, "8번의 조준은 계속된다")
+	assert_true(game.hud.finger_up(8, pad_at))
+	assert_eq(_recorder().shots.size(), 1)
+	assert_false(game.player.aim.active)
+	assert_false(game.hud.aiming)
+	assert_false(game.hud.auto_aim)
+
+
+func test_new_aim_owner_can_release_before_the_old_hand() -> void:
+	_field()
+	_gun_for_fingers()
+	var hand_at := _aim_hand_press()
+	var pad_at := _pad_press(game.hud.aim_button, 8)
+	assert_true(game.hud.finger_up(8, pad_at))
+	assert_eq(_recorder().shots.size(), 1)
+	assert_false(game.player.aim.active)
+	assert_true(game.hud.finger_up(7, hand_at + Vector2(300, 0)))
+	assert_eq(_recorder().shots.size(), 1, "뒤늦은 손 뗌은 아무 일도 하지 않는다")
+	assert_false(game.hud.aiming)
+	assert_false(game.hud.auto_aim)
+	assert_false(game.player.aim.active)
+	assert_true(game.hud.fingers.is_empty())
+
+
+func test_old_aim_finger_drag_preserves_the_new_owner_state() -> void:
+	for old_kind: String in ["hand", "pad"]:
+		_field()
+		_gun_for_fingers()
+		if old_kind == "hand":
+			_aim_hand_press()
+		else:
+			_pad_press(game.hud.aim_button, 7)
+		var pad_at := _pad_press(game.hud.aim_button, 8)
+		var point: Vector3 = game.hud.aim_point
+		var target: Variant = game.hud.aim_target
+		var facing: float = game.player.facing
+		var over: Vector2 = game.hud._project(game.player.position + Vector3(0, 1.0, 0))
+		for at: Vector2 in [over, over + Vector2(300, -120)]:
+			assert_true(game.hud.finger_move(7, at))
+			assert_false(game.hud.aim_cancel, old_kind + "의 옛 손가락은 취소 상태를 바꾸지 않는다")
+			assert_true(game.hud.aim_armed)
+			assert_eq(game.hud.aim_point, point)
+			assert_eq(game.hud.aim_target, target)
+			assert_eq(game.player.facing, facing)
+			assert_false(game.hud.auto_free)
+			assert_true(game.hud.aiming)
+			assert_true(game.player.aim.active)
+		assert_true(game.hud.finger_up(7, over))
+		assert_true(_recorder().shots.is_empty())
+		assert_true(game.player.aim.active)
+		assert_true(game.hud.aim_button.button_pressed)
+		assert_true(game.hud.finger_up(8, pad_at))
+		assert_eq(_recorder().shots.size(), 1)
+		assert_false(game.player.aim.active)
+
+
+func _three_point_approach() -> PackedVector3Array:
+	var at: Vector3 = game.player.position
+	var route := PackedVector3Array([at + Vector3(1, 0, 0), at + Vector3(2, 0, 0), at + Vector3(3, 0, 0)])
+	game.combat._approach_melee(game.player, route)
+	assert_false(game.player.brain.has("goal"))
+	return route.duplicate()
+
+
+func test_melee_cancel_keeps_same_or_suffix_new_path_without_goal() -> void:
+	for suffix: bool in [false, true]:
+		_field({"melee_one_swing": false})
+		_begin_far_repeat(false)
+		var issued := _three_point_approach()
+		var replacement: PackedVector3Array = issued.slice(1) if suffix else issued.duplicate()
+		game.player.go_to(replacement, false)
+		assert_false(game.player.brain.has("goal"))
+		assert_true(game.hud.finger_cancel(7))
+		assert_eq(game.player.path, replacement, "좌표가 같아도 새 이동 발행은 보존한다")
+		_assert_no_target()
+		assert_false(game.player.hold_attack)
+
+
+func test_melee_cancel_clears_its_consumed_path_suffix() -> void:
+	_field({"melee_one_swing": false})
+	_begin_far_repeat(false)
+	var issued := _three_point_approach()
+	# 실제 걷기의 앞 점 소비와 같은 변경: go_to로 다시 발행하지 않는다.
+	game.player.path.remove_at(0)
+	assert_eq(game.player.path, issued.slice(1))
+	assert_true(game.hud.finger_cancel(7))
+	assert_true(game.player.path.is_empty())
+	_assert_no_target()
+
+
+func test_melee_cancel_clears_its_reissued_approach() -> void:
+	_field({"melee_one_swing": false})
+	_begin_far_repeat(false)
+	var issued := _three_point_approach()
+	game.player.go_to(issued, false)
+	game.combat._approach_melee(game.player, issued.slice(1))
+	assert_true(game.hud.finger_cancel(7))
+	assert_true(game.player.path.is_empty(), "근접 재탐색이 발행한 최신 길은 취소한다")
+	_assert_no_target()
+
+
+func test_melee_cancel_keeps_a_reissued_stair_path_without_goal() -> void:
+	_field({"melee_one_swing": false})
+	_begin_far_repeat(false)
+	var stair: Dictionary = {}
+	for candidate: Dictionary in game.stairs:
+		if not bool(candidate.get("ladder", false)):
+			stair = candidate
+			break
+	assert_false(stair.is_empty())
+	if stair.is_empty():
+		return
+	var p = game.player
+	p.position = game.lift(stair["cell"], int(stair["low"]))
+	var destination: Vector3 = game.lift(stair["cell"], int(stair["high"]))
+	var route: PackedVector3Array = game.find_path(p.position, destination, false)
+	assert_false(route.is_empty())
+	if route.is_empty():
+		return
+	game.combat._approach_melee(p, route)
+	p.brain["goal"] = destination
+	assert_eq(p.sled_id, 0)
+	game.actions.take_stairs(p, stair)
+	assert_false(p.brain.has("goal"), "계단 이동은 goal 없이 새 길을 낸다")
+	assert_eq(p.path, route)
+	assert_true(game.hud.finger_cancel(7))
+	assert_eq(p.path, route, "같은 좌표라도 실제 계단 이동 발행을 남긴다")
+	_assert_no_target()

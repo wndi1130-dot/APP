@@ -4351,7 +4351,7 @@ func finger_move(index: int, pos: Vector2) -> bool:
 		"pad":
 			_pad_move(f["pad"], pos, f)
 		"hand":
-			_hand_move(pos)
+			_hand_move(pos, f)
 		"button":
 			# A finger on the bag pane drags its list once it goes past a tap.
 			var held_key: Variant = f.get("button")
@@ -4444,7 +4444,7 @@ func finger_up(index: int, pos: Vector2) -> bool:
 				b.pressed.emit()
 			_finger_key_up(f)
 		"hand":
-			_release(pos)
+			_release(pos, f)
 		"portrait":
 			if pos.distance_to(f["start"]) < DRAG_PX and touch_rect(portrait).has_point(pos):
 				body_panel()
@@ -4493,7 +4493,9 @@ static func _owns_aim(f: Dictionary) -> bool:
 
 func _claim_aim(f: Dictionary) -> void:
 	for held: Dictionary in fingers.values():
-		held.erase("aim_owner")
+		if _owns_aim(held):
+			# Keep the spent gesture marked, even after the new owner lets go.
+			held["aim_owner"] = false
 	if not f.is_empty():
 		f["aim_owner"] = true
 
@@ -4801,6 +4803,9 @@ func _pad_move(b: Button, pos: Vector2, f: Dictionary) -> void:
 		return
 	if b != aim_button or not auto_aim:
 		return
+	# Direct callers without registered fingers retain their existing aim API.
+	if not _owns_aim(f) and (f.has("kind") or not fingers.is_empty()):
+		return
 	var over := _over_player(pos)
 	aim_armed = aim_armed or not over
 	aim_cancel = aim_armed and over
@@ -4830,6 +4835,8 @@ func _pad_move(b: Button, pos: Vector2, f: Dictionary) -> void:
 
 
 func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
+	if b == aim_button and not f.is_empty() and not _owns_aim(f) and not primary_melee(game.player):
+		return
 	if _pad_blocked(b):
 		if b in [attack_button, aim_button, shove_button]:
 			b.button_pressed = false
@@ -4946,6 +4953,8 @@ func _press(pos: Vector2, f: Dictionary = {}) -> void:
 	if gun:
 		if game.combat.start_aim(p):
 			_claim_aim(f)
+			auto_aim = false
+			auto_free = false
 			aiming = true
 			# An enemy at your feet: pressing on it must not count as letting go on yourself.
 			aim_armed = not _over_player(pos)
@@ -4956,10 +4965,13 @@ func _press(pos: Vector2, f: Dictionary = {}) -> void:
 		melee_pending = target
 
 
-func _release(pos: Vector2) -> void:
+func _release(pos: Vector2, f: Dictionary = {}) -> void:
 	pressing = false
+	# A superseded aim gesture is consumed even if the new owner lifted first.
+	if f.has("aim_owner") and not _owns_aim(f):
+		return
 	var p = game.player
-	if aiming:
+	if aiming and (f.is_empty() or _owns_aim(f)):
 		aiming = false
 		if p.aim.active:
 			if not (aim_cancel or (aim_armed and _over_player(pos))):
@@ -4968,14 +4980,17 @@ func _release(pos: Vector2) -> void:
 			p.aim.stop()
 		aim_cancel = false
 		aim_target = null
+		f.erase("aim_owner")
 		return
 	if melee_pending != null:
 		if not melee_holding:
 			# A tap keeps swinging until it is down (no tap per swing).
 			# 결정 564: 한 번씩을 켰을 때만 hold=false, 기본 연타는 그대로다.
-			_melee(melee_pending, not MeleePress.enabled(game.opts))
+			_melee(melee_pending, not MeleePress.enabled(game.opts), f)
 		melee_pending = null
 		melee_holding = false
+		return
+	if aiming:
 		return
 	if pos.distance_to(press_pos) > DRAG_PX:
 		return
@@ -4983,8 +4998,8 @@ func _release(pos: Vector2) -> void:
 
 
 ## The right thumb dragging the aim point (manual, or pressed on an enemy).
-func _hand_move(pos: Vector2) -> void:
-	if not (pressing and aiming):
+func _hand_move(pos: Vector2, f: Dictionary = {}) -> void:
+	if not (pressing and aiming) or (not f.is_empty() and not _owns_aim(f)):
 		return
 	var over := _over_player(pos)
 	aim_armed = aim_armed or not over
