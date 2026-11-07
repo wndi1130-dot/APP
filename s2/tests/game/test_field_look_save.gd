@@ -61,26 +61,37 @@ func _saved(game) -> Dictionary:
 ## FieldSave writes with full precision: seen 11-07 on zombies[*].angle and zombies[*].phase, both
 ## directions (9c04804ea755f43f -> 9d04804ea755f43f, 000000e07b3ca13f -> ffffffdf7b3ca13f), on all
 ## five fixed seeds, never two units. FieldSave._encode passes finite floats through untouched, so the
-## drift is the engine's decimal <-> double step, not this codec. A float counts as equal within
-## FLOAT_ULP_SLACK units; ints, strings, types, key sets and sizes stay exact, and two units or more
-## still fails, so a real codec change cannot hide behind this.
+## drift is the engine's decimal <-> double step, not this codec. Only comparisons across the JSON file
+## round trip (_assert_saved_equal) count a float as equal within FLOAT_ULP_SLACK units; checks that an
+## in-memory source was not mutated (_assert_unchanged) stay bit-exact, so a one-unit change made before
+## the JSON step still fails there. Ints, strings, types, key sets and sizes stay exact everywhere. Two
+## units or more fails the round trip too, which catches most precision losses (a float32 cut of an
+## ordinary value lands millions of units away); a value already exact in float32 cut by one unit is the
+## one case the round trip alone cannot tell apart, and the exact source checks cover it before JSON.
 const FLOAT_ULP_SLACK: int = 1
 const FAR_ULPS: int = 9223372036854775807
 
 
-## Units in the last place between two float64s of the same sign; FAR_ULPS when they cannot be near
-## (NaN, infinity, opposite signs).
+## Units in the last place between two finite float64s with the same sign bit; FAR_ULPS for NaN, an
+## infinity unequal to the other value, or opposite sign bits. Equal values (the same infinity, or +0.0
+## and -0.0, which compare equal) are 0 apart.
 static func _float_ulps(a: float, b: float) -> int:
 	if a == b:
 		return 0
-	if is_nan(a) or is_nan(b) or is_inf(a) or is_inf(b) or signf(a) != signf(b):
+	if is_nan(a) or is_nan(b) or is_inf(a) or is_inf(b):
 		return FAR_ULPS
 	var bytes := PackedByteArray()
 	bytes.resize(16)
 	bytes.encode_double(0, a)
 	bytes.encode_double(8, b)
-	# Same sign: the raw bit patterns sit in one half of int64 and count up with the magnitude.
-	return absi(bytes.decode_s64(0) - bytes.decode_s64(8))
+	var bits_a := bytes.decode_s64(0)
+	var bits_b := bytes.decode_s64(8)
+	# The sign bit, not signf(): 0.0 and the smallest subnormal share a sign bit one unit apart, while
+	# signf(0.0) is 0. With one sign bit the raw patterns sit in one half of int64 and count up with
+	# the magnitude, so their difference cannot overflow.
+	if (bits_a < 0) != (bits_b < 0):
+		return FAR_ULPS
+	return absi(bits_a - bits_b)
 
 
 static func _float_from_bits(hex_le: String) -> float:
@@ -96,18 +107,18 @@ func _save_value(value: Variant) -> String:
 	return "%s (%s)" % [var_to_str(value), type_string(typeof(value))]
 
 
-func _save_difference(actual: Variant, expected: Variant, at: String = "save") -> String:
+func _save_difference(actual: Variant, expected: Variant, at: String = "save", ulp_slack: int = FLOAT_ULP_SLACK) -> String:
 	if typeof(actual) == typeof(expected) and actual == expected:
 		return ""
 	if actual is float and expected is float:
-		if _float_ulps(actual, expected) <= FLOAT_ULP_SLACK:
+		if _float_ulps(actual, expected) <= ulp_slack:
 			return ""
 	elif actual is Dictionary and expected is Dictionary:
 		for key: Variant in expected:
 			var path := "%s[%s]" % [at, str(key)]
 			if not actual.has(key):
 				return "%s: loaded=<missing>, saved=%s" % [path, _save_value(expected[key])]
-			var difference := _save_difference(actual[key], expected[key], path)
+			var difference := _save_difference(actual[key], expected[key], path, ulp_slack)
 			if difference != "":
 				return difference
 		for key: Variant in actual:
@@ -118,17 +129,23 @@ func _save_difference(actual: Variant, expected: Variant, at: String = "save") -
 		if actual.size() != expected.size():
 			return "%s.size: loaded=%d, saved=%d" % [at, actual.size(), expected.size()]
 		for i: int in expected.size():
-			var difference := _save_difference(actual[i], expected[i], "%s[%d]" % [at, i])
+			var difference := _save_difference(actual[i], expected[i], "%s[%d]" % [at, i], ulp_slack)
 			if difference != "":
 				return difference
 		return ""
 	return "%s: loaded=%s, saved=%s" % [at, _save_value(actual), _save_value(expected)]
 
 
+## Across the JSON file round trip: exact except a float may sit FLOAT_ULP_SLACK units off (see
+## FLOAT_ULP_SLACK); the message names the first key that differs with both values' float64 bits.
 func _assert_saved_equal(actual: Dictionary, expected: Dictionary, why: String) -> void:
-	# Exact except a float may sit FLOAT_ULP_SLACK units off (see FLOAT_ULP_SLACK); the message
-	# names the first key that differs with both values' float64 bits.
 	var difference := _save_difference(actual, expected)
+	assert_true(difference.is_empty(), "%s\n%s" % [why, difference])
+
+
+## An in-memory source against its own deep copy, no JSON in between: every float bit-exact.
+func _assert_unchanged(actual: Dictionary, expected: Dictionary, why: String) -> void:
+	var difference := _save_difference(actual, expected, "save", 0)
 	assert_true(difference.is_empty(), "%s\n%s" % [why, difference])
 
 
@@ -361,7 +378,7 @@ func _assert_file_resume_and_immediate_resave(saved: Dictionary, fixture: Dictio
 		assert_true(row.has("look_code"), "immediate disk resave persists every migrated code")
 		assert_eq(int(row.get("look_code", -1)), int(expected[int(row["id"])]))
 	assert_eq(game.rng.state, int(fixture["rng_state"]), "disk resave consumes no simulation dice")
-	_assert_saved_equal(saved, original, "startup and immediate resave do not rewrite the input snapshot")
+	_assert_unchanged(saved, original, "startup and immediate resave do not rewrite the input snapshot")
 
 
 func test_real_file_round_trip_without_seed_option_preserves_mixed_legacy_looks() -> void:
@@ -370,7 +387,7 @@ func test_real_file_round_trip_without_seed_option_preserves_mixed_legacy_looks(
 	var untouched: Dictionary = saved.duplicate(true)
 	assert_false((saved["start_opts"] as Dictionary).has("seed"))
 	assert_true(FieldSave.write(saved, AT))
-	_assert_saved_equal(saved, untouched, "write must not mutate its source snapshot")
+	_assert_unchanged(saved, untouched, "write must not mutate its source snapshot")
 	assert_true(FileAccess.file_exists(AT))
 	var loaded := FieldSave.read(AT)
 	_assert_saved_equal(loaded, saved, "seed %d: write/read retains all missing and explicit codes before migration" % int(fixture["seed"]))
@@ -443,6 +460,27 @@ func test_save_difference_allows_one_float_ulp_and_nothing_else() -> void:
 	assert_eq(_save_difference({"a": [1, 2]}, {"a": [1, 2, 3]}), "save[a].size: loaded=2, saved=3")
 
 
+func test_ulp_count_reads_the_sign_bit_and_source_checks_allow_no_slack() -> void:
+	var tiny := _float_from_bits("0100000000000000")        # smallest positive subnormal
+	var minus_tiny := _float_from_bits("0100000000000080")  # smallest negative subnormal
+	var minus_zero := _float_from_bits("0000000000000080")
+	assert_eq(_float_ulps(0.0, tiny), 1, "0.0 and the smallest subnormal share a sign bit, one unit apart")
+	assert_eq(_float_ulps(minus_zero, minus_tiny), 1, "-0.0 and the smallest negative subnormal, one unit")
+	assert_eq(_float_ulps(0.0, minus_tiny), FAR_ULPS, "opposite sign bits never count as near")
+	var x := _float_from_bits("000000e07b3ca13f")
+	var one_down := _float_from_bits("ffffffdf7b3ca13f")
+	assert_eq(_float_ulps(-x, -one_down), 1, "negative neighbours count the same way")
+	assert_eq(_float_ulps(INF, INF), 0, "the same infinity is an equal value, not a near one")
+	assert_eq(_float_ulps(INF, -INF), FAR_ULPS)
+	# A float32 cut of an ordinary value lands far outside the round-trip slack.
+	var cut: float = PackedFloat32Array([0.1])[0]
+	assert_true(_float_ulps(cut, 0.1) > 1000000, "float32 0.1 is %d units from float64 0.1" % _float_ulps(cut, 0.1))
+	# The in-memory source checks (_assert_unchanged) pass slack 0: one unit before JSON still fails.
+	assert_eq(_save_difference({"p": one_down}, {"p": x}), "", "round-trip comparison keeps one unit")
+	var exact := _save_difference({"z": [{"p": one_down}]}, {"z": [{"p": x}]}, "save", 0)
+	assert_true(exact.contains("save[z][0][p]") and exact.contains("float64"), "slack 0 names the key and bits: %s" % exact)
+
+
 func test_engine_json_float_round_trip_stays_within_one_ulp() -> void:
 	# The saved bits from the five 11-07 failures; the log line says what the engine does today.
 	for hex: String in ["9c04804ea755f43f", "000000e07b3ca13f", "000000607836ed3f",
@@ -468,7 +506,7 @@ func test_int64_seed_and_rng_payload_round_trip_preserves_values_and_input() -> 
 		saved["rng_probe"] = FieldSave._freeze(null, rng)
 		var untouched: Dictionary = saved.duplicate(true)
 		assert_true(FieldSave.write(saved, AT), "write seed %d" % seed_value)
-		_assert_saved_equal(saved, untouched, "source unchanged for seed %d" % seed_value)
+		_assert_unchanged(saved, untouched, "source unchanged for seed %d" % seed_value)
 		var loaded := FieldSave.read(AT)
 		_assert_saved_equal(loaded, saved, "exact int64 file round trip for seed %d" % seed_value)
 		assert_eq(loaded.get("seed"), seed_value)
@@ -485,7 +523,7 @@ func test_fixed_int64_seeds_preserve_full_capture_through_real_files() -> void:
 		assert_eq(saved["seed"], seed_value)
 		assert_false((saved["start_opts"] as Dictionary).has("seed"))
 		assert_true(FieldSave.write(saved, AT), "full capture seed %d" % seed_value)
-		_assert_saved_equal(saved, untouched, "full capture input unchanged, seed %d" % seed_value)
+		_assert_unchanged(saved, untouched, "full capture input unchanged, seed %d" % seed_value)
 		_assert_saved_equal(FieldSave.read(AT), saved, "full capture exact round trip, seed %d" % seed_value)
 		# Bound scene lifetime: only this iteration's source exists during the next build.
 		var source = fields.pop_back()
