@@ -385,9 +385,15 @@ func _start_task(script: Script) -> void:
 ## On the worker: the map and what is made ahead from it (make_ready), nothing in
 ## the scene tree.
 static func _build_off_thread(box: Dictionary, script: Script, run_seed: int, form: String, form_m: float, band: String, vat_vertices: int, bounds_rule: int = -1, side_path_rule: int = SidePath.RULE) -> void:
+	var started: int = Time.get_ticks_usec()
 	box["data"] = make_ready(script, run_seed, form, form_m, band, bounds_rule, side_path_rule)
+	var times: Dictionary = box["data"].get_or_add("_ms", {})
+	times["worker_make_ready"] = float(Time.get_ticks_usec() - started) / 1000.0
+	var mark: int = Time.get_ticks_usec()
 	if vat_vertices > 0:
 		box["vat"] = VatBaker.build(vat_vertices)
+	times["worker_vat"] = float(Time.get_ticks_usec() - mark) / 1000.0 if vat_vertices > 0 else 0.0
+	times["worker_total"] = float(Time.get_ticks_usec() - started) / 1000.0
 
 
 ## The map script's static build; in the stop's form, its ground (stop_ground.gd: an
@@ -398,30 +404,73 @@ static func _build_off_thread(box: Dictionary, script: Script, run_seed: int, fo
 ## (building_view.gd), the ground's and the floors' arrays (map_view.gd, 2a) with the
 ## maps they fit, the rooms' finish (room_finish.gd) and the plan of the woods round
 ## the map (edge_band.gd plan_ahead). Data only, no nodes.
-static func make_ready(script: Script, run_seed: int, form: String = "", form_m: float = -1.0, band: String = "", bounds_rule: int = -1, side_path_rule: int = SidePath.RULE) -> Dictionary:
-	var d: Dictionary = FieldMaps.build_from(script, band)
+static func make_ready(script: Script, run_seed: int, form: String = "", form_m: float = -1.0, band: String = "", bounds_rule: int = -1, side_path_rule: int = SidePath.RULE, bounds_solver: Callable = Callable(), sweep_times: Dictionary = {}) -> Dictionary:
+	var started: int = Time.get_ticks_usec()
+	var mark: int = started
+	var ms: Dictionary = {}
+	var d: Dictionary = FieldMaps.build_from(script, band, bounds_rule, sweep_times)
+	ms["build_from"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	if not form.is_empty():
 		d = StopGround.apply(d, form, run_seed, form_m)
+	ms["stop_ground"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	d = StopGround.widen_view(d)
+	ms["widen_view"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	if run_seed >= 0:
 		d = SidePath.add(d, run_seed, side_path_rule)
 		d["side_path_rule"] = side_path_rule  # 샛길 대상이 아닌 첫 정차·이야기 지도도 같은 옵션으로 재사용.
 		d["_side_seed"] = run_seed
+		ms["side_path"] = float(Time.get_ticks_usec() - mark) / 1000.0
+		mark = Time.get_ticks_usec()
 		# 경계는 샛길이 확정된 자료에만 찍는다. 씨앗을 모르면 필드 시작이 샛길 다음에 찍는다
-		# (field_game.gd with_side_path 뒤 MapBounds.apply).
-		d = MapBounds.apply(d, bounds_rule)
+		# (field_game.gd with_side_path 뒤 MapBounds.finish).
+		var base_factory: Callable = func() -> Dictionary:
+			var base: Dictionary = FieldMaps.build_from(script, band, 0)
+			base = StopGround.apply(base, form, run_seed, form_m)
+			base = StopGround.widen_view(base)
+			base = SidePath.add(base, run_seed, side_path_rule)
+			base["side_path_rule"] = side_path_rule
+			base["_side_seed"] = run_seed
+			return base
+		d = MapBounds.finish(d, base_factory, bounds_rule, bounds_solver)
+	ms["bounds"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	d["_building_plan"] = BuildingView.plan(d)
+	ms["building_plan"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	var g: FieldGrid = d["grid"]
 	d["_ground_arrays"] = MapView.ground_arrays(g, MapView.ground_details(g))
 	d["_ground_key"] = MapView.ground_key(g)
 	var keys: Dictionary = {}
 	d["_floor_arrays"] = MapView.level_floor_arrays(d.get("levels", {}), keys)
 	d["_floor_keys"] = keys
+	ms["ground_arrays"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	d["_room_finish"] = RoomFinish.build(d)
-	d["_edge_plan"] = EdgeBand.plan_ahead(d)
+	ms["room_finish"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
+	d["_edge_plan"] = EdgeBand.plan_ahead(d, sweep_times)
+	ms["edge_plan"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	# The walk from the train doors and the clumps of trees to fell (work_spots.gd);
 	# the field's dress adds the stretch's food depot from the same walk.
-	WorkSpots.dress(d, -1, run_seed)
+	if d.has("bounds_stamp"):
+		EdgeBand.dress_bounds_work(d, -1, run_seed)
+	else:
+		WorkSpots.dress(d, -1, run_seed)
+	ms["work_spots"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	if d.has("bounds_stamp"):
+		mark = Time.get_ticks_usec()
+		EdgeBand.prepare_bounds_groves(d)
+		ms["bounds_groves"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	ms["total"] = float(Time.get_ticks_usec() - started) / 1000.0
+	ms.merge(d.get("_ms", {}))
+	if d.has("bounds_stamp") and bool(sweep_times.get("_sweep", false)):
+		for key: String in sweep_times:
+			if key != "_sweep": ms[key] = sweep_times[key]
+	d["_ms"] = ms
 	return d
 
 

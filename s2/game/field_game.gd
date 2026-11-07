@@ -494,7 +494,7 @@ func _ready() -> void:
 	# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd),
 	# on a map built here or handed over built (the stop loader's): the same seed gives the same way.
 	# A resumed stop's ground is the one its save stood on (field_save.gd resume_opts).
-	var fresh_map: Callable = func() -> Dictionary: return FieldMaps.build_from(map_script, region) if map_script != null else FieldMaps.build(place, region)
+	var fresh_map: Callable = func() -> Dictionary: return FieldMaps.build_from(map_script, region, int(opts.get("bounds_rule", -1))) if map_script != null else FieldMaps.build(place, region, int(opts.get("bounds_rule", -1)))
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary else fresh_map.call()
 	var side_path_rule: int = int(opts.get("side_path_rule", SidePath.RULE))
 	if not MapBounds.can_reuse(stop_map, int(opts.get("bounds_rule", -1))) or ((stop_map.has("side_path") or stop_map.has("_side_seed")) and int(stop_map.get("side_path_rule", 0)) != side_path_rule):
@@ -509,13 +509,21 @@ func _ready() -> void:
 		stop_map = shape_view(stop_map, int(opts.get("stop_view_rows", StopGround.VIEW_ASK)), int(opts.get("stop_view_cols", StopGround.VIEW_ASK)),
 			ground_form, rng.seed, ground_m, fresh_map, end_gap)
 	stop_map = with_side_path(stop_map, rng.seed, side_path_rule)
-	_take_map(MapBounds.apply(stop_map, int(opts.get("bounds_rule", -1))))
+	var base_factory: Callable = func() -> Dictionary:
+		var base: Dictionary = FieldMaps.build_from(map_script, region, 0) if map_script != null else FieldMaps.build(place, region, 0)
+		base = StopGround.apply(base, ground_form, rng.seed, ground_m, end_gap)
+		base = StopGround.widen_view(base, int(opts.get("stop_view_rows", StopGround.VIEW_ASK)), int(opts.get("stop_view_cols", StopGround.VIEW_ASK)))
+		return with_side_path(base, rng.seed, side_path_rule)
+	_take_map(MapBounds.finish(stop_map, base_factory, int(opts.get("bounds_rule", -1))))
 	set_stop_form(StopForm.resolve(opts, String(data["place_kind"])))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
 	# no fire at the first leg's fifth stop), before anything is put on the map.
 	if opts.get("departure") is Dictionary:
 		RouteStops.dress(data, int((opts["departure"] as Dictionary).get("segment", 0)))
-	WorkSpots.dress(data, int((opts["departure"] as Dictionary).get("segment", 0)) if opts.get("departure") is Dictionary else -1, rng.seed)
+	if data.has("bounds_stamp"):
+		EdgeBand.dress_bounds_work(data, int((opts["departure"] as Dictionary).get("segment", 0)) if opts.get("departure") is Dictionary else -1, rng.seed)
+	else:
+		WorkSpots.dress(data, int((opts["departure"] as Dictionary).get("segment", 0)) if opts.get("departure") is Dictionary else -1, rng.seed)
 	# Where the fallen stood is read into keys once (J06; the boxes' are in dress).
 	LootRules.place_keys(data.get("buildings", []))
 	# The boxes get their named things, from this run's seed (decision 423-8).
@@ -1711,7 +1719,10 @@ static func with_side_path(map: Dictionary, run_seed: int, side_path_rule: int =
 	if not map.has("side_path") and place_id not in ["", SidePath.FIRST_STOP] and SidePath.rolls(place_id, run_seed):
 		for key in AHEAD_KEYS:
 			map.erase(key)
-	return SidePath.add(map, run_seed, side_path_rule)
+	var shaped: Dictionary = SidePath.add(map, run_seed, side_path_rule)
+	if place_id in MapBounds.Rule.ON:
+		shaped["_side_seed"] = run_seed
+	return shaped
 
 
 ## A handed view is reusable only on the requested rows and columns.
