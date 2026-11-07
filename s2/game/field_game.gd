@@ -733,7 +733,7 @@ func _apply_fx() -> void:
 		_take_air()
 		# The first light update sets the lights, the floors and the grade.
 		atmo_min = -INF
-		fx_params = Atmosphere.params(atmo, weather.wind_dir, snow_cover.cover())
+		fx_params = _fx_params_now(hour, snow_cover.cover())
 		FxState.apply(fx_params)
 		fx_light = Atmosphere.light(atmo, float(fx_params["fx_snow"]))
 		fx_light_night = Atmosphere.light(atmosphere_at(0.0), float(fx_params["fx_snow"]))
@@ -741,7 +741,7 @@ func _apply_fx() -> void:
 	# A storm keeps its stage's light; the look is still made for breath and the like.
 	atmo = atmosphere_at(picture_hour())
 	_set_sky_photo()
-	fx_params = FxState.params_for(look_kinds, weather.ambient_c, weather.wind_dir, weather.wind, hour, snow_cover.cover())
+	fx_params = _fx_params_now(hour, snow_cover.cover())
 	FxState.apply(fx_params)
 	fx_light = FxState.lighting_for(look_kinds, hour)
 	fx_light_night = FxState.lighting_for(look_kinds, 0.0)
@@ -751,6 +751,17 @@ func _apply_fx() -> void:
 		fx_light["sun_energy"] = float(clear_sky["sun_energy"]) * float(storm["sun"])
 		fx_light["sun_color"] = Color(fx_light["sun_color"]).lerp(storm["sun_color"], 0.6)
 		fx_light["ambient_color"] = Color(fx_light["ambient_color"]).lerp(storm["ambient_color"], 0.6)
+
+
+## Arrival and later snow updates must use the same picture weather: warm
+## sleet draws rain, whose lying snow is halved. Storms keep their stage inputs.
+func _fx_params_now(hour: float, cover: float) -> Dictionary:
+	if storm.is_empty() and not atmo.is_empty():
+		return Atmosphere.params(atmo, weather.wind_dir, cover)
+	# atmo starts empty; _ready initializes weather then _apply_fx fills atmo
+	# before any frame update. With initialized weather but no frame, retain
+	# the old rule-weather fallback, just as snow accumulation does below.
+	return FxState.params_for(look_kinds, weather.ambient_c, weather.wind_dir, weather.wind, hour, cover)
 
 
 ## The fires' sparks thin out in what is drawn falling (the atmosphere's kinds:
@@ -777,7 +788,8 @@ func _update_snow() -> void:
 	if snow_tracks != null:
 		snow_tracks.refill(now - snow_at_min, SnowCover.rate_cm_h(kinds_now, temp_now))
 	snow_at_min = now
-	var p := FxState.params_for(look_kinds, weather.ambient_c, weather.wind_dir, weather.wind, now / 60.0, snow_cover.cover())
+	# Reuse arrival's rain/snow branches; only the snow global may change here.
+	var p := _fx_params_now(now / 60.0, snow_cover.cover())
 	if absf(float(p["fx_snow"]) - float(fx_params["fx_snow"])) < 0.002:
 		return
 	fx_params["fx_snow"] = p["fx_snow"]
