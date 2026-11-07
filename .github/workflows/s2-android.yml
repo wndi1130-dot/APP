@@ -3,9 +3,9 @@ name: S2 Android field graybox
 on:
   push:
     branches: [main]
-    paths: [s2/**, .github/workflows/s2-android.yml]
+    paths: [s2/**, .github/workflows/s2-android.yml, .github/gut_check.py, .github/test_gut_check.py, .github/gut-times.json]
   pull_request:
-    paths: [s2/**, .github/workflows/s2-android.yml]
+    paths: [s2/**, .github/workflows/s2-android.yml, .github/gut_check.py, .github/test_gut_check.py, .github/gut-times.json]
 
 permissions:
   contents: read
@@ -117,26 +117,17 @@ jobs:
           print(f'shard {shard}/{total}: {len(mine)} of {len(scripts)} test scripts, '
                 f'about {loads[shard - 1] / 60:.1f} of {sum(loads) / 60:.1f} minutes by the table')
           PY
+          # The pass check is tested first, so a broken check cannot wave the shard through.
+          python3 .github/test_gut_check.py
+          # No report or log from an earlier run may stand in for this one.
+          rm -f s2/build/gut-results.xml s2/build/gut.log
           "$GODOT_BIN" --headless --path s2 --script addons/gut/gut_cmdln.gd \
             -gtest="$(paste -sd, s2/build/gut-shard.txt)" -gexit \
             -gjunit_xml_file=res://build/gut-results.xml 2>&1 | tee s2/build/gut.log
-          # Require a real passing test report, even if runner exits zero.
-          # Every `func test_` in this shard's scripts must appear as a case, so a
-          # test script GUT could not load cannot drop out silently.
-          python3 - <<'PY'
-          import pathlib, re
-          import xml.etree.ElementTree as ET
-          mine = pathlib.Path('s2/build/gut-shard.txt').read_text().split()
-          expected = sum(len(re.findall(r'(?m)^func test_', pathlib.Path('s2', s[len('res://'):]).read_text()))
-                         for s in mine)
-          report = ET.parse('s2/build/gut-results.xml').getroot()
-          cases = list(report.iter('testcase'))
-          if any(list(case.iter('failure')) or list(case.iter('error')) or list(case.iter('skipped')) for case in cases):
-              raise SystemExit('Failed, errored or skipped GUT tests')
-          if expected == 0 or len(cases) < expected:
-              raise SystemExit(f'GUT ran {len(cases)} cases but this shard defines {expected} test functions')
-          print(f'GUT report: {len(cases)} passing test cases ({expected} test functions in {len(mine)} scripts)')
-          PY
+          # Require a real passing test report, even if runner exits zero: every `func test_` of every
+          # script, under that script (a script GUT could not load cannot drop out silently, nor hide
+          # behind another script's extra cases), all "pass", and no SCRIPT ERROR in the run log.
+          python3 .github/gut_check.py s2/build/gut-shard.txt s2/build/gut-results.xml s2/build/gut.log
 
       - name: Upload GUT logs
         if: always()

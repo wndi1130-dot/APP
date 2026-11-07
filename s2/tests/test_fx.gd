@@ -290,9 +290,16 @@ func _uniform_default(code: String, uniform: String) -> PackedFloat64Array:
 	return out
 
 
+## Shader text without its // and /* */ comments, so a commented-out declaration cannot pass for the live one.
+func _without_comments(code: String) -> String:
+	var re := RegEx.new()
+	re.compile("/\\*[\\s\\S]*?\\*/|//[^\\n]*")
+	return re.sub(code, "", true)
+
+
 func test_model_grade_defaults_are_the_user_values() -> void:
 	# Weathered's uniform defaults and FxState.MODEL_GRADE are one set of numbers.
-	var code := FileAccess.get_file_as_string(DIR + "weathered.gdshaderinc")
+	var code := _without_comments(FileAccess.get_file_as_string(DIR + "weathered.gdshaderinc"))
 	for key in FxState.MODEL_GRADE:
 		var want = FxState.MODEL_GRADE[key]
 		var got := _uniform_default(code, key)
@@ -338,6 +345,44 @@ func test_model_grade_presses_loud_colours() -> void:
 	assert_false(_sky_blue(grey))
 	# Black stays black; alpha is kept.
 	assert_eq(FxState.grade_color(Color(0, 0, 0, 0.5)), Color(0, 0, 0, 0.5))
+
+
+func test_model_grade_mirror_uses_the_linear_cool_the_shaders_get() -> void:
+	# grade_cool is a `source_color` uniform in every shader that grades, so the shader multiplies by its
+	# linear value; the mirror must too (it multiplied the sRGB numbers: greys came out half as cold).
+	for path in [DIR + "weathered.gdshaderinc", "res://game/world/building.gdshader",
+			"res://game/actors/dead_vat.gdshaderinc"]:
+		var re := RegEx.new()
+		re.compile("uniform\\s+vec3\\s+grade_cool\\s*:\\s*source_color\\b")
+		assert_not_null(re.search(_without_comments(FileAccess.get_file_as_string(path))),
+				path + ": grade_cool is source_color")
+	var k := float(FxState.MODEL_GRADE["grade_cool_mix"])
+	var cool := (FxState.MODEL_GRADE["grade_cool"] as Color).srgb_to_linear()
+	var grey := 0.5
+	var got := FxState.grade_color(Color(grey, grey, grey))
+	var val := float(FxState.MODEL_GRADE["grade_value"])
+	assert_almost_eq(got.r, grey * val * lerpf(1.0, cool.r, k), 1e-5)
+	assert_almost_eq(got.g, grey * val * lerpf(1.0, cool.g, k), 1e-5)
+	assert_almost_eq(got.b, grey * val * lerpf(1.0, cool.b, k), 1e-5)
+	# The sRGB numbers would give r 0.378; the linear cool gives about 0.348.
+	assert_lt(got.r, 0.36)
+	# Coloured inputs with each channel the largest, for the default press and the living-colour press
+	# (accent_saturation 0.75, cool mix 0.35 x 0.6), against numbers worked out apart from this code
+	# (exact sRGB curve: linear cool 0.570482, 0.692071, 0.890005).
+	var lively := FxState.MODEL_GRADE.duplicate()
+	lively["grade_saturation"] = 0.75
+	lively["grade_cool_mix"] = 0.21
+	var cases := [
+		[Color(0.6, 0.3, 0.1), Vector3(0.418037, 0.340205, 0.295662), Vector3(0.447622, 0.287615, 0.180238)],
+		[Color(0.2, 0.5, 0.3), Vector3(0.254306, 0.365812, 0.323257), Vector3(0.20516, 0.383487, 0.280371)],
+		[Color(0.1, 0.2, 0.7), Vector3(0.299593, 0.347522, 0.551902), Vector3(0.186509, 0.249267, 0.560741)],
+	]
+	for row: Array in cases:
+		var c: Color = row[0]
+		for pair: Array in [[FxState.MODEL_GRADE, row[1]], [lively, row[2]]]:
+			var out := FxState.grade_color(c, pair[0])
+			var want: Vector3 = pair[1]
+			assert_almost_eq(Vector3(out.r, out.g, out.b), want, Vector3.ONE * 1e-4, str(c))
 
 
 func test_low_cold_sun() -> void:

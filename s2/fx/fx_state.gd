@@ -152,12 +152,15 @@ const MODEL_GRADE: Dictionary = {
 const MODEL_ROUGHNESS := 0.9
 
 
-## The same sum as fx_model_grade in fx_common.gdshaderinc, for tests and tools.
+## The same sum as fx_model_grade in fx_common.gdshaderinc, for tests and tools. `c` is linear, as the
+## shaders' albedo is. grade_cool is written as the shaders write their `source_color` default (sRGB) and
+## Godot hands the shader its linear value, so the mirror converts it too: multiplying the sRGB numbers left
+## the mirror about 6 % brighter in luminance than the screen and half as cold on greys (2026-11-07).
 static func grade_color(c: Color, g: Dictionary = MODEL_GRADE) -> Color:
 	var v := maxf(c.r, maxf(c.g, c.b))
 	var sat := float(g["grade_saturation"])
 	var val := float(g["grade_value"])
-	var cool: Color = g["grade_cool"]
+	var cool: Color = (g["grade_cool"] as Color).srgb_to_linear()
 	var k := float(g["grade_cool_mix"])
 	var out := Color(lerpf(v, c.r, sat), lerpf(v, c.g, sat), lerpf(v, c.b, sat)) * val
 	out = Color(lerpf(out.r, out.r * cool.r, k), lerpf(out.g, out.g * cool.g, k), lerpf(out.b, out.b * cool.b, k))
