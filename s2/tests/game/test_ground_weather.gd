@@ -114,7 +114,8 @@ func test_blizzard_picture_wind_floor_preserves_other_kinds_and_plain_frame() ->
 func test_storm_picture_wind_crosses_dust_gate_without_changing_rule_wind() -> void:
 	var game := _stop(true)
 	assert_almost_eq(game.weather.wind, 0.4, 0.00001, "body weather stays put")
-	assert_gte(Vector3(game.fx_params["fx_wind"]).z, 0.9)
+	# fx_wind is a float32 Vector3: 0.9 reads back as 0.8999999762, so compare within a tolerance.
+	assert_almost_eq(Vector3(game.fx_params["fx_wind"]).z, 0.9, 0.00001, "storm blizzard takes the picture wind floor")
 	assert_gt(Vector3(game.fx_params["fx_wind"]).z, 0.5, "dust's lower wind threshold")
 
 
