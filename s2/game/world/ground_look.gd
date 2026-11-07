@@ -1,10 +1,11 @@
 extends RefCounted
 ## What lies on the ground, drawn (decision 444, 차이 6·7의 앞단): every thing in
 ## game.ground_items but the ones still shining in the snow (decision 423 (11):
-## those are a light only, field_hud.gd) gets a grey-box shape of its kind on its
-## floor, so a coat taken off, what a fallen one had, a thrown tin or a spent
+## those are a light only, field_hud.gd) gets its pre-baked icon model on its
+## floor (decision 550), so a coat taken off, what a fallen one had, a thrown tin or a spent
 ## arrow is seen where it lies; before, it was found only by walking into 「줍기」.
-## No word and no icon (결정 417); the real models are art3d's.
+## No word and no flat icon (결정 417). Missing/failed bakes and BOX_ONLY things
+## keep their old boxes; runtime never calls an icon builder.
 ##
 ## 금지선: no case, bundle or bag shapes and no heaps. A sack or a crate at most;
 ## things at one spot are spread over their cell and no more than PER_CELL are
@@ -15,6 +16,7 @@ const FieldItems = preload("res://game/sim/field_items.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const W = preload("res://game/sim/weapons.gd")
 const Carry = preload("res://game/sim/carry.gd")
+const GroundModels = preload("res://game/world/ground_models.gd")
 
 const LEVEL_H: float = 3.0
 ## Drawn on one cell at most.
@@ -74,7 +76,7 @@ static func kind_of(g: Dictionary) -> String:
 	return "small"
 
 
-## The boxes to draw: [{"lv", "size", "at" (centre), "color"}], in list order.
+## [{"lv", "model", "yaw", "size", "at" (footprint centre on floor), "color"}].
 static func pieces(items: Array) -> Array:
 	var out: Array = []
 	var on_cell: Dictionary = {}  # Vector3i(x, y, lv) -> drawn there so far
@@ -96,14 +98,19 @@ static func pieces(items: Array) -> Array:
 			at += Vector3(cos(turn), 0, sin(turn)) * SPREAD
 		var look: Array = LOOKS[kind_of(g)]
 		var size: Vector3 = look[0]
-		if (h >> 9) & 1 == 1:
-			size = Vector3(size.z, size.y, size.x)
+		var id: String = String(g.get("id", ""))
+		var weapon: Dictionary = W.get_data(id)
+		var icon: String = String(weapon.get("icon", FieldItems.icon(id)))
+		var model: String = GroundModels.resolve(id, icon)
+		if not model.is_empty():
+			size = GroundModels.template(model)["size"]
+		var yaw: float = deg_to_rad(float(posmod(h >> 9, 360)))
 		# Vertex alpha 0 reads as under a roof in world_vis.gdshader: no snow,
 		# rain or ground grain over it, so a grey thing does not go white and
 		# vanish (what lies buried shines instead, decision 423 (11)).
 		var color: Color = look[1]
 		color.a = 0.0
-		out.append({"lv": lv, "size": size, "at": at + Vector3(0, size.y / 2.0, 0), "color": color})
+		out.append({"lv": lv, "model": model, "yaw": yaw, "size": size, "at": at, "color": color})
 	return out
 
 
@@ -125,5 +132,7 @@ static func rim(piece: Dictionary) -> Dictionary:
 	var size: Vector3 = piece["size"]
 	var at: Vector3 = piece["at"]
 	var outer := Vector2(size.x + 2.0 * RIM, size.z + 2.0 * RIM)
-	return {"lv": piece["lv"], "at": Vector3(at.x, at.y - size.y / 2.0 + RIM_LIFT, at.z), "size": outer,
+	# Existing container/sled bars pass a box centre, without the new model key.
+	var floor_y: float = at.y if piece.has("model") else at.y - size.y / 2.0
+	return {"lv": piece["lv"], "at": Vector3(at.x, floor_y + RIM_LIFT, at.z), "size": outer, "yaw": float(piece.get("yaw", 0.0)),
 		"inner": Vector2(size.x / outer.x, size.z / outer.y)}

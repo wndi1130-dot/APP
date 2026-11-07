@@ -7,6 +7,18 @@ const FieldGame = preload("res://game/field_game.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const TwoLids = preload("res://tests/game/fixtures/two_lids_map.gd")
 const MapView = preload("res://game/world/map_view.gd")
+const GroundModels = preload("res://game/world/ground_models.gd")
+
+var _old_cache: Dictionary = {}
+
+
+func before_each() -> void:
+	_old_cache = GroundModels.cache_snapshot()
+	GroundModels.restore_cache({})
+
+
+func after_each() -> void:
+	GroundModels.restore_cache(_old_cache)
 
 
 func test_each_thing_has_a_shape_of_its_kind() -> void:
@@ -69,9 +81,9 @@ func test_it_lies_on_its_own_floor() -> void:
 	]
 	var out: Array = GroundLook.pieces(items)
 	assert_eq(out[0]["lv"], 1)
-	assert_almost_eq(float(out[0]["at"].y), 3.0 + out[0]["size"].y / 2.0, 0.001, "on the floor above, not in the air")
+	assert_almost_eq(float(out[0]["at"].y), 3.0, 0.001, "footprint centre on the upper floor")
 	assert_eq(out[1]["lv"], -1)
-	assert_almost_eq(float(out[1]["at"].y), -3.0 + out[1]["size"].y / 2.0, 0.001)
+	assert_almost_eq(float(out[1]["at"].y), -3.0, 0.001)
 	assert_eq(GroundLook.pieces(items).hash(), out.hash(), "the same list, the same spots")
 
 
@@ -128,3 +140,64 @@ func test_a_thing_put_down_shows_on_the_map_and_goes_when_picked_up() -> void:
 	game._update_zone(0.1)
 	assert_null(game.view.ground_nodes[0].mesh, "picked up, it is gone")
 	assert_null((game.view.ground_nodes[0].get_node("Rim") as MeshInstance3D).mesh, "its rim with it")
+
+
+func _template() -> ArrayMesh:
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for vertex: Vector3 in [Vector3(-0.6, 0, -0.2), Vector3(0.6, 0, -0.2), Vector3(0, 0.08, 0.2)]:
+		surface.set_normal(Vector3.UP)
+		surface.set_color(Color(0.4, 0.3, 0.2, 0))
+		surface.add_vertex(vertex)
+	return surface.commit()
+
+
+func test_model_name_footprint_yaw_and_floor_are_from_the_shared_template() -> void:
+	assert_true(GroundModels.cache_template("knife", _template()))
+	var items: Array = [{"id": "knife", "n": 1, "pos": Vector3(5.5, 3, 7.5)}]
+	var piece: Dictionary = GroundLook.pieces(items)[0]
+	assert_eq(piece["model"], "knife")
+	assert_eq(piece["size"], Vector3(1.2, 0.08, 0.4))
+	assert_eq(piece["at"], Vector3(5.5, 3, 7.5))
+	assert_eq(GroundLook.pieces(items)[0]["yaw"], piece["yaw"])
+	assert_gte(float(piece["yaw"]), 0.0)
+	assert_lt(float(piece["yaw"]), TAU)
+	var rim: Dictionary = GroundLook.rim(piece)
+	assert_eq(rim["yaw"], piece["yaw"])
+	assert_almost_eq(rim["size"].x, 1.2 + GroundLook.RIM * 2.0, 0.00001)
+	assert_almost_eq(rim["size"].y, 0.4 + GroundLook.RIM * 2.0, 0.00001)
+	assert_almost_eq(rim["at"].y, 3.0 + GroundLook.RIM_LIFT, 0.00001)
+
+
+func test_missing_models_and_box_only_ids_and_bags_keep_boxes() -> void:
+	GroundModels.cache_template("no_art_550", null)
+	var missing: Dictionary = GroundLook.pieces([{"id": "no_art_550", "n": 1, "pos": Vector3.ZERO}])[0]
+	assert_eq(missing["model"], "")
+	assert_eq(missing["size"], GroundLook.LOOKS["small"][0])
+	var ids: Array = GroundModels.BOX_ONLY_IDS.keys()
+	ids.append("found_big_pack")
+	for id: String in ids:
+		assert_true(GroundModels.cache_template(id, _template()))
+		var piece: Dictionary = GroundLook.pieces([{"id": id, "n": 1, "pos": Vector3.ZERO}])[0]
+		assert_eq(piece["model"], "", id + " stays a box even with a baked resource")
+
+
+func test_rim_rotates_all_four_corners_and_keeps_uvs_attached() -> void:
+	var rim: Dictionary = {"at": Vector3(5, 3, 7), "size": Vector2(2, 1), "inner": Vector2(0.8, 0.6), "yaw": PI * 0.5}
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	MapView._rim_quad(surface, rim)
+	var arrays: Array = surface.commit().surface_get_arrays(0)
+	var rotation := Basis(Vector3.UP, PI * 0.5)
+	var corners: Array[Vector3] = [Vector3(-1, 0, -0.5), Vector3(1, 0, -0.5), Vector3(1, 0, 0.5), Vector3(-1, 0, 0.5)]
+	var order: Array[int] = [0, 1, 2, 0, 2, 3]
+	var uvs: Array[Vector2] = [Vector2.ZERO, Vector2(1, 0), Vector2.ONE, Vector2(0, 1)]
+	for offset: int in order.size():
+		assert_almost_eq((arrays[Mesh.ARRAY_VERTEX][offset] as Vector3).distance_to(rim["at"] + rotation * corners[order[offset]]), 0.0, 0.00001)
+		assert_eq(arrays[Mesh.ARRAY_TEX_UV][offset], uvs[order[offset]])
+
+
+func test_existing_container_rims_still_accept_box_centres() -> void:
+	var rim: Dictionary = GroundLook.rim({"lv": 0, "at": Vector3(2, 0.5, 3), "size": Vector3.ONE})
+	assert_almost_eq(rim["at"].y, GroundLook.RIM_LIFT, 0.00001)
+	assert_eq(rim["yaw"], 0.0)

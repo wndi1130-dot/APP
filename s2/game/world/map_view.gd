@@ -41,6 +41,7 @@ const CONTACT_SHADER = preload("res://fx/shaders/contact_shade.gdshader")
 const BuildingView = preload("res://game/world/building_view.gd")
 const BuildPace = preload("res://game/world/build_pace.gd")
 const GroundLook = preload("res://game/world/ground_look.gd")
+const GroundModels = preload("res://game/world/ground_models.gd")
 const StopGround = preload("res://game/world/stop_ground.gd")
 ## Unlit car windows: dark glass. Lit ones take FxState.LAMP.
 const WINDOW_DARK := Color(0.16, 0.16, 0.17)
@@ -925,9 +926,9 @@ func update_ground(items: Array) -> void:
 		if not level_roots.has(lv):
 			continue
 		if not tools.has(lv):
-			tools[lv] = _begin()
+			tools[lv] = GroundModels.begin()
 			rims[lv] = _begin()
-		box(tools[lv], piece["size"], piece["at"], piece["color"])
+		_append_ground(tools[lv], piece)
 		var rim: Dictionary = GroundLook.rim(piece)
 		rim["sky"] = sky_alpha(grid, FieldGrid.cell_of(piece["at"])) if lv == 0 else 0.0
 		_rim_quad(rims[lv], rim)
@@ -942,8 +943,17 @@ func update_ground(items: Array) -> void:
 			rim_node.material_override = _contact_material("rim")
 			rim_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			ground_nodes[lv].add_child(rim_node)
-		ground_nodes[lv].mesh = tools[lv].commit()
+		ground_nodes[lv].mesh = GroundModels.commit(tools[lv])
 		(ground_nodes[lv].get_node("Rim") as MeshInstance3D).mesh = rims[lv].commit()
+
+
+static func _append_ground(batch: GroundModels.Batch, piece: Dictionary) -> void:
+	var model: String = piece["model"]
+	var template: Dictionary = GroundModels.template(model) if not model.is_empty() else {}
+	if not template.is_empty():
+		GroundModels.append_template(batch, template, piece["at"], piece["yaw"])
+	else:
+		GroundModels.append_box(batch, piece["size"], piece["at"], piece["color"], piece["yaw"])
 
 
 ## One rim quad (ground_look.rim) flat on the floor: the thing's share of it, the
@@ -957,11 +967,12 @@ static func _rim_quad(st: SurfaceTool, rim: Dictionary, strength: float = Ground
 	var c := Color(inner.x, inner.y, strength, float(rim.get("sky", 1.0)))
 	var corners := [Vector3(-h.x, 0, -h.y), Vector3(h.x, 0, -h.y), Vector3(h.x, 0, h.y), Vector3(-h.x, 0, h.y)]
 	var uvs := [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
+	var rotation := Basis(Vector3.UP, float(rim.get("yaw", 0.0)))
 	for idx in [0, 1, 2, 0, 2, 3]:
 		st.set_color(c)
 		st.set_uv(uvs[idx])
 		st.set_normal(Vector3.UP)
-		st.add_vertex(at + corners[idx])
+		st.add_vertex(at + rotation * (corners[idx] as Vector3))
 
 
 ## The contact shades' materials: "rim" round the things on the ground (a crisp
