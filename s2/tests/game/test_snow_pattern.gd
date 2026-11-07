@@ -608,13 +608,26 @@ func _grass_order_errors(source: String) -> PackedStringArray:
 	return errors
 
 
-func _write_statements(tokens: Array[String], pairs: Dictionary, start: int, end: int, name: String) -> Array[String]:
+func _write_statements(tokens: Array[String], pairs: Dictionary, start: int, end: int, name: String, write_errors: Array[String] = []) -> Array[String]:
 	var result: Array[String] = []
 	for i in range(start, end):
 		if tokens[i] != name:
 			continue
-		if tokens[i + 1] not in WRITE_OPERATORS and tokens[i - 1] not in ["++", "--"]:
+		# A component, swizzle or subscript still writes the protected root value.
+		var after := i + 1
+		while after < end:
+			if tokens[after] == "." and after + 1 < end and tokens[after + 1].is_valid_identifier():
+				after += 2
+			elif tokens[after] == "[" and pairs.has(after):
+				after = int(pairs[after]) + 1
+			else:
+				break
+		if (after >= end or tokens[after] not in WRITE_OPERATORS) and (i <= start or tokens[i - 1] not in ["++", "--"]):
 			continue
+		if after > i + 1:
+			var message := "보호 값 성분·첨자 쓰기: " + name
+			if not write_errors.has(message):
+				write_errors.append(message)
 		var first := i
 		while first > start and tokens[first - 1] not in [";", "{", "}"]:
 			first -= 1
@@ -654,7 +667,7 @@ func _snow_flow_steps() -> Array[Array]:
 	]
 
 
-func _snow_flow_errors(tokens: Array[String], pairs: Dictionary, opening: int, closing: int, steps: Array[Array]) -> PackedStringArray:
+func _snow_flow_errors(tokens: Array[String], pairs: Dictionary, opening: int, closing: int, steps: Array[Array], protected_names: Array = SNOW_FLOW_VALUES) -> PackedStringArray:
 	# 중괄호 경로까지 일치하는 독립 문장만 센다. 무괄호 분기·삼항 안의 식은 문장과 다르다.
 	var errors: PackedStringArray = []
 	var functions := {}
@@ -685,8 +698,9 @@ func _snow_flow_errors(tokens: Array[String], pairs: Dictionary, opening: int, c
 		if tokens[i] in BUILTIN_OUT_CALLS:
 			# 어느 인자가 out인지 따지지 않고, 계약 값이 인자에 들면 거절한다(6.1 Sol 44eee868 Medium 1).
 			for argument in range(i + 2, int(pairs[i + 1])):
-				if tokens[argument] in SNOW_FLOW_VALUES:
+				if tokens[argument] in protected_names:
 					_unsupported_error(errors, "눈 계약 값을 out 내장 함수에 전달: " + tokens[i])
+					_unsupported_error(errors, "보호 값 out 내장 함수 전달: " + tokens[argument] + " (" + tokens[i] + ")")
 					break
 			continue
 		if not functions.has(tokens[i]):
@@ -698,8 +712,10 @@ func _snow_flow_errors(tokens: Array[String], pairs: Dictionary, opening: int, c
 			continue
 		# bare_ground의 기존 출력 한 번만 허용한다. include에 정의된 함수도 같은 경계다.
 		for argument in range(i + 2, call_end):
-			if tokens[argument] in SNOW_FLOW_VALUES:
+			# Keep the existing conservative input-call boundary too: no alias analysis here.
+			if tokens[argument] in protected_names:
 				_unsupported_error(errors, "눈 계약 값을 사용자 함수에 전달: " + tokens[i])
+				_unsupported_error(errors, "보호 값 사용자 함수 전달: " + tokens[argument] + " (" + tokens[i] + ")")
 				break
 	# Lying snow and airborne dust are two exact, separately guarded consumers below.
 	if grass_calls != 1 or snow_paints != 2:

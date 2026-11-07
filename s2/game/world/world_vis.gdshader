@@ -933,7 +933,8 @@ void fragment() {
 	// kinds as the snow is (0.08 to 0.3), and never on a trodden track (782a61e1 5).
 	float hoar = smoothstep(0.0, 0.3, fx_frost) * (1.0 - smoothstep(0.5, 0.92, fx_cloud.x)) * (1.0 - smoothstep(0.0, 0.05, max(fx_fall.x, fx_fall.y)));
 	hoar *= 1.0 - smoothstep(0.5, 0.8, fx_wind.z);
-	hoar *= (is_ground ? 1.0 : 0.0) * smoothstep(0.6, 0.9, up) * sky * (1.0 - cover) * (1.0 - trodden) * (1.0 - smoothstep(0.08, 0.3, chroma)) * smoothstep(0.3, 0.7, 0.5 * grain.g + 0.5 * drift);
+	// A single walk presses 0.5: clear its frost fully, rather than leave half a bloom.
+	hoar *= (is_ground ? 1.0 : 0.0) * smoothstep(0.6, 0.9, up) * sky * (1.0 - cover) * (1.0 - smoothstep(0.05, 0.3, trodden)) * (1.0 - smoothstep(0.08, 0.3, chroma)) * smoothstep(0.3, 0.7, 0.5 * grain.g + 0.5 * drift);
 	base = mix(base, FX_RIME, 0.6 * hoar);
 	// The atmosphere frame (fx_cold, fx_sky): standing water on open flat ground
 	// where the snow thins, open and ringed by rain above freezing, ice below;
@@ -974,10 +975,13 @@ void fragment() {
 		float st = ph - slot;
 		// The ring grows to 0.3 of the cell with a 0.07 edge: its centre stays within 0.37 of the
 		// cell's sides so the ring never crosses into the next cell and gets cut (6 Pro 782a61e1 6).
-		vec2 so = vec2(fx_hash(sc + slot * 0.37 + 3.1), fx_hash(sc + slot * 0.71 + 7.7)) * 0.26 + 0.37;
-		float ring = (1.0 - smoothstep(0.0, 0.07, abs(length(fract(sp) - so) - st * 0.3))) * (1.0 - st);
-		ring *= step(fx_hash(sc + slot * 1.3), 0.4 * fx_fall.x);
-		base += vec3(ring * splash_k * 0.16);
+		// The same 0/1 selection first: an unpicked cell needs neither centre hashes nor distance.
+		float splash_cell = step(fx_hash(sc + slot * 1.3), 0.4 * fx_fall.x);
+		if (splash_cell > 0.5) {
+			vec2 so = vec2(fx_hash(sc + slot * 0.37 + 3.1), fx_hash(sc + slot * 0.71 + 7.7)) * 0.26 + 0.37;
+			float ring = (1.0 - smoothstep(0.0, 0.07, abs(length(fract(sp) - so) - st * 0.3))) * (1.0 - st);
+			base += vec3(ring * splash_k * 0.16);
+		}
 	}
 	if (fx_cold.w * level_k > 0.01) {
 		// Fallen leaf in drifts a few metres across (from this far a drift reads,

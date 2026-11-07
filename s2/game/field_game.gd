@@ -738,7 +738,7 @@ func _apply_fx() -> void:
 		# The first light update sets the lights, the floors and the grade.
 		atmo_min = -INF
 		fx_params = _fx_params_now(hour, snow_cover.cover())
-		FxState.apply(fx_params)
+		_push_fx(fx_params)
 		fx_light = Atmosphere.light(atmo, float(fx_params["fx_snow"]))
 		fx_light_night = Atmosphere.light(atmosphere_at(0.0), float(fx_params["fx_snow"]))
 		return
@@ -746,7 +746,7 @@ func _apply_fx() -> void:
 	atmo = atmosphere_at(picture_hour())
 	_set_sky_photo()
 	fx_params = _fx_params_now(hour, snow_cover.cover())
-	FxState.apply(fx_params)
+	_push_fx(fx_params)
 	fx_light = FxState.lighting_for(look_kinds, hour)
 	fx_light_night = FxState.lighting_for(look_kinds, 0.0)
 	if not storm.is_empty():
@@ -779,10 +779,15 @@ func _map_snow_base(stop_snow: float) -> float:
 	return MapView.map_snow_base(data, stop_snow, look)
 
 
+func _push_fx(values: Dictionary) -> void:
+	# One weather writer lets tests observe the actual calls without reading editor-only globals.
+	FxState.apply(values)
+
+
 func _apply_map_snow_base() -> void:
 	# built supplies the map without changing arrival's snow, light or weather.
 	fx_params["fx_map_snow_base"] = _map_snow_base(float(fx_params["fx_snow"]))
-	FxState.apply({"fx_map_snow_base": fx_params["fx_map_snow_base"]})
+	_push_fx({"fx_map_snow_base": fx_params["fx_map_snow_base"]})
 
 
 ## The fires' sparks thin out in what is drawn falling (the atmosphere's kinds:
@@ -815,7 +820,7 @@ func _update_snow() -> void:
 		return
 	fx_params["fx_snow"] = p["fx_snow"]
 	fx_params["fx_map_snow_base"] = p["fx_map_snow_base"]
-	FxState.apply({"fx_snow": p["fx_snow"], "fx_map_snow_base": p["fx_map_snow_base"]})
+	_push_fx({"fx_snow": p["fx_snow"], "fx_map_snow_base": p["fx_map_snow_base"]})
 
 
 func _warm_light(reach: float, strength: float) -> OmniLight3D:

@@ -226,6 +226,9 @@ static func params_for(kinds: Array, ambient_c: float, wind_dir := Vector2(1, 0)
 	var band := hour_band(hour, season)
 	tint = tint * Color(band["tint"])
 	var dir := wind_dir.normalized() if wind_dir.length() > 0.001 else Vector2(1, 0)
+	# Match atmosphere.gd look's drawn-blizzard wind floor; this is picture wind,
+	# not Weather.wind used by body cold and the stop's particle direction.
+	var picture_wind := maxf(wind, 0.9) if known.has("blizzard") else wind
 	# Plain atmosphere values from the temperature alone: cold +6 C .. -14 C,
 	# standing water frozen below about -1 C, no cloud shadows.
 	var cold := clampf((6.0 - ambient_c) / 20.0, 0.0, 1.0)
@@ -236,7 +239,7 @@ static func params_for(kinds: Array, ambient_c: float, wind_dir := Vector2(1, 0)
 		# No map here: the field supplies its shifted base once the map exists.
 		"fx_map_snow_base": 0.0,
 		"fx_frost": frost,
-		"fx_wind": Vector3(dir.x, dir.y, clampf(wind, 0.0, 1.0)),
+		"fx_wind": Vector3(dir.x, dir.y, clampf(picture_wind, 0.0, 1.0)),
 		"fx_tint": Color(tint.r, tint.g, tint.b, 1.0),
 		"fx_flash": 0.0,
 		"fx_fade": 0.0,
