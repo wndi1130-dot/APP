@@ -161,15 +161,21 @@ static func _lay_apart(out: Array, on_cell: Dictionary, blocked: Callable) -> Ar
 			var foot := Footprint.new(Vector2(origin.x, origin.z), Vector2(size.x, size.z), float(piece["yaw"]))
 			var neighbours: Array[Footprint] = []
 			var walls: Array[Footprint] = []
-			var seen: Dictionary = {}
-			var bounds: Rect2i = foot.cells(SPREAD_MAX + SPREAD_GAP)
+			# Every rotation and offset fits inside this square about the origin.
+			var radius: float = foot.half.length() + SPREAD_MAX + SPREAD_GAP
+			var low := Vector2i((foot.centre - Vector2.ONE * radius).floor())
+			var high := Vector2i((foot.centre + Vector2.ONE * radius).floor())
+			var bounds := Rect2i(low, high - low + Vector2i.ONE)
 			for y: int in range(bounds.position.y, bounds.end.y):
 				for x: int in range(bounds.position.x, bounds.end.x):
 					var key := Vector3i(x, y, cell.z)
-					if buckets.has(key):
-						for other: Footprint in buckets[key]:
-							if not seen.has(other):
-								seen[other] = true
+					var near: Variant = buckets.get(key)
+					if near != null:
+						# A thing across cell edges sits in several buckets: take it once,
+						# marked with this thing's slot (no lookup table per thing).
+						for other: Footprint in near:
+							if other.mark != slot:
+								other.mark = slot
 								neighbours.append(other)
 					if blocked.is_valid():
 						if not wall_cache.has(key):
@@ -195,9 +201,25 @@ static func _lay_apart(out: Array, on_cell: Dictionary, blocked: Callable) -> Ar
 	return drawn
 
 
-## Directions round the wide search (WIDE_RINGS) and the distances it tries.
+## How many tries along its own angle: SPREAD to SPREAD_MAX and SPREAD_NEAR to
+## SPREAD_NEAR_MAX by SPREAD_STEP (test_ground_look holds them to those).
+const FAR_TRIES: int = 5
+const NEAR_TRIES: int = 4
+## The wide search: RING16's sixteen directions on each of WIDE_RINGS.
 const WIDE_ANGLES: int = 16
 const WIDE_RINGS: Array[float] = [0.7, 0.6, 0.5]
+## Tries in one turn (own yaw or quarter turned): far, near, eight round, wide.
+const SPIN_TRIES: int = FAR_TRIES + NEAR_TRIES + 8 + WIDE_ANGLES * 3
+## cos and sin of k·22.5°: the sixteen directions, every other one the eight.
+## Turned by a thing's own angle (a complex product), so no try costs a sine:
+## building every thing's 130 tries with cos/sin made laying 300 things 37 →
+## 215 ms (11-07 15:4x, headless).
+const RING16: Array[Vector2] = [
+	Vector2(1.0, 0.0), Vector2(0.9238795, 0.3826834), Vector2(0.7071068, 0.7071068), Vector2(0.3826834, 0.9238795),
+	Vector2(0.0, 1.0), Vector2(-0.3826834, 0.9238795), Vector2(-0.7071068, 0.7071068), Vector2(-0.9238795, 0.3826834),
+	Vector2(-1.0, 0.0), Vector2(-0.9238795, -0.3826834), Vector2(-0.7071068, -0.7071068), Vector2(-0.3826834, -0.9238795),
+	Vector2(0.0, -1.0), Vector2(0.3826834, -0.9238795), Vector2(0.7071068, -0.7071068), Vector2(0.9238795, -0.3826834),
+]
 
 
 ## Where `foot` (on its spot, at its own yaw) goes among `laid`, leaving it there:
@@ -217,22 +239,25 @@ const WIDE_RINGS: Array[float] = [0.7, 0.6, 0.5]
 static func _clear_spot(foot: Footprint, turn: float, laid: Array[Footprint], walls: Array[Footprint] = [], home: bool = false) -> bool:
 	var origin: Vector2 = foot.centre
 	var own_yaw: float = foot.yaw
-	var tries: PackedVector3Array = _tries(turn, home)
+	var way := Vector2(cos(turn), sin(turn))
 	var best_at: Vector2 = origin
 	var best_yaw: float = own_yaw
 	var best_room: float = -INF
 	var found := false
-	for tried: Vector3 in tries:
+	for index: int in try_count(home):
+		var tried: Vector3 = try_at(index, home, way)
 		var yaw: float = own_yaw + PI * 0.5 * tried.z
 		if not is_equal_approx(foot.yaw, yaw):
 			foot.turn_to(yaw)
 		foot.centre = origin + Vector2(tried.x, tried.y)
-		if _room_among(foot, laid) < SPREAD_GAP:
+		if not _clear_of(foot, laid, SPREAD_GAP):
 			continue
-		var room: float = _room_among(foot, walls)
+		var room: float = _wall_room(foot, walls)
 		if room >= 0.0:
 			return true
-		if room > best_room:
+		# Equal burial (to rounding: a turned rectangle's sides carry 1e-8) keeps
+		# the earlier candidate, so a coat in a corridor stays on its spot.
+		if room > best_room + ROOM_EPSILON:
 			found = true
 			best_room = room
 			best_at = foot.centre
@@ -242,31 +267,72 @@ static func _clear_spot(foot: Footprint, turn: float, laid: Array[Footprint], wa
 	return found
 
 
-## The candidates of _clear_spot in order, as (offset x, offset z, quarter turns):
-## made once per thing, never per try.
-static func _tries(turn: float, home: bool) -> PackedVector3Array:
-	var tries := PackedVector3Array()
+## How many candidates _clear_spot has: both turns' SPIN_TRIES, and the own
+## spot at both turns first for the biggest on a cell (`home`).
+static func try_count(home: bool) -> int:
+	return SPIN_TRIES * 2 + (2 if home else 0)
+
+
+## Candidate `index` of _clear_spot, worked out when it is tried (most things
+## take one of the first few): (offset x, offset z, quarter turns). `way` is the
+## thing's own angle as (cos, sin).
+static func try_at(index: int, home: bool, way: Vector2) -> Vector3:
+	var k: int = index
 	if home:
-		tries.append(Vector3(0.0, 0.0, 0.0))
-		tries.append(Vector3(0.0, 0.0, 1.0))
-	var way := Vector2(cos(turn), sin(turn))
-	for spin: int in 2:
-		var distance: float = SPREAD
-		while distance <= SPREAD_MAX + 0.0001:
-			tries.append(Vector3(way.x * distance, way.y * distance, spin))
-			distance += SPREAD_STEP
-		distance = SPREAD_NEAR
-		while distance <= SPREAD_NEAR_MAX + 0.0001:
-			tries.append(Vector3(way.x * distance, way.y * distance, spin))
-			distance += SPREAD_STEP
-		for step: int in 8:
-			var angle: float = turn + TAU * float(step) / 8.0
-			tries.append(Vector3(cos(angle) * SPREAD_MAX, sin(angle) * SPREAD_MAX, spin))
-		for ring: float in WIDE_RINGS:
-			for step: int in WIDE_ANGLES:
-				var angle: float = turn + TAU * float(step) / float(WIDE_ANGLES)
-				tries.append(Vector3(cos(angle) * ring, sin(angle) * ring, spin))
-	return tries
+		if k < 2:
+			return Vector3(0.0, 0.0, float(k))
+		k -= 2
+	var spin: float = 1.0 if k >= SPIN_TRIES else 0.0
+	k = k % SPIN_TRIES
+	var along: Vector2 = way
+	var distance: float
+	if k < FAR_TRIES:
+		distance = SPREAD + SPREAD_STEP * k
+	elif k < FAR_TRIES + NEAR_TRIES:
+		distance = SPREAD_NEAR + SPREAD_STEP * (k - FAR_TRIES)
+	elif k < FAR_TRIES + NEAR_TRIES + 8:
+		along = _turned(RING16[(k - FAR_TRIES - NEAR_TRIES) * 2], way)
+		distance = SPREAD_MAX
+	else:
+		var wide: int = k - FAR_TRIES - NEAR_TRIES - 8
+		along = _turned(RING16[wide % WIDE_ANGLES], way)
+		distance = WIDE_RINGS[floori(float(wide) / float(WIDE_ANGLES))]
+	return Vector3(along.x * distance, along.y * distance, spin)
+
+
+## `unit` turned by the angle whose (cos, sin) is `way`.
+static func _turned(unit: Vector2, way: Vector2) -> Vector2:
+	return Vector2(unit.x * way.x - unit.y * way.y, unit.x * way.y + unit.y * way.x)
+
+
+## Burial differences under this are rounding, not room (_clear_spot).
+const ROOM_EPSILON: float = 0.000001
+
+
+## Whether `foot` keeps `gap` from every one of `laid`, stopping at the first
+## that it does not. Two rectangles whose centres lie further apart than both
+## reach (half diagonals) plus the gap are clear without the four-axis test.
+static func _clear_of(foot: Footprint, laid: Array[Footprint], gap: float) -> bool:
+	for other: Footprint in laid:
+		var apart: float = foot.reach + other.reach + gap
+		if foot.centre.distance_squared_to(other.centre) > apart * apart:
+			continue
+		if foot.gap_to(other) < gap:
+			return false
+	return true
+
+
+## How buried `foot` is in `walls`: the most negative gap when it overlaps any,
+## otherwise some clearance >= 0 (INF when none is near — only overlap matters
+## to _clear_spot, so the far squares skip the four-axis test).
+static func _wall_room(foot: Footprint, walls: Array[Footprint]) -> float:
+	var room: float = INF
+	for wall: Footprint in walls:
+		var apart: float = foot.reach + wall.reach
+		if foot.centre.distance_squared_to(wall.centre) > apart * apart:
+			continue
+		room = minf(room, foot.gap_to(wall))
+	return room
 
 
 static func _footprint_area(piece: Dictionary) -> float:
@@ -353,12 +419,18 @@ class Footprint:
 	var centre: Vector2
 	var half: Vector2
 	var yaw: float
+	## The slot of the last thing that gathered it as a neighbour (_lay_apart).
+	var mark: int = -1
 	var along_x: Vector2
 	var along_z: Vector2
+
+	## Half its diagonal: no part of it lies further from its centre, at any yaw.
+	var reach: float
 
 	func _init(at: Vector2, size: Vector2, turn: float) -> void:
 		centre = at
 		half = size * 0.5
+		reach = half.length()
 		turn_to(turn)
 
 	## Turn it to `turn` (radians, as Basis(UP, turn)): its side directions worked

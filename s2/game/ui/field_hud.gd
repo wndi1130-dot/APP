@@ -5183,10 +5183,13 @@ func _pick_ally(world: Vector3):
 ## reach. Without a drawn table (no view yet) every row is read at its own spot.
 func _pick_item(world: Vector3) -> int:
 	var drawn: Dictionary = game.view.drawn_ground(game.ground_items) if game.view != null else {}
+	var ready: bool = game.view != null and not game.view.level_roots.is_empty()
 	var cands: Array = []
 	for i in range(game.ground_items.size()):
 		var row: Dictionary = game.ground_items[i]
-		if drawn.has(i):
+		var lv: int = game.level_of(row["pos"])
+		var shown: bool = ready and game.view.level_roots.has(lv) and game.view.level_roots[lv].visible
+		if shown and drawn.has(i):
 			var piece: Dictionary = drawn[i]
 			var at: Vector3 = piece["at"]
 			var size: Vector3 = piece["size"]
@@ -5196,7 +5199,7 @@ func _pick_item(world: Vector3) -> int:
 				"reach": _finger_off(world, at, size.y), "order": piece["order"]})
 		else:
 			var reach: float = _finger_off(world, row["pos"], ITEM_H)
-			var order: int = drawn.size() + i if not drawn.is_empty() and bool(row.get("glint", false)) else -1
+			var order: int = drawn.size() + i if shown and bool(row.get("glint", false)) else -1
 			cands.append({"item": i, "off": reach, "reach": reach, "order": order})
 	return GroundLook.pick(cands)
 

@@ -916,22 +916,57 @@ static func _sled_rope(surface: SurfaceTool, from: Vector3, to: Vector3) -> void
 
 var _drawn_ground: Dictionary = {}
 var _drawn_ground_sig: int = -1
+var _ground_cells: Dictionary = {}  # floor -> queried cell -> blocked
+var _ground_grids: Dictionary = {}
+var _ground_revisions: Dictionary = {}
+var _ground_recording: bool = false
+
+
+static func _ground_signature(items: Array, roots: Dictionary) -> int:
+	var floors: Array = roots.keys()
+	floors.sort()
+	return hash([items.hash(), floors])
 
 
 func update_ground(items: Array) -> void:
-	var sig := items.hash()
+	var sig: int = _ground_signature(items, level_roots)
 	if level_roots.is_empty():
 		_drawn_ground.clear()
+		_ground_cells.clear()
+		_ground_grids.clear()
+		_ground_revisions.clear()
 		_drawn_ground_sig = -1
 		_ground_sig = -1
 		return
 	if sig == _ground_sig and sig == _drawn_ground_sig:
-		return
+		var changed := false
+		for lv: int in _ground_cells:
+			var floor_grid: FieldGrid = levels.get(lv, grid if lv == 0 else null)
+			var revision: int = floor_grid.revision if floor_grid != null else -1
+			if floor_grid == _ground_grids[lv] and revision == _ground_revisions[lv]:
+				continue
+			# A door revision alone does not change placement; read only old queries.
+			for cell: Vector2i in _ground_cells[lv]:
+				if _ground_blocked(cell, lv) != bool(_ground_cells[lv][cell]):
+					changed = true
+					break
+			if changed:
+				break
+			_ground_grids[lv] = floor_grid
+			_ground_revisions[lv] = revision
+		if not changed:
+			return
 	_ground_sig = sig
 	_drawn_ground.clear()
+	_ground_cells.clear()
+	_ground_grids.clear()
+	_ground_revisions.clear()
 	var tools: Dictionary = {}
 	var rims: Dictionary = {}
-	for piece: Dictionary in GroundLook.pieces(items, _ground_blocked):
+	_ground_recording = true
+	var pieces: Array = GroundLook.pieces(items, _ground_blocked)
+	_ground_recording = false
+	for piece: Dictionary in pieces:
 		var lv: int = piece["lv"]
 		if not level_roots.has(lv):
 			continue
@@ -943,7 +978,7 @@ func update_ground(items: Array) -> void:
 		drawn["order"] = _drawn_ground.size()
 		_drawn_ground[int(piece["item"])] = drawn
 		var rim: Dictionary = GroundLook.rim(piece)
-		rim["sky"] = sky_alpha(grid, FieldGrid.cell_of(piece["at"])) if lv == 0 else 0.0
+		rim["sky"] = sky_alpha(grid, FieldGrid.cell_of(piece["at"])) if lv == 0 and grid != null else 0.0
 		_rim_quad(rims[lv], rim)
 	for lv in ground_nodes:
 		ground_nodes[lv].mesh = null
@@ -961,17 +996,22 @@ func update_ground(items: Array) -> void:
 	_drawn_ground_sig = sig
 
 
-## Refresh before picking if a removal changed the row numbers this frame.
+## Picking and drawing share the same list, root and cell invalidation checks.
 func drawn_ground(items: Array) -> Dictionary:
-	var sig := items.hash()
-	if sig != _drawn_ground_sig or sig != _ground_sig or level_roots.is_empty():
-		update_ground(items)
-	return _drawn_ground if sig == _drawn_ground_sig else {}
+	update_ground(items)
+	return _drawn_ground
 
 
 func _ground_blocked(cell: Vector2i, lv: int) -> bool:
 	var floor_grid: FieldGrid = levels.get(lv, grid if lv == 0 else null)
-	return floor_grid != null and floor_grid.solid_at(cell) != FieldGrid.Solid.NONE
+	var blocked: bool = floor_grid != null and floor_grid.solid_at(cell) != FieldGrid.Solid.NONE
+	if _ground_recording:
+		if not _ground_cells.has(lv):
+			_ground_cells[lv] = {}
+			_ground_grids[lv] = floor_grid
+			_ground_revisions[lv] = floor_grid.revision if floor_grid != null else -1
+		_ground_cells[lv][cell] = blocked
+	return blocked
 
 
 static func _append_ground(batch: GroundModels.Batch, piece: Dictionary) -> void:

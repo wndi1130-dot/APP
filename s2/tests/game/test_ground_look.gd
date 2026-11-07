@@ -134,6 +134,24 @@ func test_footprint_gap_agrees_with_the_plain_working() -> void:
 		assert_almost_eq(GroundLook.footprint_gap(ca, sa, ya, cb, sb, yb), _plain_gap(ca, sa, ya, cb, sb, yb), 0.00001, "case %d" % n)
 
 
+## The quick checks that skip far pairs give the four-axis answer: clear exactly
+## when the gap is SPREAD_GAP or more, and the same burial whenever one overlaps.
+func test_the_far_pair_shortcut_agrees_with_the_full_gap() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1508
+	for n: int in 400:
+		var a := GroundLook.Footprint.new(Vector2(rng.randf_range(-1.5, 1.5), rng.randf_range(-1.5, 1.5)), Vector2(rng.randf_range(0.02, 1.2), rng.randf_range(0.02, 1.2)), rng.randf_range(-TAU, TAU))
+		var b := GroundLook.Footprint.new(Vector2(rng.randf_range(-1.5, 1.5), rng.randf_range(-1.5, 1.5)), Vector2(rng.randf_range(0.02, 1.2), rng.randf_range(0.02, 1.2)), rng.randf_range(-TAU, TAU))
+		var full: float = a.gap_to(b)
+		var pair: Array[GroundLook.Footprint] = [b]
+		assert_eq(GroundLook._clear_of(a, pair, GroundLook.SPREAD_GAP), full >= GroundLook.SPREAD_GAP, "case %d" % n)
+		var room: float = GroundLook._wall_room(a, pair)
+		if full < 0.0:
+			assert_almost_eq(room, full, 0.000001, "case %d buried" % n)
+		else:
+			assert_gte(room, 0.0, "case %d clear" % n)
+
+
 ## Every one of the four side directions, each rectangle reaching along it by
 ## both its sides.
 func _plain_gap(ca: Vector2, sa: Vector2, ya: float, cb: Vector2, sb: Vector2, yb: float) -> float:
@@ -179,6 +197,39 @@ func test_a_clear_spot_starts_far_and_omits_overlap() -> void:
 ## A long thing that fits no spot at its own yaw lies a quarter turned: a 1.2 m
 ## plank dropped in a one-metre corridor running along x stays on its spot, along
 ## the corridor, instead of being left undrawn or buried in the wall.
+## The tries worked out one at a time (try_at, a turned table) are the list the
+## plain working gives — own angle far then near, eight round at SPREAD_MAX, the
+## wide rings, then all again a quarter turned — at any angle, home or not.
+func test_tries_one_at_a_time_match_the_plain_list() -> void:
+	assert_almost_eq(GroundLook.SPREAD + GroundLook.SPREAD_STEP * (GroundLook.FAR_TRIES - 1), GroundLook.SPREAD_MAX, 0.00001)
+	assert_almost_eq(GroundLook.SPREAD_NEAR + GroundLook.SPREAD_STEP * (GroundLook.NEAR_TRIES - 1), GroundLook.SPREAD_NEAR_MAX, 0.00001)
+	assert_eq(GroundLook.WIDE_RINGS.size(), 3, "SPIN_TRIES counts three wide rings")
+	for turn: float in [0.0, 0.7, -2.4, 5.9]:
+		for home: bool in [false, true]:
+			var plain: Array[Vector3] = []
+			if home:
+				plain.append_array([Vector3.ZERO, Vector3(0, 0, 1)])
+			for spin: int in 2:
+				for k: int in GroundLook.FAR_TRIES:
+					var d: float = GroundLook.SPREAD + GroundLook.SPREAD_STEP * k
+					plain.append(Vector3(cos(turn) * d, sin(turn) * d, spin))
+				for k: int in GroundLook.NEAR_TRIES:
+					var d: float = GroundLook.SPREAD_NEAR + GroundLook.SPREAD_STEP * k
+					plain.append(Vector3(cos(turn) * d, sin(turn) * d, spin))
+				for step: int in 8:
+					var angle: float = turn + TAU * step / 8.0
+					plain.append(Vector3(cos(angle) * GroundLook.SPREAD_MAX, sin(angle) * GroundLook.SPREAD_MAX, spin))
+				for ring: float in GroundLook.WIDE_RINGS:
+					for step: int in GroundLook.WIDE_ANGLES:
+						var angle: float = turn + TAU * step / float(GroundLook.WIDE_ANGLES)
+						plain.append(Vector3(cos(angle) * ring, sin(angle) * ring, spin))
+			assert_eq(GroundLook.try_count(home), plain.size())
+			var way := Vector2(cos(turn), sin(turn))
+			for index: int in plain.size():
+				var got: Vector3 = GroundLook.try_at(index, home, way)
+				assert_true(got.is_equal_approx(plain[index]) or got.distance_to(plain[index]) < 0.000001, "try %d at %.1f" % [index, turn])
+
+
 func test_a_quarter_turn_is_tried_before_giving_up() -> void:
 	var walls: Array[GroundLook.Footprint] = []
 	for x: int in range(-3, 4):
@@ -210,11 +261,29 @@ func test_far_then_near_then_ring_and_wall_fallback() -> void:
 	assert_true(GroundLook._clear_spot(foot, 0.0, other))
 	assert_almost_eq(foot.centre.distance_to(Vector2.ZERO), 0.7, 0.00001, "turn round only after both straight ranges")
 	assert_gt(foot.centre.y, 0.0)
-	var coat: Array = [_piece(0, Vector3(0.5, 0, 0.5), Vector3(1.2, 0.1, 0.6))]
+	var coat: Array = [_piece(0, Vector3(0.5, 0, 0.5), Vector3(1.2, 0.1, 1.1))]
 	var corridor := func(c: Vector2i, _lv: int) -> bool: return c.x != 0
 	var out: Array = GroundLook._lay_apart(coat, {Vector3i.ZERO: [0]}, corridor)
 	assert_eq(out.size(), 1, "a wide coat still lies in a one metre corridor")
 	assert_eq(out[0]["at"], Vector3(0.5, 0, 0.5), "the least buried candidate wins, first of equals")
+	assert_almost_eq(out[0]["yaw"], PI * 0.5, 0.00001, "the narrower side buries least")
+	for x: float in [-0.5, 1.5]:
+		assert_almost_eq(GroundLook.footprint_gap(Vector2(0.5, 0.5), Vector2(1.2, 1.1), out[0]["yaw"], Vector2(x, 0.5), Vector2(1, 10), 0.0), -0.05, 0.00001)
+	var fitting: Array = GroundLook._lay_apart([_piece(0, Vector3(0.5, 0, 0.5), Vector3(1.2, 0.1, 0.6))], {Vector3i.ZERO: [0]}, corridor)
+	assert_almost_eq(fitting[0]["yaw"], PI * 0.5, 0.00001, "a narrower coat fits after turning")
+
+
+func test_rotated_search_keeps_neighbours_across_the_cell_boundary() -> void:
+	var pieces: Array = [
+		_piece(0, Vector3(10.5, 0, 9.96), Vector3(0.02, 0.1, 0.02)),
+		_piece(1, Vector3(10.5, 0, 10.8), Vector3(1.7, 0.1, 0.1)),
+	]
+	var blocked := func(c: Vector2i, _lv: int) -> bool: return c == Vector2i(11, 10)
+	var out: Array = GroundLook._lay_apart(pieces, {Vector3i(10, 9, 0): [0], Vector3i(10, 10, 0): [1]}, blocked)
+	assert_eq(out.size(), 2, "both fit without dropping the small neighbour")
+	_assert_gaps(out)
+	for piece: Dictionary in out:
+		assert_gte(GroundLook.footprint_gap(Vector2(piece["at"].x, piece["at"].z), Vector2(piece["size"].x, piece["size"].z), piece["yaw"], Vector2(11.5, 10.5), Vector2.ONE, 0.0), -0.000001)
 
 
 func test_cell_order_cross_cell_gap_and_blocked_cells() -> void:
@@ -276,6 +345,21 @@ func test_press_off_rectangle_segment_and_rotation() -> void:
 	assert_eq(GroundLook.press_off(piece, Vector2(-2, 0.5), Vector2(2, 0.5)), 0.0)
 	piece["yaw"] = PI * 0.5
 	assert_almost_eq(GroundLook.press_off(piece, Vector2(1, 0), Vector2(1, 0)), 0.5, 0.00001)
+
+
+func test_press_on_coat_edge_beats_nearer_turned_knife() -> void:
+	var coat := _piece(0, Vector3.ZERO, Vector3(1.0, 0.04, 0.6))
+	var knife := _piece(1, Vector3(0.75, 0, 0), Vector3(0.75, 0.06, 0.1))
+	knife["yaw"] = PI * 0.5
+	var press := Vector2(0.45, 0)
+	var coat_off: float = GroundLook.press_off(coat, press, press)
+	var knife_off: float = GroundLook.press_off(knife, press, press)
+	assert_eq(coat_off, 0.0)
+	assert_almost_eq(knife_off, 0.25, 0.00001)
+	assert_eq(GroundLook.pick([
+		{"item": 0, "off": coat_off, "reach": 0.45, "order": 0},
+		{"item": 1, "off": knife_off, "reach": 0.3, "order": 1},
+	]), 0, "the coat under the finger wins over the nearer knife centre")
 
 
 func test_pick_visible_order_reach_glint_and_hidden() -> void:
