@@ -18,6 +18,7 @@ const Sled = preload("res://game/sim/sled.gd")
 const W = preload("res://game/sim/weapons.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
+const ItemArt = preload("res://game/ui/item_art.gd")
 
 ## The mockup's sizes in css (시안 「나」 고친 판): two columns of 200, the rail of 52.
 const COL_W: float = 200.0
@@ -60,15 +61,10 @@ const ART_PATH: String = "res://assets/icons/items/%s.png"
 ## Things that share another's picture on purpose: the same thing to the eye (a can
 ## that is off looks as the dented one; the note on the side is the same 「쪽지」).
 ## Every other thing that can be found has its own (test_item_art.gd).
-const ART_ALIAS: Dictionary = {
-	"can_dented_bad": "can_dented", "note_side": "note_map",
-}
+const ART_ALIAS: Dictionary = ItemArt.ART_ALIAS
 ## A line icon drawn like a thing that has its bake: the things under it share
 ## that picture.
-const ICON_ALIAS: Dictionary = {
-	# The herbal's line icon "book" is also the plain book's id (its picture is it_book).
-	"book": "herbal_book",
-}
+const ICON_ALIAS: Dictionary = ItemArt.ICON_ALIAS
 ## art_texture's answers, misses included: (id + "|" + icon) -> Texture2D or null.
 static var _art_found: Dictionary = {}
 ## The places rail shows five keys at most, then scrolls, fading at its foot while
@@ -1292,11 +1288,7 @@ static func _item_icon(hud, id: String) -> Control:
 ## one, then the one baked under the icon's own name; "" without one. Its own
 ## picture wins over a shared one.
 static func art_name(id: String, icon: String = "") -> String:
-	var tried: Dictionary = {}
-	for name: String in [id, String(ART_ALIAS.get(id, "")), String(ICON_ALIAS.get(icon, "")), icon]:
-		if name == "" or tried.has(name):
-			continue
-		tried[name] = true
+	for name: String in ItemArt.candidates(id, icon):
 		if ResourceLoader.exists(ART_PATH % name):
 			return name
 	return ""

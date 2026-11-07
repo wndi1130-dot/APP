@@ -41,6 +41,7 @@ const CONTACT_SHADER = preload("res://fx/shaders/contact_shade.gdshader")
 const BuildingView = preload("res://game/world/building_view.gd")
 const BuildPace = preload("res://game/world/build_pace.gd")
 const GroundLook = preload("res://game/world/ground_look.gd")
+const GroundModels = preload("res://game/world/ground_models.gd")
 const StopGround = preload("res://game/world/stop_ground.gd")
 ## Unlit car windows: dark glass. Lit ones take FxState.LAMP.
 const WINDOW_DARK := Color(0.16, 0.16, 0.17)
@@ -913,27 +914,78 @@ static func _sled_rope(surface: SurfaceTool, from: Vector3, to: Vector3) -> void
 		surface.add_vertex(corners[index])
 
 
+var _drawn_ground: Dictionary = {}
+var _drawn_ground_sig: int = -1
+var _ground_cells: Dictionary = {}  # floor -> queried cell -> blocked
+var _ground_grids: Dictionary = {}
+var _ground_revisions: Dictionary = {}
+var _ground_recording: bool = false
+
+
+static func _ground_signature(items: Array, roots: Dictionary) -> int:
+	var floors: Array = roots.keys()
+	floors.sort()
+	var root_ids: Array[int] = []
+	for lv in floors:
+		root_ids.append(roots[lv].get_instance_id() if is_instance_valid(roots[lv]) else 0)
+	return hash([items.hash(), floors, root_ids])
+
+
 func update_ground(items: Array) -> void:
-	var sig := items.hash()
-	if sig == _ground_sig or level_roots.is_empty():
-		return
+	var sig: int = _ground_signature(items, level_roots)
+	if not level_roots.is_empty() and sig == _ground_sig and sig == _drawn_ground_sig:
+		var changed := false
+		for lv: int in _ground_cells:
+			var floor_grid: FieldGrid = levels.get(lv, grid if lv == 0 else null)
+			var revision: int = floor_grid.revision if floor_grid != null else -1
+			if floor_grid == _ground_grids[lv] and revision == _ground_revisions[lv]:
+				continue
+			# A door revision alone does not change placement; read only old queries.
+			for cell: Vector2i in _ground_cells[lv]:
+				if _ground_blocked(cell, lv) != bool(_ground_cells[lv][cell]):
+					changed = true
+					break
+			if changed:
+				break
+			_ground_grids[lv] = floor_grid
+			_ground_revisions[lv] = revision
+		if not changed:
+			return
 	_ground_sig = sig
-	var tools: Dictionary = {}
-	var rims: Dictionary = {}
-	for piece: Dictionary in GroundLook.pieces(items):
-		var lv: int = piece["lv"]
-		if not level_roots.has(lv):
+	_drawn_ground.clear()
+	_ground_cells.clear()
+	_ground_grids.clear()
+	_ground_revisions.clear()
+	# A removed root may leave a live mesh or a freed cache entry.
+	for lv in ground_nodes.keys():
+		if not is_instance_valid(ground_nodes[lv]):
+			ground_nodes.erase(lv)
 			continue
-		if not tools.has(lv):
-			tools[lv] = _begin()
-			rims[lv] = _begin()
-		box(tools[lv], piece["size"], piece["at"], piece["color"])
-		var rim: Dictionary = GroundLook.rim(piece)
-		rim["sky"] = sky_alpha(grid, FieldGrid.cell_of(piece["at"])) if lv == 0 else 0.0
-		_rim_quad(rims[lv], rim)
-	for lv in ground_nodes:
 		ground_nodes[lv].mesh = null
 		(ground_nodes[lv].get_node("Rim") as MeshInstance3D).mesh = null
+	if level_roots.is_empty():
+		_drawn_ground_sig = -1
+		_ground_sig = -1
+		return
+	var tools: Dictionary = {}
+	var rims: Dictionary = {}
+	_ground_recording = true
+	var pieces: Array = GroundLook.pieces(items, _ground_blocked)
+	_ground_recording = false
+	for piece: Dictionary in pieces:
+		var lv: int = piece["lv"]
+		if not is_instance_valid(level_roots.get(lv)):
+			continue
+		if not tools.has(lv):
+			tools[lv] = GroundModels.begin()
+			rims[lv] = _begin()
+		_append_ground(tools[lv], piece)
+		var drawn: Dictionary = piece.duplicate()
+		drawn["order"] = _drawn_ground.size()
+		_drawn_ground[int(piece["item"])] = drawn
+		var rim: Dictionary = GroundLook.rim(piece)
+		rim["sky"] = sky_alpha(grid, FieldGrid.cell_of(piece["at"])) if lv == 0 and grid != null else 0.0
+		_rim_quad(rims[lv], rim)
 	for lv in tools:
 		if not ground_nodes.has(lv):
 			ground_nodes[lv] = _mesh_node(lv)
@@ -942,8 +994,38 @@ func update_ground(items: Array) -> void:
 			rim_node.material_override = _contact_material("rim")
 			rim_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			ground_nodes[lv].add_child(rim_node)
-		ground_nodes[lv].mesh = tools[lv].commit()
+		elif ground_nodes[lv].get_parent() != level_roots[lv]:
+			ground_nodes[lv].reparent(level_roots[lv], false)
+		ground_nodes[lv].mesh = GroundModels.commit(tools[lv])
 		(ground_nodes[lv].get_node("Rim") as MeshInstance3D).mesh = rims[lv].commit()
+	_drawn_ground_sig = sig
+
+
+## Picking and drawing share the same list, root and cell invalidation checks.
+func drawn_ground(items: Array) -> Dictionary:
+	update_ground(items)
+	return _drawn_ground
+
+
+func _ground_blocked(cell: Vector2i, lv: int) -> bool:
+	var floor_grid: FieldGrid = levels.get(lv, grid if lv == 0 else null)
+	var blocked: bool = floor_grid != null and floor_grid.solid_at(cell) != FieldGrid.Solid.NONE
+	if _ground_recording:
+		if not _ground_cells.has(lv):
+			_ground_cells[lv] = {}
+			_ground_grids[lv] = floor_grid
+			_ground_revisions[lv] = floor_grid.revision if floor_grid != null else -1
+		_ground_cells[lv][cell] = blocked
+	return blocked
+
+
+static func _append_ground(batch: GroundModels.Batch, piece: Dictionary) -> void:
+	var model: String = piece["model"]
+	var template: Dictionary = GroundModels.template(model) if not model.is_empty() else {}
+	if not template.is_empty():
+		GroundModels.append_template(batch, template, piece["at"], piece["yaw"])
+	else:
+		GroundModels.append_box(batch, piece["size"], piece["at"], piece["color"], piece["yaw"])
 
 
 ## One rim quad (ground_look.rim) flat on the floor: the thing's share of it, the
@@ -957,11 +1039,12 @@ static func _rim_quad(st: SurfaceTool, rim: Dictionary, strength: float = Ground
 	var c := Color(inner.x, inner.y, strength, float(rim.get("sky", 1.0)))
 	var corners := [Vector3(-h.x, 0, -h.y), Vector3(h.x, 0, -h.y), Vector3(h.x, 0, h.y), Vector3(-h.x, 0, h.y)]
 	var uvs := [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
+	var rotation := Basis(Vector3.UP, float(rim.get("yaw", 0.0)))
 	for idx in [0, 1, 2, 0, 2, 3]:
 		st.set_color(c)
 		st.set_uv(uvs[idx])
 		st.set_normal(Vector3.UP)
-		st.add_vertex(at + corners[idx])
+		st.add_vertex(at + rotation * (corners[idx] as Vector3))
 
 
 ## The contact shades' materials: "rim" round the things on the ground (a crisp
