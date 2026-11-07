@@ -138,37 +138,42 @@ static func _lay_apart(out: Array, slots: Array) -> void:
 		var area_a: float = _footprint_area(out[a])
 		var area_b: float = _footprint_area(out[b])
 		return area_a > area_b if not is_equal_approx(area_a, area_b) else a < b)
-	var laid: Array[Dictionary] = []
+	var laid: Array[Footprint] = []
 	for slot: int in order:
 		var piece: Dictionary = out[slot]
-		if laid.is_empty():
-			laid.append(piece)
-			continue
 		var origin: Vector3 = piece["at"]
-		var best_at: Vector3 = origin
-		var best_room: float = -INF
-		var placed: bool = false
-		var distance: float = SPREAD
-		while distance <= SPREAD_MAX + 0.0001 and not placed:
-			var at: Vector3 = origin + _towards(float(piece["turn"])) * distance
-			var room: float = _room_among(piece, at, laid)
-			if room >= SPREAD_GAP:
-				best_at = at
-				placed = true
-			distance += SPREAD_STEP
-		if not placed:
-			for step: int in 8:
-				var at: Vector3 = origin + _towards(float(piece["turn"]) + TAU * float(step) / 8.0) * SPREAD_MAX
-				var room: float = _room_among(piece, at, laid)
-				if room > best_room:
-					best_room = room
-					best_at = at
-		piece["at"] = best_at
-		laid.append(piece)
+		var size: Vector3 = piece["size"]
+		var foot := Footprint.new(Vector2(origin.x, origin.z), Vector2(size.x, size.z), float(piece["yaw"]))
+		if not laid.is_empty():
+			var spot: Vector2 = _clear_spot(foot, float(piece["turn"]), laid)
+			piece["at"] = Vector3(spot.x, origin.y, spot.y)
+		laid.append(foot)
 
 
-static func _towards(angle: float) -> Vector3:
-	return Vector3(cos(angle), 0, sin(angle))
+## Where `foot`, on its own spot, goes among `laid` (and leaves it there): out
+## along `turn` from SPREAD by SPREAD_STEP to the first spot SPREAD_GAP clear of
+## them all; when none is by SPREAD_MAX, the roomiest of eight angles round
+## `turn` at SPREAD_MAX.
+static func _clear_spot(foot: Footprint, turn: float, laid: Array[Footprint]) -> Vector2:
+	var origin: Vector2 = foot.centre
+	var way := Vector2(cos(turn), sin(turn))
+	var distance: float = SPREAD
+	while distance <= SPREAD_MAX + 0.0001:
+		foot.centre = origin + way * distance
+		if _room_among(foot, laid) >= SPREAD_GAP:
+			return foot.centre
+		distance += SPREAD_STEP
+	var best_at: Vector2 = origin
+	var best_room: float = -INF
+	for step: int in 8:
+		var angle: float = turn + TAU * float(step) / 8.0
+		foot.centre = origin + Vector2(cos(angle), sin(angle)) * SPREAD_MAX
+		var room: float = _room_among(foot, laid)
+		if room > best_room:
+			best_room = room
+			best_at = foot.centre
+	foot.centre = best_at
+	return best_at
 
 
 static func _footprint_area(piece: Dictionary) -> float:
@@ -176,38 +181,57 @@ static func _footprint_area(piece: Dictionary) -> float:
 	return size.x * size.z
 
 
-## The least clearance (metres, negative when they overlap) between `piece` set
-## at `at` and each of `laid`, footprint to footprint (oriented rectangles).
-static func _room_among(piece: Dictionary, at: Vector3, laid: Array[Dictionary]) -> float:
+## The least clearance (metres, negative when they overlap) between `foot` and
+## each of `laid`.
+static func _room_among(foot: Footprint, laid: Array[Footprint]) -> float:
 	var room: float = INF
-	for other: Dictionary in laid:
-		room = minf(room, footprint_gap(
-			Vector2(at.x, at.z), Vector2((piece["size"] as Vector3).x, (piece["size"] as Vector3).z), float(piece["yaw"]),
-			Vector2((other["at"] as Vector3).x, (other["at"] as Vector3).z), Vector2((other["size"] as Vector3).x, (other["size"] as Vector3).z), float(other["yaw"])))
+	for other: Footprint in laid:
+		room = minf(room, foot.gap_to(other))
 	return room
 
 
 ## The gap between two footprints on the floor — rectangles of `size` (x, z)
-## round `centre`, turned by `yaw` as the 3D pieces are (Basis(UP, yaw)) — along
-## the separating axis that parts them most (SAT); negative when they overlap
-## (then the least push that would part them, as a negative).
+## round `centre`, turned by `yaw` as the 3D pieces are — see Footprint.gap_to.
 static func footprint_gap(centre_a: Vector2, size_a: Vector2, yaw_a: float, centre_b: Vector2, size_b: Vector2, yaw_b: float) -> float:
-	var axes_a: Array[Vector2] = _footprint_axes(yaw_a)
-	var axes_b: Array[Vector2] = _footprint_axes(yaw_b)
-	var best: float = -INF
-	for axis: Vector2 in axes_a + axes_b:
-		var reach_a: float = absf(axis.dot(axes_a[0])) * size_a.x * 0.5 + absf(axis.dot(axes_a[1])) * size_a.y * 0.5
-		var reach_b: float = absf(axis.dot(axes_b[0])) * size_b.x * 0.5 + absf(axis.dot(axes_b[1])) * size_b.y * 0.5
-		best = maxf(best, absf(axis.dot(centre_b - centre_a)) - reach_a - reach_b)
-	return best
+	return Footprint.new(centre_a, size_a, yaw_a).gap_to(Footprint.new(centre_b, size_b, yaw_b))
 
 
-## A footprint's own x and z directions on the floor (x, z of the turned 3D axes).
-static func _footprint_axes(yaw: float) -> Array[Vector2]:
-	var turn := Basis(Vector3.UP, yaw)
-	var along_x: Vector3 = turn * Vector3.RIGHT
-	var along_z: Vector3 = turn * Vector3.BACK
-	return [Vector2(along_x.x, along_x.z), Vector2(along_z.x, along_z.z)]
+## One thing's footprint on the floor: a rectangle `half` its sides (x, z) out
+## from `centre` each way, turned by yaw as the 3D piece is (Basis(UP, yaw)).
+## Its own x and z directions are worked out once, so trying it at spot after
+## spot (_clear_spot) moves only the centre; before, every try turned both
+## rectangles again and built arrays, and spreading 300 things went from 86 to
+## 137 ms of rebuild (11-07 g6).
+class Footprint:
+	var centre: Vector2
+	var half: Vector2
+	var along_x: Vector2
+	var along_z: Vector2
+
+	func _init(at: Vector2, size: Vector2, yaw: float) -> void:
+		centre = at
+		half = size * 0.5
+		var turn := Basis(Vector3.UP, yaw)
+		var x3: Vector3 = turn * Vector3.RIGHT
+		var z3: Vector3 = turn * Vector3.BACK
+		along_x = Vector2(x3.x, x3.z)
+		along_z = Vector2(z3.x, z3.z)
+
+	## The gap to `other` along the side direction, of the four, that parts them
+	## most (SAT); negative when they overlap (then the least push that would part
+	## them, as a negative). Along its own side direction a rectangle reaches its
+	## half side; the other reaches by how its sides lie across that direction.
+	func gap_to(other: Footprint) -> float:
+		var d: Vector2 = other.centre - centre
+		var xx: float = absf(along_x.dot(other.along_x))
+		var xz: float = absf(along_x.dot(other.along_z))
+		var zx: float = absf(along_z.dot(other.along_x))
+		var zz: float = absf(along_z.dot(other.along_z))
+		var on_x: float = absf(d.dot(along_x)) - half.x - xx * other.half.x - xz * other.half.y
+		var on_z: float = absf(d.dot(along_z)) - half.y - zx * other.half.x - zz * other.half.y
+		var on_other_x: float = absf(d.dot(other.along_x)) - other.half.x - xx * half.x - zx * half.y
+		var on_other_z: float = absf(d.dot(other.along_z)) - other.half.y - xz * half.x - zz * half.y
+		return maxf(maxf(on_x, on_z), maxf(on_other_x, on_other_z))
 
 
 ## A dark rim round each thing (T0-6): a quad flat on its floor, RIM wider than

@@ -110,6 +110,66 @@ func test_footprint_gap_is_the_room_between_turned_rectangles() -> void:
 	# Two squares turned 45 degrees, 2 m apart on x: measured along their own edge
 	# normals (the separating axes), 2·cos45 apart less a side each.
 	assert_almost_eq(GroundLook.footprint_gap(Vector2.ZERO, Vector2.ONE, PI * 0.25, Vector2(2, 0), Vector2.ONE, PI * 0.25), sqrt(2.0) - 1.0, 0.0001)
+	# Turned unlike each other: a square on its corner reaches √2/2 along x, so to a
+	# straight one 2 m off it is 2 - √2/2 - 1/2, measured either way round.
+	var mixed: float = 1.5 - sqrt(2.0) * 0.5
+	assert_almost_eq(GroundLook.footprint_gap(Vector2.ZERO, Vector2.ONE, PI * 0.25, Vector2(2, 0), Vector2.ONE, 0.0), mixed, 0.0001, "corner to side")
+	assert_almost_eq(GroundLook.footprint_gap(Vector2(2, 0), Vector2.ONE, 0.0, Vector2.ZERO, Vector2.ONE, PI * 0.25), mixed, 0.0001, "side to corner")
+
+
+## The quick gap (each rectangle's sides turned once, its own reach taken as its
+## half side) agrees with the plain one on long, thin, turned things at any angle.
+func test_footprint_gap_agrees_with_the_plain_working() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1107
+	for n: int in 300:
+		var ca := Vector2(rng.randf_range(-1, 1), rng.randf_range(-1, 1))
+		var cb := Vector2(rng.randf_range(-1, 1), rng.randf_range(-1, 1))
+		var sa := Vector2(rng.randf_range(0.02, 1.2), rng.randf_range(0.02, 1.2))
+		var sb := Vector2(rng.randf_range(0.02, 1.2), rng.randf_range(0.02, 1.2))
+		var ya: float = rng.randf_range(-TAU, TAU)
+		var yb: float = rng.randf_range(-TAU, TAU)
+		assert_almost_eq(GroundLook.footprint_gap(ca, sa, ya, cb, sb, yb), _plain_gap(ca, sa, ya, cb, sb, yb), 0.00001, "case %d" % n)
+
+
+## Every one of the four side directions, each rectangle reaching along it by
+## both its sides.
+func _plain_gap(ca: Vector2, sa: Vector2, ya: float, cb: Vector2, sb: Vector2, yb: float) -> float:
+	var sides: Array = []
+	for yaw: float in [ya, yb]:
+		var turn := Basis(Vector3.UP, yaw)
+		var x3: Vector3 = turn * Vector3.RIGHT
+		var z3: Vector3 = turn * Vector3.BACK
+		sides.append([Vector2(x3.x, x3.z), Vector2(z3.x, z3.z)])
+	var best: float = -INF
+	for axis: Vector2 in sides[0] + sides[1]:
+		var reach_a: float = absf(axis.dot(sides[0][0])) * sa.x * 0.5 + absf(axis.dot(sides[0][1])) * sa.y * 0.5
+		var reach_b: float = absf(axis.dot(sides[1][0])) * sb.x * 0.5 + absf(axis.dot(sides[1][1])) * sb.y * 0.5
+		best = maxf(best, absf(axis.dot(cb - ca)) - reach_a - reach_b)
+	return best
+
+
+## A spot is sought out along the thing's own angle from SPREAD on; when nothing
+## by SPREAD_MAX is clear, it takes the roomiest of eight angles there, the
+## first of equals, and is left at the spot it was given.
+func test_a_clear_spot_is_the_first_out_along_its_angle_else_the_roomiest() -> void:
+	var laid: Array[GroundLook.Footprint] = [GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.2, 0.2), 0.0)]
+	var small := GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.2, 0.2), 0.0)
+	var spot: Vector2 = GroundLook._clear_spot(small, 0.0, laid)
+	assert_almost_eq(spot.x, GroundLook.SPREAD, 0.0001, "clear at the first try")
+	assert_almost_eq(spot.y, 0.0, 0.0001)
+	assert_eq(small.centre, spot, "left where it goes")
+	var down: Vector2 = GroundLook._clear_spot(GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.2, 0.2), PI * 0.5), PI * 0.5, laid)
+	assert_almost_eq(down.y, GroundLook.SPREAD, 0.0001, "out along its own angle")
+	# Under a 2 m square nothing by SPREAD_MAX is clear: straight out on x and z is
+	# roomier than the diagonals, and of those four the first, along its own angle.
+	var under: Array[GroundLook.Footprint] = [GroundLook.Footprint.new(Vector2.ZERO, Vector2(2, 2), 0.0)]
+	var lost := GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.5, 0.5), 0.0)
+	var best: Vector2 = GroundLook._clear_spot(lost, 0.0, under)
+	assert_almost_eq(best.x, GroundLook.SPREAD_MAX, 0.0001)
+	assert_almost_eq(best.y, 0.0, 0.0001)
+	assert_eq(lost.centre, best, "left at the roomiest")
+	assert_lt(GroundLook._room_among(lost, under), 0.0, "still under it, but no farther than reach")
 
 
 func test_it_lies_on_its_own_floor() -> void:
