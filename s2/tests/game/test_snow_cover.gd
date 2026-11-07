@@ -183,13 +183,25 @@ func test_storm_snow_keeps_rule_formula_after_one_minute() -> void:
 
 
 func test_empty_atmosphere_snow_keeps_rule_fallback() -> void:
-	var game = _stop(["clear"])
+	# The thaw stop of the repro test: the drawn rain halves lying snow, the rule's
+	# sleet does not, so the fallback must move fx_snow past the 0.002 gate and a
+	# skipped update cannot pass (6.1 Sol op-20261107T145111+0900-7c6c41ad Low).
+	var game = FieldGame.new()
+	game.opts = {"seed": 5, "raiders": false, "auto_pause": false, "cold": 0.05, "side": 1.0,
+		"region": "K1", "weather": ["rain"], "look": ["sleet"], "arrive_min": 720.0, "look_hour": 12.0}
+	add_child_autofree(game)
+	game.set_process(false)
 	# atmo starts empty, but _ready fills it before the first frame update.
 	# Exercise the fallback with weather/fx initialized, as _apply_fx requires.
 	assert_false(game.atmo.is_empty(), "the normal ready path already built the atmosphere")
+	var at_arrival: float = game.fx_params["fx_snow"]
 	game.atmo.clear()
 	game.clock.elapsed = 60.0 / FieldClock.GAME_PER_REAL
+	var rule_before := FxState.params_for(game.look_kinds, game.weather.ambient_c,
+		game.weather.wind_dir, game.weather.wind, game.clock.game_minutes() / 60.0, game.snow_cover.cover())
+	assert_gt(absf(float(rule_before["fx_snow"]) - at_arrival), 0.002, "the two formulas must differ here")
 	game._update_snow()
+	assert_almost_eq(game.snow_at_min, game.clock.game_minutes(), 0.00001, "the update ran")
 	var expected := FxState.params_for(game.look_kinds, game.weather.ambient_c,
 		game.weather.wind_dir, game.weather.wind, game.clock.game_minutes() / 60.0, game.snow_cover.cover())
 	assert_almost_eq(float(game.fx_params["fx_snow"]), float(expected["fx_snow"]), 0.00001)
