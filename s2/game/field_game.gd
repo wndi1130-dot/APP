@@ -725,6 +725,10 @@ func go_live() -> void:
 ## Weather is fixed for the whole stop, so the shader globals are set once;
 ## only lying snow moves afterwards (_update_snow).
 func _apply_fx() -> void:
+	# Arrival runs before _take_map/view.setup. Reset the base now, then fill it
+	# from the finished map at built (ready can precede an awaited staged build).
+	if not is_built and not built.is_connected(_apply_map_snow_base):
+		built.connect(_apply_map_snow_base, CONNECT_ONE_SHOT)
 	var hour := clock.game_minutes() / 60.0
 	snow_at_min = clock.game_minutes()
 	if storm.is_empty():
@@ -756,12 +760,29 @@ func _apply_fx() -> void:
 ## Arrival and later snow updates must use the same picture weather: warm
 ## sleet draws rain, whose lying snow is halved. Storms keep their stage inputs.
 func _fx_params_now(hour: float, cover: float) -> Dictionary:
+	var p: Dictionary
 	if storm.is_empty() and not atmo.is_empty():
-		return Atmosphere.params(atmo, weather.wind_dir, cover)
-	# atmo starts empty; _ready initializes weather then _apply_fx fills atmo
-	# before any frame update. With initialized weather but no frame, retain
-	# the old rule-weather fallback, just as snow accumulation does below.
-	return FxState.params_for(look_kinds, weather.ambient_c, weather.wind_dir, weather.wind, hour, cover)
+		p = Atmosphere.params(atmo, weather.wind_dir, cover)
+	else:
+		# Without a frame, retain the rule-weather fallback; storms use their stage.
+		p = FxState.params_for(look_kinds, weather.ambient_c, weather.wind_dir, weather.wind, hour, cover)
+	p["fx_map_snow_base"] = _map_snow_base(float(p["fx_snow"]))
+	return p
+
+
+func _map_snow_base(stop_snow: float) -> float:
+	# No map yet means no map snow, not the empty place id's generated shift.
+	if data.is_empty():
+		return 0.0
+	# Reuse the ground's resolved look; never shift fx_snow itself or shift twice.
+	var look := {"shift": view.material.get_shader_parameter("snow_shift")} if view != null and view.material != null else MapView.snow_look_for(data)
+	return MapView.map_snow_base(data, stop_snow, look)
+
+
+func _apply_map_snow_base() -> void:
+	# built supplies the map without changing arrival's snow, light or weather.
+	fx_params["fx_map_snow_base"] = _map_snow_base(float(fx_params["fx_snow"]))
+	FxState.apply({"fx_map_snow_base": fx_params["fx_map_snow_base"]})
 
 
 ## The fires' sparks thin out in what is drawn falling (the atmosphere's kinds:
@@ -788,12 +809,13 @@ func _update_snow() -> void:
 	if snow_tracks != null:
 		snow_tracks.refill(now - snow_at_min, SnowCover.rate_cm_h(kinds_now, temp_now))
 	snow_at_min = now
-	# Reuse arrival's rain/snow branches; only the snow global may change here.
+	# Reuse arrival's branches; the two snow globals share the same visible-change gate.
 	var p := _fx_params_now(now / 60.0, snow_cover.cover())
 	if absf(float(p["fx_snow"]) - float(fx_params["fx_snow"])) < 0.002:
 		return
 	fx_params["fx_snow"] = p["fx_snow"]
-	FxState.apply({"fx_snow": p["fx_snow"]})
+	fx_params["fx_map_snow_base"] = p["fx_map_snow_base"]
+	FxState.apply({"fx_snow": p["fx_snow"], "fx_map_snow_base": p["fx_map_snow_base"]})
 
 
 func _warm_light(reach: float, strength: float) -> OmniLight3D:

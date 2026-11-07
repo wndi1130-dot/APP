@@ -9,7 +9,7 @@ extends RefCounted
 
 ## fx_cold, fx_sky, fx_cloud and fx_sight belong to the atmosphere frame (fx/atmosphere.gd):
 ## params_for gives plain values from the temperature and hour, Atmosphere.params the real ones.
-const GLOBALS: Array[String] = ["fx_wet", "fx_snow", "fx_frost", "fx_wind", "fx_tint", "fx_flash", "fx_fade", "fx_cold", "fx_sky", "fx_cloud", "fx_sight", "fx_fall"]
+const GLOBALS: Array[String] = ["fx_wet", "fx_snow", "fx_frost", "fx_wind", "fx_tint", "fx_flash", "fx_fade", "fx_cold", "fx_sky", "fx_cloud", "fx_sight", "fx_fall", "fx_map_snow_base"]
 ## Texture globals (CC0 photos, 사용자 10-25 공개 자산 먼저): the ground's grain stays as
 ## project.godot sets it; the photo sky follows the look (set_sky).
 const TEXTURE_GLOBALS: Array[String] = ["fx_ground", "fx_sky_tex"]
@@ -233,6 +233,8 @@ static func params_for(kinds: Array, ambient_c: float, wind_dir := Vector2(1, 0)
 	return {
 		"fx_wet": clampf(wet, 0.0, 1.0),
 		"fx_snow": clampf(snow, 0.0, 1.0),
+		# No map here: the field supplies its shifted base once the map exists.
+		"fx_map_snow_base": 0.0,
 		"fx_frost": frost,
 		"fx_wind": Vector3(dir.x, dir.y, clampf(wind, 0.0, 1.0)),
 		"fx_tint": Color(tint.r, tint.g, tint.b, 1.0),
