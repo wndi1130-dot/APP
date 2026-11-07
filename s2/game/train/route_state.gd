@@ -5,16 +5,32 @@ const Catalog = preload("res://game/train/campaign_route.gd")
 const Rng = preload("res://game/politics/rng.gd")
 const FieldReceipt = preload("res://game/sim/receipt.gd")
 const FieldReturn = preload("res://game/politics/field_return.gd")
+const FieldSave = preload("res://game/sim/field_save.gd")
+## Rule 1 derives the seed from the run using SHA-256.
+const SEED_RULE: int = 1
+const FURNISH_RULE: int = FieldSave.FURNISH_RULE
 
 
 static func is_campaign(g: Dictionary) -> bool:
 	return g.get("campaign") is Dictionary and g["campaign"].get("mode") == "campaign"
 
 
-static func start(g: Dictionary, run: String) -> Dictionary:
+static func world_seed_text(bytes: PackedByteArray) -> String:
+	if bytes.size() != 8:
+		return ""
+	return str(bytes.decode_s64(0))
+
+
+static func world_seed_for_run(run: String) -> String:
+	# An empty run is still deterministic; the new-game path generates one first.
+	return world_seed_text((run + ":world_seed").sha256_buffer().slice(0, 8))
+
+
+static func start(g: Dictionary, run: String, world_seed: String) -> Dictionary:
 	var out: Dictionary = g.duplicate(true)
 	out["campaign"] = {"version": 1, "mode": "campaign", "catalog": Catalog.CATALOG, "run": run,
-		"cursor": 0, "visit": {}, "workshop_done": [], "branches": [], "chosen": {}, "recommended": {}, "dead": {}}
+		"cursor": 0, "visit": {}, "workshop_done": [], "branches": [], "chosen": {}, "recommended": {}, "dead": {},
+		"world_seed": world_seed, "seed_rule": SEED_RULE, "furnish_rule": FURNISH_RULE}
 	return out
 
 
@@ -41,10 +57,17 @@ static func record_for_visit(g: Dictionary) -> Dictionary:
 	return {}
 
 
+static func _seed_problem(route: Dictionary, max_furnish_rule: int) -> String:
+	return FieldSave.furnish_seed_problem(route, max_furnish_rule, SEED_RULE)
+
+
 static func problem(g: Dictionary, t: Dictionary = {}) -> String:
 	if not is_campaign(g):
 		return "F-CAMPAIGN-ROUTE: mode"
 	var route: Dictionary = g["campaign"]
+	var seed_issue: String = _seed_problem(route, FURNISH_RULE)
+	if seed_issue != "":
+		return seed_issue
 	if route.get("version") != 1 or route.get("catalog") != Catalog.CATALOG or not route.get("run") is String or route["run"].is_empty():
 		return "F-CAMPAIGN-ROUTE: identity"
 	if not _whole(route.get("cursor")) or int(route["cursor"]) > Catalog.size() or not route.get("visit") is Dictionary:

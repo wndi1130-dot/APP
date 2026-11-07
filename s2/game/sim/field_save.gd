@@ -30,6 +30,7 @@ const Sled = preload("res://game/sim/sled.gd")
 const SLED_PERSON_FIELDS: Array[String] = ["sled_id", "sled_stowed_for", "sled_weapon_stowed", "sled_rearm_t", "sled_serial", "sled_job"]
 const StopGround = preload("res://game/world/stop_ground.gd")
 const SidePath = preload("res://game/world/side_path.gd")
+const FURNISH_RULE: int = 0
 
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
 const VEC_KEYS := ["pos", "home"]
@@ -364,6 +365,23 @@ static func _valid_bounds_rule(value: Variant) -> bool:
 	return value is float and is_finite(value) and value >= 0.0 and value < 9223372036854775808.0 and floor(value) == value
 
 
+## Campaign rules require int; old JSON field options may hold integral floats.
+## A negative seed-rule limit means the field does not read that campaign-only key.
+static func furnish_seed_problem(d: Dictionary, max_rule: int, max_seed_rule: int = -1, allow_float: bool = false) -> String:
+	if d.has("world_seed") and _int_of_text(d["world_seed"]) == null:
+		return "F-CAMPAIGN-ROUTE: world seed"
+	if max_seed_rule >= 0 and d.has("seed_rule"):
+		if not d["seed_rule"] is int or d["seed_rule"] < 0 or d["seed_rule"] > max_seed_rule:
+			return "F-CAMPAIGN-ROUTE: seed_rule"
+	if d.has("furnish_rule"):
+		var rule: Variant = d["furnish_rule"]
+		if not _valid_bounds_rule(rule) or (not allow_float and not rule is int) or rule > max_rule:
+			return "F-CAMPAIGN-ROUTE: furnish_rule"
+	if int(d.get("furnish_rule", 0)) >= 1 and not d.has("world_seed"):
+		return "F-CAMPAIGN-ROUTE: missing world seed"
+	return ""
+
+
 ## Sled rows as the restore reads them: a bad one sends the read to the backup
 ## before anything of the game changes. Saves from before sleds have none.
 static func _whole_sleds(d: Dictionary) -> bool:
@@ -382,7 +400,9 @@ static func _whole_sleds(d: Dictionary) -> bool:
 
 
 ## The saved start options may supply a squad instead of the default one.
-static func _whole_start(opts: Dictionary) -> bool:
+static func _whole_start(opts: Dictionary, max_furnish_rule: int = FURNISH_RULE) -> bool:
+	if furnish_seed_problem(opts, max_furnish_rule, -1, true) != "":
+		return false
 	if not _fields(opts, {}, {"squad": TYPE_ARRAY}):
 		return false
 	if opts.has("squad") and opts["squad"].is_empty():
