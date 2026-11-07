@@ -49,6 +49,8 @@ const INT64_MAX_DIGITS := "9223372036854775807"
 const INT64_MIN_DIGITS := "9223372036854775808"
 const INT32_MIN := -2147483648
 const INT32_MAX := 2147483647
+## Untyped JSON floats can carry whole identifiers exactly only within this inclusive range.
+const MAX_SAFE_JSON_INTEGER: int = 9007199254740992
 ## Tag types and the length of their fixed number list.
 const NUMBER_TAGS := {"Vector3": 3, "Vector2": 2, "Color": 4}
 const INT_TAGS := {"Vector2i": 2, "Rect2i": 4}
@@ -303,6 +305,25 @@ static func _counts(d: Dictionary) -> bool:
 	return true
 
 
+## Missing legacy keys are allowed; present person links must be safe before apply().
+static func _person_brain_ok(row: Dictionary) -> bool:
+	var state: Variant = row.get("state", {})
+	if not state is Dictionary:
+		return false
+	if not state.has("brain"):
+		return true
+	var brain: Variant = state["brain"]
+	if not brain is Dictionary:
+		return false
+	if not brain.has("rising_id"):
+		return true
+	var rising_id: Variant = brain["rising_id"]
+	if rising_id is int:
+		return true  # Tagged int64 values retain their full range.
+	return rising_id is float and is_finite(rising_id) \
+		and absf(rising_id) <= MAX_SAFE_JSON_INTEGER and floorf(rising_id) == rising_id
+
+
 static func _whole(d: Dictionary) -> bool:
 	if d.has("bounds_rule") and not _valid_bounds_rule(d["bounds_rule"]):
 		return false
@@ -328,6 +349,8 @@ static func _whole(d: Dictionary) -> bool:
 			"wear": TYPE_DICTIONARY, "heat": TYPE_DICTIONARY, "meta": TYPE_DICTIONARY, "state": TYPE_DICTIONARY, "aim": TYPE_DICTIONARY,
 		}):
 			return false
+		if not _person_brain_ok(row):
+			return false
 		if not _counts(row["items"]):
 			return false
 		for hand in row["hands"]:
@@ -335,6 +358,8 @@ static func _whole(d: Dictionary) -> bool:
 				return false
 	for row in d.get("zombies", []):
 		if not _fields(row, {"id": TYPE_FLOAT, "horde": TYPE_FLOAT, "kind": TYPE_STRING, "pos": TYPE_VECTOR3, "state": TYPE_STRING}, {"loot": TYPE_ARRAY}):
+			return false
+		if row.has("look_code") and not _int_component(row["look_code"], 0, 511):
 			return false
 	for row in d.get("ground_items", []):
 		if not _fields(row, {"n": TYPE_FLOAT}):
@@ -624,6 +649,8 @@ static func apply(game, save: Dictionary) -> void:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
 	if exact(save):
 		_restore_work_fallback(game, save)
+	# All five fallback routes share this final migration, after person links restore.
+	game.zombies.migrate_look_codes()
 	game.cam_focus = game.player.position
 	game._update_camera(1.0)
 	Sled.reconcile(game)
@@ -776,6 +803,13 @@ static func _sled_person_state(saved: Dictionary) -> Dictionary:
 static func _put_person(p, row: Dictionary) -> void:
 	p.cancel_action()
 	p.stop()
+	# Fallback does not restore the whole brain, but legacy look migration needs this
+	# identity link. Clear a stale local link when the saved person has none.
+	var brain: Dictionary = row.get("state", {}).get("brain", {})
+	if brain.has("rising_id"):
+		p.brain["rising_id"] = brain["rising_id"]
+	else:
+		p.brain.erase("rising_id")
 	p.position = row["pos"]
 	p.bag = String(row["bag"])
 	p.items = (row["items"] as Dictionary).duplicate(true)
@@ -1112,6 +1146,8 @@ static func _apply_exact(game, save: Dictionary) -> void:
 					p.set_meta(key, _thaw(game, metadata[key]))
 				elif p.has_meta(key):
 					p.remove_meta(key)
+	# Drawing did not commit missing codes; all people and the final rows now exist.
+	game.zombies.migrate_look_codes()
 
 
 static func _refresh_restored_view(game) -> void:
@@ -1170,6 +1206,10 @@ static func _put_zombies(game, rows: Array) -> void:
 		if state in ["downed", "dead"]:
 			DeadPose.mark_fall(z, game.people)  # lies as it fell, not standing
 		z["id"] = int(row["id"])
+		if row.has("look_code"):
+			z["look_code"] = int(row["look_code"])
+		else:
+			z.erase("look_code")   # discard spawn's temporary identity; migrate after people restore
 		z["state"] = state if state in RESUME_STATES else "wander"
 		# A version-2 row is the whole record: pockets not rolled yet stay unrolled (zombies.gd rolls them when asked).
 		if row.has("loot"):

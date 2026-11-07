@@ -40,6 +40,7 @@ class SightWorld extends RefCounted:
 
 class DoorWorld extends RefCounted:
 	var rng := RandomNumberGenerator.new()
+	var opts := {}   # spawn reads the run's options like the field's (look code seed falls back to rng)
 	var grid = FieldGrid.new(32, 32)
 	var player := Subject.new()
 	var bangs := 0

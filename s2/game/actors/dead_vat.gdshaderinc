@@ -4,7 +4,8 @@
 #include "res://fx/shaders/fx_common.gdshaderinc"
 
 // VAT layout from scripts/vat_baker.gd. INSTANCE_CUSTOM:
-// r = phase, g = clip number, b = 1 stops the animation, a = shade + 2 * k.
+// r = phase, g = clip number, b = still + 2 * look_code, a = shade + 2 * k.
+// still is 0 or 1 (1 stops the animation); look_code is 0..511, decoded below.
 // k = 0..16 hides that many sixteenths with SIGHT_FADE; shade stays below 2.
 // Plain shade (the living and train's people) has k = 0. b below 0
 // is a tremble of the cold (the train's people, -0.5 at most) and stops nothing.
@@ -103,6 +104,7 @@ varying vec2 tear_at;    // x how high it rests (0 feet .. 1 crown), y 1 on the 
 
 varying float shade;
 varying flat float sight_k;
+varying flat float look_code;   // P0 transport only; fragment does not consume it yet.
 varying vec3 view_pos;
 // 1 in a motion on the ground (falls, the crawl, getting up, eating; vat_baker.gd shader_tables marks
 // them in clip_loop as 2 more): its normals are taken from the moved surface (see flat_normals).
@@ -155,8 +157,12 @@ void vertex() {
 	}
 	// Each body walks at its own pace (0.82..1.18), from its own number.
 	float pace = mix(0.82, 1.18, fract(INSTANCE_CUSTOM.r * 7.31));
-	float hold = max(INSTANCE_CUSTOM.b, 0.0);
-	float shiver = max(-INSTANCE_CUSTOM.b, 0.0);
+	// Nine code bits plus the hold bit, b <= 1023. Each step is exact in fp16.
+	// Living b < 1.5 and negative train shiver retain their original values.
+	look_code = INSTANCE_CUSTOM.b >= 0.0 ? floor(INSTANCE_CUSTOM.b * 0.5 + 0.25) : 0.0;
+	float still_b = INSTANCE_CUSTOM.b - 2.0 * look_code;
+	float hold = max(still_b, 0.0);
+	float shiver = max(-still_b, 0.0);
 	float speed = rate * pace * (1.0 - hold);
 	float looped = mod((TIME - fx_still) * speed + INSTANCE_CUSTOM.r * frames, frames);
 	float once = clamp(INSTANCE_CUSTOM.r, 0.0, 1.0) * (frames - 1.0);

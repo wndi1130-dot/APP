@@ -24,6 +24,150 @@ const BODIES: Array[String] = ["n3-body_tracksuit", "n10-body_denim-m", "n10-bod
 const SETTING: String = "visuals/dead_bodies_max"
 
 
+## Saved outfit numbers and the common mix from the clean design, 2026-11-07:
+## combat_work/docs/설계_망자차림표_클린_20261107.md, sections 2, 3 and 8.
+## Never renumber or reuse a removed row; leave its number empty.
+## P0 only transports these numbers; it does not recolour any pixels.
+const LOOK_MAX: int = 511
+const LOOK_OUTFITS: Dictionary[int, Dictionary] = {
+	1: {"id": "flight_wool_long", "kind": "plain", "set": "flight"},
+	2: {"id": "flight_quilted", "kind": "plain", "set": "flight"},
+	3: {"id": "flight_short_coat", "kind": "plain", "set": "flight"},
+	4: {"id": "flight_wrapped", "kind": "plain", "set": "flight"},
+	5: {"id": "flight_layered", "kind": "plain", "set": "flight"},
+	6: {"id": "flight_lined", "kind": "plain", "set": "flight"},
+	7: {"id": "home_cardigan_coat", "kind": "plain", "set": "home"},
+	8: {"id": "home_robe_coat", "kind": "plain", "set": "home"},
+	9: {"id": "town_counter_winter", "kind": "plain", "set": "work"},
+	10: {"id": "town_outdoor_knit", "kind": "plain", "set": "work"},
+	21: {"id": "rail_two_tone_jacket", "kind": "work", "set": "work"},
+	22: {"id": "rail_bib_overalls", "kind": "work", "set": "work"},
+	23: {"id": "workshop_coat", "kind": "work", "set": "work"},
+	24: {"id": "workshop_apron_vest", "kind": "work", "set": "work"},
+	25: {"id": "farm_bib_overalls", "kind": "work", "set": "work"},
+	26: {"id": "farm_work_coat", "kind": "work", "set": "work"},
+	27: {"id": "shed_heavy_vest", "kind": "work", "set": "work"},
+	41: {"id": "police_winter_coat", "kind": "uniform", "set": "work"},
+	42: {"id": "police_duty", "kind": "uniform", "set": "work"},
+	43: {"id": "fire_turnout", "kind": "uniform", "set": "work"},
+	44: {"id": "fire_duty", "kind": "uniform", "set": "work"},
+}
+const COMMON_LOOK_WEIGHTS: Dictionary[int, int] = {
+	1: 89, 2: 89, 3: 88, 4: 88, 5: 88, 6: 88, 7: 90, 8: 90, 9: 80, 10: 80,
+	21: 20, 22: 20, 23: 20, 25: 20, 26: 20, 41: 10, 42: 5, 43: 10, 44: 5,
+}
+## Append only: never change or delete an issued number/id pair, even if retired.
+## Retired outfits stay here, outside LOOK_OUTFITS; unused numbers have no entry.
+const LOOK_OUTFIT_ISSUED: Dictionary[int, String] = {
+	1: "flight_wool_long",
+	2: "flight_quilted",
+	3: "flight_short_coat",
+	4: "flight_wrapped",
+	5: "flight_layered",
+	6: "flight_lined",
+	7: "home_cardigan_coat",
+	8: "home_robe_coat",
+	9: "town_counter_winter",
+	10: "town_outdoor_knit",
+	21: "rail_two_tone_jacket",
+	22: "rail_bib_overalls",
+	23: "workshop_coat",
+	24: "workshop_apron_vest",
+	25: "farm_bib_overalls",
+	26: "farm_work_coat",
+	27: "shed_heavy_vest",
+	41: "police_winter_coat",
+	42: "police_duty",
+	43: "fire_turnout",
+	44: "fire_duty",
+}
+
+
+## Pure boundary decisions: tests exercise rejected values without stopping scripts.
+static func look_code_ok(code: int) -> bool:
+	return code >= 0 and code <= LOOK_MAX
+
+
+static func still_ok(still: float) -> bool:
+	return is_finite(still) and (still == 0.0 or still == 1.0 or (still >= -0.5 and still < 0.0))
+
+
+static func packed_still_ok(b: float) -> bool:
+	return is_finite(b) and b >= -0.5 and b <= 1023.0
+
+
+static func look_ticket_ok(ticket: int) -> bool:
+	return ticket >= 0 and ticket < 1000
+
+
+static func look_ticket_covered(ticket: int, cumulative: int) -> bool:
+	return ticket < cumulative
+
+
+## Body/shell custom b: one hold bit and nine code bits. Negative b is the
+## train's shiver, never an outfit. The bound also keeps every fp16 decode exact.
+static func pack_still(still: float, code: int) -> float:
+	assert(look_code_ok(code), "look code must be within 0..511")
+	assert(still_ok(still), "still must be 0 or 1, or a shiver in -0.5..0")
+	return still if still < 0.0 else still + 2.0 * code
+
+
+## The same arithmetic as dead_vat.gdshaderinc. Living fractional b below 1.5
+## remains unchanged; multiply before adding to stay exact in half arithmetic.
+static func unpack_still(b: float) -> Vector2:
+	assert(packed_still_ok(b), "packed still must be finite and within -0.5..1023")
+	var code := floorf(b * 0.5 + 0.25) if b >= 0.0 else 0.0
+	return Vector2(b - 2.0 * code, code)
+
+
+## Empty/reserved outfit rows keep their saved number, but draw the old look.
+static func active_look_code(code: int) -> int:
+	return code if look_code_ok(code) and LOOK_OUTFITS.has(code >> 3) else 0
+
+
+## A pure weighted choice over 1000 tickets; sort only a copy of the sparse keys.
+static func outfit_for_roll(ticket: int) -> int:
+	if not look_ticket_ok(ticket):
+		assert(look_ticket_ok(ticket), "look ticket must be within 0..999")
+		push_error("look ticket must be within 0..999")
+		return 0
+	var numbers: Array = COMMON_LOOK_WEIGHTS.keys()
+	numbers.sort()
+	var cumulative := 0
+	for number: int in numbers:
+		cumulative += COMMON_LOOK_WEIGHTS[number]
+		if look_ticket_covered(ticket, cumulative):
+			return number
+	assert(look_ticket_covered(ticket, cumulative), "look weights must cover all 1000 tickets")
+	push_error("look weights must cover all 1000 tickets")
+	return 0
+
+
+## Its own stream: spawn, restoration and drawing never consume game.rng here.
+static func look_code_for(seed: int, id: int) -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = ("%d:look:%d" % [seed, id]).hash()
+	var outfit := outfit_for_roll(rng.randi_range(0, 999))
+	var variant := rng.randi_range(0, 7)
+	return 0 if outfit == 0 else outfit * 8 + variant
+
+
+## Origin is independent of the current state: a risen person can already wander.
+## The caller builds the restored people's id set once; this decision is pure.
+static func look_code_migrated(seed: int, id: int, name: String, person_ids: Dictionary = {}) -> int:
+	return 0 if name != "" or person_ids.has(id) else look_code_for(seed, id)
+
+
+## Shell b uses dirt 0..7, blood 0..7 and a stable pattern seed 0..7. Strengths
+## come from the last seen record's tear colour, never the current hidden body.
+static func shell_look_code(body_code: int, tear: Color) -> int:
+	if active_look_code(body_code) == 0:
+		return 0
+	var dirt := roundi(clampf(tear.g, 0.0, 1.0) * 7.0)
+	var blood := roundi(clampf(tear.r, 0.0, 1.0) * 7.0)
+	return dirt + 8 * blood + 64 * (body_code % 8)
+
+
 ## The folders the dead wear past the first: none when the first is not the
 ## build's own (a folder put in place of it to try a body, dead_body.gd assets).
 static func others() -> Array[String]:

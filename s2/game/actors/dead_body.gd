@@ -151,12 +151,20 @@ static func with_albedo(got: Dictionary, dir: String) -> Dictionary:
 	return got
 
 
+## Tests inject the renderer name, not the capability result, and restore it after use.
+## Empty keeps the production query and decision unchanged.
+static var _test_rendering_method: String = ""
+
+
 ## False where the instance values reach the shader too coarse to carry a
 ## frame and a share in g (the compatibility renderer: a large g does not come
 ## back from the instance buffer as it went in). There a body changes motion
 ## at once, as it did.
 static func can_mix() -> bool:
-	return RenderingServer.get_current_rendering_method() != "gl_compatibility"
+	var method := _test_rendering_method
+	if method == "":
+		method = RenderingServer.get_current_rendering_method()
+	return method != "gl_compatibility"
 
 
 ## Where each motion of a baked folder lies in its picture.
