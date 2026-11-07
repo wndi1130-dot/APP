@@ -1312,6 +1312,7 @@ static func reach_basis(z: Dictionary) -> Basis:
 ## One body's multimeshes, one per look, each in the look's tint, each of the
 ## dead in it worn as its own (dead_cast.gd tear_of, the multimesh colour).
 func _draws_of(body: Dictionary) -> Dictionary:
+	print("DEAD_FIRST_DRAW ", {"kind": "body", "msec": Time.get_ticks_msec(), "frame": Engine.get_process_frames()})
 	var out := {}
 	var mesh: Mesh = body["mesh"]
 	var marked: bool = mesh != null and mesh.get_surface_count() > 0 and (mesh.surface_get_format(0) & Mesh.ARRAY_FORMAT_COLOR) != 0
@@ -1379,6 +1380,7 @@ func _garment_of(b: int, kind: String) -> MultiMeshInstance3D:
 ## on the dead's motions, each of the dead in the garment's own
 ## colour and pattern (dead_cast.gd garment_of, the multimesh colour).
 func _garment_draw(shell: Dictionary) -> MultiMeshInstance3D:
+	print("DEAD_FIRST_DRAW ", {"kind": "garment", "msec": Time.get_ticks_msec(), "frame": Engine.get_process_frames()})
 	var node := MultiMeshInstance3D.new()
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
