@@ -7,7 +7,7 @@ const SENSITIVE_CALLS := ["fwidth", "dFdx", "dFdy", "texture"]
 const UNSUPPORTED_PREFIX := "검사기가 지원하지 않는 구문: "
 const UNSUPPORTED_SHADER_WORDS := ["discard", "while", "for", "do", "break", "continue", "inout", "switch"]
 const WRITE_OPERATORS := ["=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", "&=", "|=", "^=", "++", "--"]
-const SNOW_FLOW_VALUES := ["thin_snow", "grass_holes", "cover", "grass_share", "local_snow", "fresh", "blow"]
+const SNOW_FLOW_VALUES := ["thin_snow", "grass_holes", "cover", "grass_share", "local_snow", "fresh", "blow_weather", "blow"]
 # Godot 셰이더 내장 함수 가운데 out 인자로 값을 쓰는 것들(modf·frexp 등) — 대입 토큰 없이도 계약 값을 바꾼다.
 const BUILTIN_OUT_CALLS := ["modf", "frexp", "uaddCarry", "usubBorrow", "umulExtended", "imulExtended"]
 const GRASS_OUTPUT_CALL := "bare_ground(kind,ground_detail,base,world_pos.xz,grain,ground_dx,ground_dy,grass_share)"
@@ -24,6 +24,9 @@ const CONDITION_BUILTINS := [
 	"normalize", "any", "all", "isnan", "isinf", "true", "false", "const",
 ]
 enum CommentMode { CODE, LINE, BLOCK, QUOTED }
+
+# Per-checker include fixtures; empty for every normal source check.
+var include_sources: Dictionary = {}
 
 
 func _code() -> String:
@@ -147,7 +150,22 @@ func _condition_start(tokens: Array[String], pairs: Dictionary, at: int, lower: 
 	return lower
 
 
-func _unsupported_syntax(source: String, function_names: Dictionary, seen_includes: Dictionary) -> Dictionary:
+func _read_include(path: String) -> Dictionary:
+	# A reader seam keeps include mutation tests in memory; normal checks still read the real files.
+	if include_sources.has(path):
+		return {"source": include_sources[path]}
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return {"error": "읽지 못한 include"}
+	var source := file.get_as_text()
+	var read_error := file.get_error()
+	file.close()
+	if read_error != OK and read_error != ERR_FILE_EOF:
+		return {"error": "읽지 못한 include"}
+	return {"source": source}
+
+
+func _unsupported_syntax(source: String, function_names: Dictionary, seen_includes: Dictionary, allow_inout := false) -> Dictionary:
 	# 지원 경계는 여기서만 판정한다. include의 허용·식별·읽기도 같은 토큰과 원문 위치를 쓴다.
 	var errors: PackedStringArray = []
 	var includes: Array[Dictionary] = []
@@ -176,7 +194,7 @@ func _unsupported_syntax(source: String, function_names: Dictionary, seen_includ
 			bracket_depth += 1
 		elif token == "]":
 			bracket_depth -= 1
-		if token in UNSUPPORTED_SHADER_WORDS or token == "struct":
+		if (token in UNSUPPORTED_SHADER_WORDS and not (allow_inout and token == "inout")) or token == "struct":
 			_unsupported_error(errors, token)
 		if token in WRITE_OPERATORS and (paren_depth > 0 or bracket_depth > 0):
 			_unsupported_error(errors, "괄호 안 대입")
@@ -208,18 +226,12 @@ func _unsupported_syntax(source: String, function_names: Dictionary, seen_includ
 		if not valid:
 			_unsupported_error(errors, "include 꼴")
 		elif not seen_includes.has(path):
-			var file := FileAccess.open(path, FileAccess.READ)
-			if file == null:
-				_unsupported_error(errors, "읽지 못한 include")
+			var included := _read_include(path)
+			if included.has("error"):
+				_unsupported_error(errors, String(included["error"]))
 			else:
-				var included_text := file.get_as_text()
-				var read_error := file.get_error()
-				file.close()
-				if read_error != OK and read_error != ERR_FILE_EOF:
-					_unsupported_error(errors, "읽지 못한 include")
-				else:
-					seen_includes[path] = true
-					includes.append({"path": path, "source": included_text})
+				seen_includes[path] = true
+				includes.append({"path": path, "source": included["source"]})
 	var headers := _function_headers(tokens, pairs)
 	var parameter_tokens := {}
 	for info: Dictionary in headers:
@@ -232,7 +244,7 @@ func _unsupported_syntax(source: String, function_names: Dictionary, seen_includ
 		for i in range(at, parameter_end):
 			parameter_tokens[i] = true
 		while at < parameter_end:
-			while at < parameter_end and tokens[at] in DECLARATION_QUALIFIERS:
+			while at < parameter_end and (tokens[at] in DECLARATION_QUALIFIERS or (allow_inout and tokens[at] == "inout")):
 				at += 1
 			if at < parameter_end and tokens[at] not in DECLARATION_TYPES:
 				_unsupported_error(errors, "목록 밖 인자 타입: " + tokens[at])
@@ -301,7 +313,7 @@ func _unsupported_syntax(source: String, function_names: Dictionary, seen_includ
 	return {"errors": errors, "includes": includes}
 
 
-func _included_source(source: String) -> Dictionary:
+func _included_source(source: String, allow_inout := false) -> Dictionary:
 	var texts: PackedStringArray = []
 	var queue: Array[Dictionary] = [{"path": SHADER_PATH, "source": source}]
 	var seen := {SHADER_PATH: true}
@@ -311,7 +323,8 @@ func _included_source(source: String) -> Dictionary:
 		if queue.size() > 64:
 			return {"error": "include가 64개를 넘음"}
 		var unit: Dictionary = queue[at]
-		var checked := _unsupported_syntax(String(unit["source"]), function_names, seen)
+		# Snow keeps its existing unsupported boundary; weather checks out/inout argument slots.
+		var checked := _unsupported_syntax(String(unit["source"]), function_names, seen, allow_inout)
 		var errors: PackedStringArray = checked["errors"]
 		if not errors.is_empty():
 			return {"unsupported": errors}
@@ -661,9 +674,11 @@ func _snow_flow_steps() -> Array[Array]:
 		["grass_holes", "grass_holes*=1.0-smoothstep(0.0,0.25,max(pile,bank));", []],
 		["cover", "cover*=1.0-grass_holes;", []],
 		["", "base=mix(base,FX_SNOW*mix(1.0,0.75,wet)*mix(0.97,1.02,fresh)*(1.0+(grain.r-0.5)*0.35*mix(1.3,0.5,fresh)*wander),cover);", []],
-		["blow", "floatblow=fresh*smoothstep(0.5,0.9,fx_wind.z)*sky*(1.0-smoothstep(0.08,0.3,chroma));", []],
-		["blow", "blow*=(is_ground?1.0:0.0)*smoothstep(0.6,0.9,up)*(1.0-0.6*trodden);", []],
-		["", "base=mix(base,FX_SNOW*1.1,blow*lane*gust*0.5);", ["if(blow>0.01)"]],
+		# Same dust computation, now under its uniform-only zero guard.
+		["blow_weather", "floatblow_weather=fresh*smoothstep(0.5,0.9,fx_wind.z);", []],
+		["blow", "floatblow=blow_weather*sky*(1.0-smoothstep(0.08,0.3,chroma));", ["if(blow_weather>0.0)"]],
+		["blow", "blow*=(is_ground?1.0:0.0)*smoothstep(0.6,0.9,up)*(1.0-0.6*trodden);", ["if(blow_weather>0.0)"]],
+		["", "base=mix(base,FX_SNOW*1.1,blow*lane*gust*0.5);", ["if(blow_weather>0.0)", "if(blow>0.01)"]],
 	]
 
 

@@ -65,6 +65,9 @@ static func release_particles(owner: Node) -> void:
 
 ## How wet each kind leaves surfaces (0..1). Fog only dampens.
 const WET: Dictionary = {"rain": 1.0, "sleet": 0.75, "fog": 0.25, "overcast": 0.1}
+## Match Atmosphere.WEATHER cloud cover without a circular preload (tested for every kind).
+## Cover gates hoarfrost too; raw weather keeps cloud-shadow strength at zero.
+const CLOUD: Dictionary = {"clear": 0.28, "overcast": 0.95, "fog": 0.85, "snow": 0.92, "blizzard": 1.0, "sleet": 0.96, "rain": 0.96}
 ## Colour washed over sky, haze and particles. Grey and grey-blue only:
 ## sky blue is kept for support (decisions.md 날씨와 빛).
 const KIND_TINT: Dictionary = {
@@ -197,8 +200,11 @@ static func params_for(kinds: Array, ambient_c: float, wind_dir := Vector2(1, 0)
 		if KIND_TINT.has(key):
 			known.append(key)
 	var wet := 0.0
+	var cloud := 0.0
 	for k in known:
 		wet = maxf(wet, float(WET.get(k, 0.0)))
+		# The most covered known kind wins, just as the atmosphere's weather cover does.
+		cloud = maxf(cloud, float(CLOUD.get(k, 0.0)))
 	# Nothing stays wet below -3 C: water is ice (weather.gd falls by the air).
 	if ambient_c < -3.0:
 		wet = minf(wet, 0.25)
@@ -230,7 +236,7 @@ static func params_for(kinds: Array, ambient_c: float, wind_dir := Vector2(1, 0)
 	# not Weather.wind used by body cold and the stop's particle direction.
 	var picture_wind := maxf(wind, 0.9) if known.has("blizzard") else wind
 	# Plain atmosphere values from the temperature alone: cold +6 C .. -14 C,
-	# standing water frozen below about -1 C, no cloud shadows.
+	# standing water frozen below about -1 C; weather cover but still no cloud shadows.
 	var cold := clampf((6.0 - ambient_c) / 20.0, 0.0, 1.0)
 	var ice := 1.0 - smoothstep(-3.0, 1.0, ambient_c)
 	return {
@@ -245,7 +251,7 @@ static func params_for(kinds: Array, ambient_c: float, wind_dir := Vector2(1, 0)
 		"fx_fade": 0.0,
 		"fx_cold": Vector4(cold, ice, 0.0, 0.0),
 		"fx_sky": Color(tint.r, tint.g, tint.b, 1.0),
-		"fx_cloud": Vector4(0.0, dir.x, dir.y, 0.0),
+		"fx_cloud": Vector4(cloud, dir.x, dir.y, 0.0),
 		"fx_sight": sight_floor(float({"day": 1.0, "dawn": 0.5, "dusk": 0.5}.get(band["name"], 0.0))),
 		"fx_fall": fall,
 	}

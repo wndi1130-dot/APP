@@ -6,14 +6,16 @@ const FieldGame = preload("res://game/field_game.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const SnowTracks = preload("res://game/sim/snow_tracks.gd")
+const SnowCover = preload("res://game/sim/snow_cover.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
 const SnowPattern = preload("res://tests/game/test_snow_pattern.gd")
 const SHADER_PATH := "res://game/world/world_vis.gdshader"
-const HOAR_START := "float hoar = smoothstep(0.0, 0.3, fx_frost) * (1.0 - smoothstep(0.5, 0.92, fx_cloud.x)) * (1.0 - smoothstep(0.0, 0.05, max(fx_fall.x, fx_fall.y)));"
-const HOAR_WIND := "hoar *= 1.0 - smoothstep(0.5, 0.8, fx_wind.z);"
+const HOAR_START := "float hoar_weather = smoothstep(0.0, 0.3, fx_frost) * (1.0 - smoothstep(0.5, 0.92, fx_cloud.x)) * (1.0 - smoothstep(0.0, 0.05, max(fx_fall.x, fx_fall.y)));"
+const HOAR_WIND := "hoar_weather *= 1.0 - smoothstep(0.5, 0.8, fx_wind.z);"
 const HOAR_MASK := "hoar *= (is_ground ? 1.0 : 0.0) * smoothstep(0.6, 0.9, up) * sky * (1.0 - cover) * (1.0 - smoothstep(0.05, 0.3, trodden)) * (1.0 - smoothstep(0.08, 0.3, chroma)) * smoothstep(0.3, 0.7, 0.5 * grain.g + 0.5 * drift);"
 const HOAR_PAINT := "base = mix(base, FX_RIME, 0.6 * hoar);"
-const BLOW_START := "float blow = fresh * smoothstep(0.5, 0.9, fx_wind.z) * sky * (1.0 - smoothstep(0.08, 0.3, chroma));"
+const BLOW_START := "float blow_weather = fresh * smoothstep(0.5, 0.9, fx_wind.z);"
+const BLOW_SPACE := "float blow = blow_weather * sky * (1.0 - smoothstep(0.08, 0.3, chroma));"
 const BLOW_MASK := "blow *= (is_ground ? 1.0 : 0.0) * smoothstep(0.6, 0.9, up) * (1.0 - 0.6 * trodden);"
 const BLOW_PAINT := "base = mix(base, FX_SNOW * 1.1, blow * lane * gust * 0.5);"
 const SPLASH := "float splash_k = clamp(fx_fall.x, 0.0, 1.0) * wet * level_k * (1.0 - standing) * (1.0 - fx_cold.y);"
@@ -22,6 +24,7 @@ const RING_EDGE := "float ring = (1.0 - smoothstep(0.0, 0.07, abs(length(fract(s
 const RING_SELECT := "float splash_cell = step(fx_hash(sc + slot * 1.3), 0.4 * fx_fall.x);"
 const WET_PAVING := "base *= 1.0 - (paved ? 0.26 : 0.17) * wet;"
 const SKY_LIFT := "base = mix(base, max(base, fx_sky.rgb * 0.5), wet * level_k * (1.0 - standing) * (paved ? 0.32 : 0.1));"
+const POOL_PAINT := "base = mix(base, fx_pool_color(base, under_snow, world_pos.xz, TIME, fx_cold.y, clamp(fx_fall.x, 0.0, 1.0) * (1.0 - fx_cold.y), refl, max(room_px.x, room_px.y)), standing);"
 
 var checker: Node
 
@@ -40,12 +43,12 @@ func before_each() -> void:
 	add_child_autofree(checker)
 
 
-func _stop(storm := false, staged := false) -> Node:
+func _stop(storm := false, staged := false, stage := "during") -> Node:
 	var game := ArrivalProbe.new()
 	game.opts = {"seed": 5, "raiders": false, "auto_pause": false, "cold": 1.0, "weather": ["snow"]}
 	game.opts["staged"] = staged
 	if storm:
-		game.opts["storm"] = "during"
+		game.opts["storm"] = stage
 	add_child_autofree(game)
 	game.set_process(false)
 	return game
@@ -85,6 +88,42 @@ func test_fall_values_by_kind() -> void:
 	for kind: String in cases:
 		assert_eq(FxState.params_for([kind], -10.0)["fx_fall"], cases[kind], kind)
 	assert_eq(FxState.params_for([], -10.0)["fx_fall"], Vector2.ZERO)
+
+
+func test_cloud_table_matches_every_atmosphere_kind_and_uses_maximum() -> void:
+	# A constant-map lookup lets 3135bb07 fail an assertion rather than fail to parse.
+	var table: Dictionary = FxState.get_script_constant_map().get("CLOUD", {})
+	assert_eq(table.size(), Atmosphere.WEATHER.size())
+	for kind: String in Atmosphere.WEATHER:
+		var expected := float(Atmosphere.WEATHER[kind]["cloud"])
+		assert_eq(float(table.get(kind, -1.0)), expected, kind)
+		var cloud: Vector4 = FxState.params_for([kind], -10.0)["fx_cloud"]
+		assert_almost_eq(cloud.x, expected, 0.000001, kind)
+		assert_eq(cloud.w, 0.0, "raw weather never turns cloud shadows on")
+		var frame := Atmosphere.look(12.0, [kind], "K1", 1.0)
+		assert_almost_eq(Vector4(Atmosphere.params(frame)["fx_cloud"]).x, float(frame["cloud"]), 0.000001, "frame still owns plain-stop cover")
+	for kinds: Array in [[], ["unknown"], ["clear", "unknown"], ["fog", "overcast"], ["rain", "clear", "snow"], ["snow", "blizzard"]]:
+		var expected := 0.0
+		for kind: String in kinds:
+			expected = maxf(expected, float(Atmosphere.WEATHER.get(kind, {}).get("cloud", 0.0)))
+		var cloud: Vector4 = FxState.params_for(kinds, -10.0)["fx_cloud"]
+		assert_almost_eq(cloud.x, expected, 0.000001)
+		assert_eq(cloud.w, 0.0)
+
+
+func test_storm_before_blocks_hoar_but_after_keeps_it_open() -> void:
+	for stage: String in ["before", "after"]:
+		var game := _stop(true, false, stage)
+		var cloud: Vector4 = game.fx_params["fx_cloud"]
+		assert_eq(game.writes[0]["values"]["fx_cloud"], cloud)
+		assert_eq(cloud.w, 0.0)
+		assert_gt(float(game.fx_params["fx_frost"]), 0.0)
+		assert_eq(game.fx_params["fx_fall"], Vector2.ZERO)
+		if stage == "before":
+			assert_gte(cloud.x, 0.92)
+			assert_eq(cloud, FxState.params_for(["overcast"], -10.0, game.weather.wind_dir)["fx_cloud"])
+		else:
+			assert_almost_eq(1.0 - smoothstep(0.5, 0.92, cloud.x), 1.0, 0.000001)
 
 
 func test_fall_uses_component_maxima_independent_of_order_and_depth() -> void:
@@ -213,6 +252,46 @@ func test_snow_gate_keeps_both_globals_below_threshold() -> void:
 		assert_true(game.writes.is_empty(), "below the 0.002 gate sends nothing")
 
 
+func test_snow_gate_checks_small_positive_changes_on_both_sides() -> void:
+	# Existing behavior, missing coverage: 3135bb07 should pass; a 0.001 gate must fail.
+	for target_delta: float in [0.0015, 0.0025]:
+		var game := _stop()
+		game.snow_cover.depth_cm = 20.0 # above the snow floor and below saturation
+		game._apply_fx()
+		var before: float = game.fx_params["fx_snow"]
+		game.clock.elapsed = 60.0 / game.clock.GAME_PER_REAL
+		var now: float = game.clock.game_minutes()
+		# Find the input via the real output function; do not duplicate its cover/rain formula.
+		var low := 20.0
+		var high := float(SnowCover.MAX_CM)
+		for _step in range(32):
+			var mid := (low + high) * 0.5
+			var p: Dictionary = game._fx_params_now(now / 60.0, SnowCover.cover_for(mid))
+			if float(p["fx_snow"]) < before + target_delta:
+				low = mid
+			else:
+				high = mid
+		# _update_snow advances the depth before computing its globals.
+		var growth: float = SnowCover.rate_cm_h(game.atmo["kinds"], float(game.atmo["temp_c"])) * (now - game.snow_at_min) / 60.0
+		game.snow_cover.depth_cm = (low + high) * 0.5 - growth
+		game.writes.clear()
+		game._update_snow()
+		var actual: Dictionary = game._fx_params_now(now / 60.0, game.snow_cover.cover())
+		var delta := float(actual["fx_snow"]) - before
+		assert_almost_eq(delta, target_delta, 0.00001)
+		if target_delta < 0.002:
+			assert_gt(delta, 0.001, "a changed 0.001 gate would wrongly write")
+			assert_lt(delta, 0.002)
+			assert_true(game.writes.is_empty())
+			assert_eq(float(game.fx_params["fx_snow"]), before)
+		else:
+			assert_gt(delta, 0.002)
+			assert_lt(delta, 0.003)
+			assert_eq(game.writes.size(), 1)
+			if game.writes.size() == 1:
+				assert_eq(game.writes[0]["values"], {"fx_snow": actual["fx_snow"], "fx_map_snow_base": actual["fx_map_snow_base"]})
+
+
 func test_globals_are_declared_and_registered() -> void:
 	for name: String in ["fx_fall", "fx_map_snow_base"]:
 		assert_true(FxState.GLOBALS.has(name))
@@ -227,9 +306,15 @@ func test_globals_are_declared_and_registered() -> void:
 func _contract_rows(contract: String) -> Array[Array]:
 	match contract:
 		"hoar":
-			return [["hoar", HOAR_START, []], ["hoar", HOAR_WIND, []], ["hoar", HOAR_MASK, []], ["", HOAR_PAINT, []]]
+			var guard := ["if(hoar_weather>0.0)"]
+			return [["hoar_weather", HOAR_START, []], ["hoar_weather", HOAR_WIND, []],
+				["hoar", "float hoar = hoar_weather;", guard], ["hoar", HOAR_MASK, guard], ["", HOAR_PAINT, guard]]
 		"blow":
-			return [["blow", BLOW_START, []], ["blow", BLOW_MASK, []], ["", BLOW_PAINT, ["if(blow>0.01)"]]]
+			var guard := ["if(blow_weather>0.0)"]
+			return [["fresh", "float fresh = clamp(fx_fall.y, 0.0, 1.0);", []], ["blow_weather", BLOW_START, []],
+				["blow", BLOW_SPACE, guard], ["blow", BLOW_MASK, guard], ["", BLOW_PAINT, ["if(blow_weather>0.0)", "if(blow>0.01)"]]]
+		"pool":
+			return [["", POOL_PAINT, ["if(level_k*water>0.01)", "if(standing>0.001)"]]]
 		"ring":
 			var guard := ["if(splash_k>0.01)"]
 			var selected := ["if(splash_k>0.01)", "if(splash_cell>0.5)"]
@@ -245,10 +330,88 @@ func _contract_rows(contract: String) -> Array[Array]:
 	return []
 
 
+func _weather_call_errors(tokens: Array[String], pairs: Dictionary, opening: int, closing: int, protected_names: Array) -> PackedStringArray:
+	# Expanded includes contain ordinary read helpers (fx_hash(sc)) as well as out helpers.
+	# Only declared out/inout slots can write a caller's value; built-in out calls stay conservative.
+	var outputs := {}
+	for info: Dictionary in checker._function_headers(tokens, pairs):
+		var slots: Array[int] = []
+		var slot := 0
+		for at in range(int(info["parameters"]), int(info["start"]) - 1):
+			if tokens[at] == ",":
+				slot += 1
+			elif tokens[at] in ["out", "inout"]:
+				slots.append(slot)
+		outputs[info["name"]] = slots
+	var errors: PackedStringArray = []
+	for at in range(opening + 1, closing - 1):
+		if tokens[at + 1] != "(":
+			continue
+		var builtin: bool = tokens[at] in checker.BUILTIN_OUT_CALLS
+		var slots: Array = outputs.get(tokens[at], [])
+		if not builtin and slots.is_empty():
+			continue
+		var finish: int = pairs[at + 1]
+		var first := at + 2
+		var cursor := first
+		var slot := 0
+		while cursor <= finish:
+			if cursor == finish or tokens[cursor] == ",":
+				if builtin or slots.has(slot):
+					for argument in range(first, cursor):
+						if tokens[argument] in protected_names:
+							var kind := "out 내장 함수" if builtin else "사용자 함수"
+							checker._unsupported_error(errors, "보호 값 " + kind + " 전달: " + tokens[argument] + " (" + tokens[at] + ")")
+				first = cursor + 1
+				slot += 1
+			elif tokens[cursor] in ["(", "["]:
+				cursor = int(pairs[cursor])
+			cursor += 1
+	return errors
+
+
+func _weather_flow_errors(tokens: Array[String], opening: int, closing: int, steps: Array[Array]) -> PackedStringArray:
+	# Weather owns only its exact statements and paths, never the number of snow/grass consumers.
+	var sites: Array[Dictionary] = []
+	var contexts: Array[String] = []
+	var first := opening + 1
+	var errors: PackedStringArray = []
+	for at in range(opening + 1, closing):
+		if tokens[at] == "{":
+			contexts.append("".join(PackedStringArray(tokens.slice(first, at))))
+			first = at + 1
+		elif tokens[at] == "}":
+			contexts.pop_back()
+			first = at + 1
+		elif tokens[at] == ";":
+			sites.append({"text": "".join(PackedStringArray(tokens.slice(first, at + 1))), "contexts": contexts.duplicate(), "at": first})
+			first = at + 1
+		elif tokens[at] == "return":
+			checker._unsupported_error(errors, "fragment 조기 종료")
+	var previous := -1
+	for step: Array in steps:
+		var matches: Array[Dictionary] = []
+		for site: Dictionary in sites:
+			if site["text"] == step[1]:
+				matches.append(site)
+		if matches.size() != 1:
+			checker._unsupported_error(errors, "날씨 계약 문장 누락·중복: " + String(step[1]))
+			continue
+		var matched: Dictionary = matches[0]
+		if matched["contexts"] != step[2] or int(matched["at"]) <= previous:
+			checker._unsupported_error(errors, "날씨 계약 실행 위치·순서: " + String(step[1]))
+		previous = int(matched["at"])
+	return errors
+
+
 func _weather_errors(source: String, contract: String) -> PackedStringArray:
-	# Reuse the snow checker's tokens, exact statement order and brace paths.
-	# The named writes must also match exactly, so a later overwrite is not an escape.
-	var tokens: Array[String] = checker._tokens(checker._strip_comments(source))
+	# The same include validation, read failures and recursion limit as the snow checker.
+	var included: Dictionary = checker._included_source(source, true)
+	if included.has("unsupported"):
+		return PackedStringArray(included["unsupported"])
+	if included.has("error"):
+		return PackedStringArray([String(included["error"])])
+	var tokens: Array[String] = checker._tokens(String(included["source"]))
 	var paired: Dictionary = checker._paired_tokens(tokens)
 	if paired.has("error"):
 		return PackedStringArray([String(paired["error"])])
@@ -268,12 +431,8 @@ func _weather_errors(source: String, contract: String) -> PackedStringArray:
 			continue
 		var opening: int = info["start"]
 		var closing: int = int(info["end"]) - 1
-		# Extend the existing snow guard with this contract's own write roots.
-		var protected_names: Array = checker.SNOW_FLOW_VALUES.duplicate()
-		for name: String in expected:
-			if not protected_names.has(name):
-				protected_names.append(name)
-		var errors: PackedStringArray = checker._snow_flow_errors(tokens, pairs, opening, closing, steps, protected_names)
+		var errors := _weather_flow_errors(tokens, opening, closing, steps)
+		errors.append_array(_weather_call_errors(tokens, pairs, opening, closing, expected.keys()))
 		var write_errors: Array[String] = []
 		for name: String in expected:
 			if checker._write_statements(tokens, pairs, opening + 1, closing, name, write_errors) != expected[name]:
@@ -377,7 +536,7 @@ func test_ring_selection_precedes_geometry_and_rejects_eager_work() -> void:
 	var source := FileAccess.get_file_as_string(SHADER_PATH)
 	var changed := source.replace(RING_CENTER, "").replace("if (splash_cell > 0.5) {", RING_CENTER + "\nif (splash_cell > 0.5) {")
 	assert_ne(changed, source)
-	assert_true(_weather_errors(changed, "ring").has(checker.UNSUPPORTED_PREFIX + "눈 계약 실행 위치·순서: " + checker._compact(RING_CENTER)))
+	assert_true(_weather_errors(changed, "ring").has(checker.UNSUPPORTED_PREFIX + "날씨 계약 실행 위치·순서: " + checker._compact(RING_CENTER)))
 
 
 func test_weather_writes_reject_components_subscripts_and_all_operators() -> void:
@@ -413,6 +572,57 @@ func test_weather_writes_reject_builtin_out_and_user_out_inout() -> void:
 		changed = changed.replace(RING_CENTER, RING_CENTER + "\nreset_weather(so);")
 		assert_ne(changed, source)
 		assert_true(_weather_errors(changed, "ring").has(checker.UNSUPPORTED_PREFIX + "보호 값 사용자 함수 전달: so (reset_weather)"), qualifier)
+
+
+func test_weather_includes_reject_out_writes_and_preserve_read_errors() -> void:
+	var source := FileAccess.get_file_as_string(SHADER_PATH)
+	var path := "res://__weather_out_fixture__.gdshaderinc"
+	# Only the read seam changes; syntax, queue expansion and function discovery remain real.
+	checker.include_sources[path] = "void weather_scalar(out float value) { value = 0.0; }\nvoid weather_vector(out vec2 value) { value = vec2(0.0); }"
+	var expanded := source.replace("void fragment() {", '#include "' + path + '"\nvoid fragment() {')
+	for row: Array in [["hoar", HOAR_MASK, "weather_scalar", "hoar"], ["ring", RING_CENTER, "weather_vector", "so"]]:
+		assert_eq(_weather_errors(expanded, row[0]).size(), 0, "unused include is valid")
+		var changed := expanded.replace(row[1], row[1] + "\n" + row[2] + "(" + row[3] + ");")
+		assert_ne(changed, expanded)
+		assert_true(_weather_errors(changed, row[0]).has(checker.UNSUPPORTED_PREFIX + "보호 값 사용자 함수 전달: " + row[3] + " (" + row[2] + ")"))
+	checker.include_sources.clear()
+	assert_true(_weather_errors(expanded, "hoar").has(checker.UNSUPPORTED_PREFIX + "읽지 못한 include"))
+	var malformed := source.replace("void fragment() {", '# include "' + path + '"\nvoid fragment() {')
+	assert_true(_weather_errors(malformed, "hoar").has(checker.UNSUPPORTED_PREFIX + "include 꼴"))
+
+
+func test_pool_rain_contract() -> void:
+	_assert_contract("pool")
+
+
+func test_pool_rain_contract_rejects_wetness_as_rain() -> void:
+	# Fog can wet the ground without falling rain; wetness must not drive pool rings.
+	_reject("pool", POOL_PAINT, POOL_PAINT.replace("clamp(fx_fall.x, 0.0, 1.0)", "fx_wet"))
+
+
+func test_weather_guards_reject_removal_and_pixel_dependencies() -> void:
+	var source := FileAccess.get_file_as_string(SHADER_PATH)
+	for row: Array in [["hoar", "hoar_weather", HOAR_START], ["blow", "blow_weather", BLOW_START]]:
+		var contract: String = row[0]
+		var marker := "if (" + String(row[1]) + " > 0.0)"
+		_assert_contract(contract)
+		var body: String = checker._block(source, marker + " {")
+		_reject(contract, marker + " {" + body + "}", body)
+		for pixel: String in ["sky", "up"]:
+			_reject(contract, marker, "if (" + String(row[1]) + " * " + pixel + " > 0.0)")
+			# A local variable named 'weather' is not enough: its definition must stay uniform too.
+			_reject(contract, row[2], String(row[2]).replace("= ", "= " + pixel + " * "))
+	assert_eq(checker._derivative_errors(source).size(), 0, "no implicit derivatives in the guarded spatial work")
+
+
+func test_weather_contract_ignores_unrelated_snow_consumers() -> void:
+	var source := FileAccess.get_file_as_string(SHADER_PATH)
+	assert_eq(_weather_errors(source, "hoar").size(), 0)
+	var grass := "bare_ground(kind, ground_detail, base, world_pos.xz, grain, ground_dx, ground_dy, grass_share)"
+	for changed: String in [source.replace(BLOW_PAINT, ""), source.replace(grass, "vec3(0.0)")]:
+		assert_ne(changed, source)
+		assert_eq(_weather_errors(changed, "hoar").size(), 0, "weather does not count snow/grass consumers")
+		assert_gt(checker._single_assignment_errors(changed).size(), 0, "the snow checker still owns that violation")
 
 
 func test_wet_paving_contract() -> void:

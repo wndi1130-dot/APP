@@ -914,13 +914,17 @@ void fragment() {
 	// Blizzard: snow dust running over the ground along the wind, in lanes that gust by.
 	// Only the ground's upward faces (the pattern is xz only, it would stripe a wall or a prop's side),
 	// and thinner over a trodden track so the track still reads under the passing dust (6 Pro 782a61e1 2).
-	float blow = fresh * smoothstep(0.5, 0.9, fx_wind.z) * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
-	blow *= (is_ground ? 1.0 : 0.0) * smoothstep(0.6, 0.9, up) * (1.0 - 0.6 * trodden);
-	if (blow > 0.01) {
-		vec2 wd = normalize(fx_wind.xy + vec2(0.0001, 0.0));
-		float lane = smoothstep(0.55, 0.95, 0.5 + 0.5 * sin(dot(world_pos.xz, vec2(-wd.y, wd.x)) * 2.7 + drift * 7.0));
-		float gust = smoothstep(0.35, 0.9, 0.5 + 0.5 * sin(dot(world_pos.xz, wd) * 0.45 - TIME * 3.2 + drift * 4.0));
-		base = mix(base, FX_SNOW * 1.1, blow * lane * gust * 0.5);
+	// The uniform prefix is unchanged; when it is zero all spatial work would contribute zero.
+	float blow_weather = fresh * smoothstep(0.5, 0.9, fx_wind.z);
+	if (blow_weather > 0.0) {
+		float blow = blow_weather * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
+		blow *= (is_ground ? 1.0 : 0.0) * smoothstep(0.6, 0.9, up) * (1.0 - 0.6 * trodden);
+		if (blow > 0.01) {
+			vec2 wd = normalize(fx_wind.xy + vec2(0.0001, 0.0));
+			float lane = smoothstep(0.55, 0.95, 0.5 + 0.5 * sin(dot(world_pos.xz, vec2(-wd.y, wd.x)) * 2.7 + drift * 7.0));
+			float gust = smoothstep(0.35, 0.9, 0.5 + 0.5 * sin(dot(world_pos.xz, wd) * 0.45 - TIME * 3.2 + drift * 4.0));
+			base = mix(base, FX_SNOW * 1.1, blow * lane * gust * 0.5);
+		}
 	}
 	// Rime on upright faces in hard cold: thin and patchy, never a white wall.
 	float rime = (1.0 - smoothstep(0.2, 0.6, up)) * sky * clamp(fx_frost, 0.0, 1.0);
@@ -931,11 +935,15 @@ void fragment() {
 	// Any fall at all puts it out (the largest of rain and snow past 0.05, not their sum), a wind
 	// past 0.5 thins it and past 0.8 clears it (6 Pro 782a61e1 4). Ground only, spared on coloured
 	// kinds as the snow is (0.08 to 0.3), and never on a trodden track (782a61e1 5).
-	float hoar = smoothstep(0.0, 0.3, fx_frost) * (1.0 - smoothstep(0.5, 0.92, fx_cloud.x)) * (1.0 - smoothstep(0.0, 0.05, max(fx_fall.x, fx_fall.y)));
-	hoar *= 1.0 - smoothstep(0.5, 0.8, fx_wind.z);
-	// A single walk presses 0.5: clear its frost fully, rather than leave half a bloom.
-	hoar *= (is_ground ? 1.0 : 0.0) * smoothstep(0.6, 0.9, up) * sky * (1.0 - cover) * (1.0 - smoothstep(0.05, 0.3, trodden)) * (1.0 - smoothstep(0.08, 0.3, chroma)) * smoothstep(0.3, 0.7, 0.5 * grain.g + 0.5 * drift);
-	base = mix(base, FX_RIME, 0.6 * hoar);
+	// Keep the original multiply order; only uniform weather decides whether to do the mask.
+	float hoar_weather = smoothstep(0.0, 0.3, fx_frost) * (1.0 - smoothstep(0.5, 0.92, fx_cloud.x)) * (1.0 - smoothstep(0.0, 0.05, max(fx_fall.x, fx_fall.y)));
+	hoar_weather *= 1.0 - smoothstep(0.5, 0.8, fx_wind.z);
+	if (hoar_weather > 0.0) {
+		float hoar = hoar_weather;
+		// A single walk presses 0.5: clear its frost fully, rather than leave half a bloom.
+		hoar *= (is_ground ? 1.0 : 0.0) * smoothstep(0.6, 0.9, up) * sky * (1.0 - cover) * (1.0 - smoothstep(0.05, 0.3, trodden)) * (1.0 - smoothstep(0.08, 0.3, chroma)) * smoothstep(0.3, 0.7, 0.5 * grain.g + 0.5 * drift);
+		base = mix(base, FX_RIME, 0.6 * hoar);
+	}
 	// The atmosphere frame (fx_cold, fx_sky): standing water on open flat ground
 	// where the snow thins, open and ringed by rain above freezing, ice below;
 	// wet ground gives a little of the sky back (no specular here); dead leaf on
