@@ -499,7 +499,7 @@ class Footprint:
 ## A dark rim round each thing (T0-6): a quad flat on its floor, up to RIM wider
 ## than the thing on every side. Close neighbours narrow it to leave RIM_SPACE
 ## of bare floor between rims, without moving the things. It darkens the floor
-## (contact_shade.gdshader: black at RIM_STRENGTH over whatever the floor is, so
+## (ground_rim.gdshader: black at RIM_STRENGTH over whatever the floor is, so
 ## asphalt, boards and snow each go darker in their own colour, lighter on snow).
 ## From above it is the outline of the flat things (a coat, a map, a knife) and
 ## the contact line of the taller ones, so a dark thing still stands off a
@@ -509,6 +509,11 @@ const RIM: float = 0.1
 const RIM_SPACE: float = 0.01
 const RIM_LIFT: float = 0.004
 const RIM_STRENGTH: float = 0.8
+## Keep the old shade until capture tuning enables the pale outer band.
+const RIM_CORE: float = 0.6
+const RIM_SNOW_KEEP: float = 0.5
+const RIM_HALO: float = 0.0
+const RIM_HALO_FROM: float = 0.7
 
 
 ## Largest common width that keeps these two rims RIM_SPACE apart (unclamped).
@@ -570,6 +575,12 @@ static func _rim_widths(out: Array) -> Array[float]:
 					if other.mark == slot:
 						continue
 					other.mark = slot
+					# Each full rim fits in reach + sqrt(2)*RIM about its centre.
+					# Beyond both radii plus sqrt(2)*RIM_SPACE, a SAT axis already
+					# keeps RIM_SPACE. Square the bound to skip four-axis work.
+					var far: float = foot.reach + other.reach + margin
+					if foot.centre.distance_squared_to(other.centre) > far * far:
+						continue
 					var width: float = clampf(_rim_limit(foot, other), 0.0, RIM)
 					widths[slot] = minf(widths[slot], width)
 					widths[other_slot] = minf(widths[other_slot], width)

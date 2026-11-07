@@ -931,6 +931,9 @@ static func _ground_signature(items: Array, roots: Dictionary) -> int:
 	return hash([items.hash(), floors, root_ids])
 
 
+var _ground_rim_material: ShaderMaterial
+
+
 func update_ground(items: Array) -> void:
 	var sig: int = _ground_signature(items, level_roots)
 	if not level_roots.is_empty() and sig == _ground_sig and sig == _drawn_ground_sig:
@@ -988,10 +991,18 @@ func update_ground(items: Array) -> void:
 		_rim_quad(rims[lv], rim)
 	for lv in tools:
 		if not ground_nodes.has(lv):
+			if _ground_rim_material == null:
+				_ground_rim_material = ShaderMaterial.new()
+				_ground_rim_material.shader = preload("res://fx/shaders/ground_rim.gdshader")
+				_ground_rim_material.set_shader_parameter("core", GroundLook.RIM_CORE)
+				_ground_rim_material.set_shader_parameter("snow_keep", GroundLook.RIM_SNOW_KEEP)
+				_ground_rim_material.set_shader_parameter("halo", GroundLook.RIM_HALO)
+				_ground_rim_material.set_shader_parameter("halo_from", GroundLook.RIM_HALO_FROM)
+				_ground_rim_material.render_priority = Material.RENDER_PRIORITY_MIN
 			ground_nodes[lv] = _mesh_node(lv)
 			var rim_node := MeshInstance3D.new()
 			rim_node.name = "Rim"
-			rim_node.material_override = _contact_material("rim")
+			rim_node.material_override = _ground_rim_material
 			rim_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			ground_nodes[lv].add_child(rim_node)
 		elif ground_nodes[lv].get_parent() != level_roots[lv]:

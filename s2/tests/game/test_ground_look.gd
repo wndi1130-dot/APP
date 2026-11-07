@@ -21,6 +21,37 @@ func after_each() -> void:
 	GroundModels.restore_cache(_old_cache)
 
 
+func test_ground_rim_shader_loads_with_four_float_controls() -> void:
+	var path := "res://fx/shaders/ground_rim.gdshader"
+	assert_true(ResourceLoader.exists(path), "ground rims have their own shader")
+	if not ResourceLoader.exists(path):
+		return
+	var shader := load(path) as Shader
+	assert_not_null(shader)
+	if shader == null:
+		return
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	assert_eq(shader.get_mode(), Shader.MODE_SPATIAL)
+	# Uniform reflection requests parsing, as in test_fx; GPU drawing is separate.
+	var uniforms: Dictionary = {}
+	for entry: Dictionary in shader.get_shader_uniform_list():
+		uniforms[String(entry["name"])] = entry["type"]
+	# Unset defaults are not read back without a renderer (headless gives null),
+	# so the declared default is read from the source itself.
+	var defaults := {"core": 0.6, "snow_keep": 0.5, "halo": 0.0, "halo_from": 0.7}
+	var declared := RegEx.create_from_string("uniform\\s+float\\s+(\\w+)\\s*:[^=;]*=\\s*([0-9.]+)\\s*;")
+	var found: Dictionary = {}
+	for hit: RegExMatch in declared.search_all(shader.code):
+		found[hit.get_string(1)] = float(hit.get_string(2))
+	for name: String in defaults:
+		assert_eq(int(uniforms.get(name, -1)), TYPE_FLOAT, name)
+		assert_true(found.has(name), name + " declares a default")
+		assert_almost_eq(float(found.get(name, -1.0)), float(defaults[name]), 0.000001, name + " default")
+	assert_false(uniforms.has("per_instance"))
+	assert_false(uniforms.has("rect_custom"))
+
+
 func test_each_thing_has_a_shape_of_its_kind() -> void:
 	var kinds := {
 		"knife": "weapon", "undershirt_wool": "garment", "cloth": "cloth", "note_map": "paper",
@@ -589,6 +620,57 @@ func test_rim_buckets_match_all_pairs_without_moving_or_mutating_pieces() -> voi
 	assert_eq(GroundLook._rim_widths([]), [])
 
 
+## No buckets or distance shortcut; the existing SAT tests check _rim_limit itself.
+func _all_pair_rim_widths(pieces: Array) -> Array[float]:
+	var feet: Array[GroundLook.Footprint] = []
+	var widths: Array[float] = []
+	for piece: Dictionary in pieces:
+		var at: Vector3 = piece["at"]
+		var size: Vector3 = piece["size"]
+		feet.append(GroundLook.Footprint.new(Vector2(at.x, at.z), Vector2(size.x, size.z), piece["yaw"]))
+		widths.append(GroundLook.RIM)
+	for i: int in pieces.size():
+		for j: int in range(i + 1, pieces.size()):
+			if pieces[i]["lv"] != pieces[j]["lv"]:
+				continue
+			var width: float = clampf(GroundLook._rim_limit(feet[i], feet[j]), 0.0, GroundLook.RIM)
+			widths[i] = minf(widths[i], width)
+			widths[j] = minf(widths[j], width)
+	return widths
+
+
+func test_rim_distance_skip_matches_all_pairs_on_seeded_layouts() -> void:
+	for seed_value: int in [51107, 51108, 51109, 51110]:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed_value
+		var pieces: Array = []
+		for n: int in 64:
+			var extent: float = 0.8 if n < 32 else 8.0
+			var at := Vector3(rng.randf_range(-extent, extent), 3.0 * (n % 4 - 1), rng.randf_range(-extent, extent))
+			var size := Vector3(rng.randf_range(0.02, 3.0), 0.1, rng.randf_range(0.02, 3.0))
+			var piece := _piece(n, at, size)
+			piece["yaw"] = rng.randf_range(-TAU, TAU)
+			pieces.append(piece)
+		var before: Array = pieces.duplicate(true)
+		assert_eq(GroundLook._rim_widths(pieces), _all_pair_rim_widths(pieces), "seed %d" % seed_value)
+		assert_eq(pieces, before, "width pass leaves inputs unchanged")
+		pieces.reverse()
+		assert_eq(GroundLook._rim_widths(pieces), _all_pair_rim_widths(pieces), "reversed seed %d" % seed_value)
+
+
+func test_rim_distance_skip_boundary_keeps_full_and_narrow_widths() -> void:
+	var size := Vector3(0.02, 0.1, 0.02)
+	var reach: float = Vector2(size.x, size.z).length() * 0.5
+	var threshold: float = 2.0 * reach + sqrt(2.0) * (2.0 * GroundLook.RIM + GroundLook.RIM_SPACE)
+	for yaw: float in [0.0, PI * 0.25, PI * 0.5]:
+		# All pairs share a bucket; include overlap, a narrowed rim and the skip boundary.
+		for distance: float in [0.0, 0.08, threshold - 0.00001, threshold, threshold + 0.00001, 0.7]:
+			var pieces: Array = [_piece(0, Vector3(0.1, 0, 0.1), size), _piece(1, Vector3(0.1 + distance, 0, 0.1), size)]
+			pieces[0]["yaw"] = yaw
+			pieces[1]["yaw"] = -yaw
+			assert_eq(GroundLook._rim_widths(pieces), _all_pair_rim_widths(pieces), "yaw %f distance %f" % [yaw, distance])
+
+
 func test_rim_buckets_find_two_diagonal_squares_across_an_integer_edge() -> void:
 	var pieces: Array = [
 		_piece(0, Vector3(0.60, 0, 0.5), Vector3(0.2, 0.1, 0.2)),
@@ -711,7 +793,7 @@ func test_it_lies_on_its_own_floor() -> void:
 
 
 func test_each_thing_has_a_dark_rim_round_it_on_its_floor() -> void:
-	# T0-6: a quad a little wider than the thing, flat on the thing's own floor (contact_shade darkens it).
+	# T0-6: a quad a little wider than the thing, flat on the thing's own floor (ground_rim darkens it).
 	var piece: Dictionary = GroundLook.pieces([{"pos": Vector3(4.5, 3.0, 4.5), "id": "undershirt_wool", "n": 1}])[0]
 	var rim: Dictionary = GroundLook.rim(piece)
 	var size: Vector3 = piece["size"]
@@ -732,7 +814,7 @@ func _rim_alphas(rim: Dictionary) -> Array:
 
 
 func test_a_rim_under_a_roof_says_so_in_its_alpha() -> void:
-	# contact_shade lightens a rim on snow out of doors only (alpha 1); under a roof (0) no snow lies
+	# ground_rim lightens a rim on snow out of doors only (alpha 1); under a roof (0) no snow lies
 	# on the floor, so the rim keeps its strength in deep winter too.
 	var piece: Dictionary = GroundLook.pieces([{"pos": Vector3(4.5, 0.0, 4.5), "id": "cloth", "n": 1}])[0]
 	var rim: Dictionary = GroundLook.rim(piece)
