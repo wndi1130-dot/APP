@@ -30,11 +30,10 @@ const ART_DIR: String = "res://assets/icons/items"
 ## about 1.6 apart on 11-07; a second bake of one model under two names is ~0.
 const NEAR_SIDE: int = 32
 const NEAR_LIMIT: float = 0.5
-## Things a map hands out that no table names yet (so no name, weight or picture):
-## church_04's yard coal sack gives "coal" (11-07, sent to 코디 — what it should
-## become is a rule to set, not this test's). Each must still be handed out: once
-## it is set right, take it off here.
-const KNOWN_GAPS: Array[String] = ["coal"]
+## Things a map hands out that no table names yet (so no name, weight or picture).
+## Each must still be handed out: once it is set right, take it off here. Empty since
+## 11-07: church_04's yard coal sack ("coal") became a coal heap prop (#1468).
+const KNOWN_GAPS: Array[String] = []
 const DRESS_SEED: int = 1107
 
 ## Every thing the game names, by its line icon (field_game.item_icon).
