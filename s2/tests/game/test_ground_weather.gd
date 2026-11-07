@@ -92,7 +92,9 @@ func test_fall_values_by_kind() -> void:
 
 func test_cloud_table_matches_every_atmosphere_kind_and_uses_maximum() -> void:
 	# A constant-map lookup lets 3135bb07 fail an assertion rather than fail to parse.
-	var table: Dictionary = FxState.get_script_constant_map().get("CLOUD", {})
+	# Through a Script-typed variable: called on the preloaded class it parses as a static call.
+	var fx_script: Script = FxState
+	var table: Dictionary = fx_script.get_script_constant_map().get("CLOUD", {})
 	assert_eq(table.size(), Atmosphere.WEATHER.size())
 	for kind: String in Atmosphere.WEATHER:
 		var expected := float(Atmosphere.WEATHER[kind]["cloud"])
