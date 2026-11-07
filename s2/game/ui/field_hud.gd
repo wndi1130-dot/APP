@@ -4495,6 +4495,23 @@ static func _owns_aim(f: Dictionary) -> bool:
 	return bool(f.get("aim_owner", false))
 
 
+## Whether this gesture may change or end the aim. Its owner may. An aim no finger owns (started by a
+## direct call, or its owner's record already gone) may be ended by any gesture that never lost the
+## aim, so no aim is left that nothing can end; a gesture whose aim was taken over (aim_owner false)
+## never may.
+func _may_end_aim(f: Dictionary) -> bool:
+	if _owns_aim(f):
+		return true
+	return not f.has("aim_owner") and not _aim_has_owner()
+
+
+func _aim_has_owner() -> bool:
+	for held: Dictionary in fingers.values():
+		if _owns_aim(held):
+			return true
+	return false
+
+
 func _claim_aim(f: Dictionary) -> void:
 	for held: Dictionary in fingers.values():
 		if _owns_aim(held):
@@ -4505,7 +4522,7 @@ func _claim_aim(f: Dictionary) -> void:
 
 
 func _cancel_owned_aim(f: Dictionary) -> void:
-	if not _owns_aim(f):
+	if not _may_end_aim(f):
 		return
 	if auto_aim:
 		aim_cancel = true
@@ -4807,8 +4824,8 @@ func _pad_move(b: Button, pos: Vector2, f: Dictionary) -> void:
 		return
 	if b != aim_button or not auto_aim:
 		return
-	# Direct callers without registered fingers retain their existing aim API.
-	if not _owns_aim(f) and (f.has("kind") or not fingers.is_empty()):
+	# The owner, or any never-superseded gesture while no finger owns the aim (direct calls included).
+	if not _may_end_aim(f):
 		return
 	var over := _over_player(pos)
 	aim_armed = aim_armed or not over
@@ -4839,7 +4856,7 @@ func _pad_move(b: Button, pos: Vector2, f: Dictionary) -> void:
 
 
 func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
-	if b == aim_button and not f.is_empty() and not _owns_aim(f) and not primary_melee(game.player):
+	if b == aim_button and not f.is_empty() and not _may_end_aim(f) and not primary_melee(game.player):
 		return
 	if _pad_blocked(b):
 		if b in [attack_button, aim_button, shove_button]:
@@ -4849,7 +4866,7 @@ func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
 		return
 	if b == aim_button:
 		aim_button.button_pressed = false
-		if f.is_empty() or _owns_aim(f):
+		if f.is_empty() or _may_end_aim(f):
 			_auto_aim_end(pos)
 	elif b == context_button:
 		context_button.button_pressed = false
@@ -4975,7 +4992,7 @@ func _release(pos: Vector2, f: Dictionary = {}) -> void:
 	if f.has("aim_owner") and not _owns_aim(f):
 		return
 	var p = game.player
-	if aiming and (f.is_empty() or _owns_aim(f)):
+	if aiming and (f.is_empty() or _may_end_aim(f)):
 		aiming = false
 		if p.aim.active:
 			if not (aim_cancel or (aim_armed and _over_player(pos))):
@@ -5003,7 +5020,7 @@ func _release(pos: Vector2, f: Dictionary = {}) -> void:
 
 ## The right thumb dragging the aim point (manual, or pressed on an enemy).
 func _hand_move(pos: Vector2, f: Dictionary = {}) -> void:
-	if not (pressing and aiming) or (not f.is_empty() and not _owns_aim(f)):
+	if not (pressing and aiming) or (not f.is_empty() and not _may_end_aim(f)):
 		return
 	var over := _over_player(pos)
 	aim_armed = aim_armed or not over

@@ -1308,3 +1308,24 @@ func test_melee_cancel_keeps_a_reissued_stair_path_without_goal() -> void:
 	assert_true(game.hud.finger_cancel(7))
 	assert_eq(p.path, route, "같은 좌표라도 실제 계단 이동 발행을 남긴다")
 	_assert_no_target()
+
+
+func test_an_aim_nobody_owns_ends_only_by_a_gesture_that_never_lost_it() -> void:
+	_field()
+	var hud: Object = game.hud
+	# Loaded through Object so the file still parses on code without this helper; it fails here instead.
+	assert_true(hud.has_method("_may_end_aim"), "orphan-aim rule exists")
+	if not hud.has_method("_may_end_aim"):
+		return
+	var fingers: Dictionary = hud.get("fingers")
+	fingers.clear()
+	fingers[1] = {"kind": "hand", "aim_owner": false}
+	fingers[2] = {"kind": "pad"}
+	assert_false(hud.call("_may_end_aim", fingers[1]), "a superseded gesture never ends the aim")
+	assert_true(hud.call("_may_end_aim", fingers[2]), "nobody owns it: a never-superseded gesture may end it")
+	assert_true(hud.call("_may_end_aim", {}), "a direct call may end an aim nobody owns")
+	fingers[3] = {"kind": "pad", "aim_owner": true}
+	assert_true(hud.call("_may_end_aim", fingers[3]), "the owner may")
+	assert_false(hud.call("_may_end_aim", fingers[2]), "while an owner exists, others may not")
+	assert_false(hud.call("_may_end_aim", {}), "nor a direct call")
+	fingers.clear()
