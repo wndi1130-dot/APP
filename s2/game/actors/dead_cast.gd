@@ -83,32 +83,52 @@ const LOOK_OUTFIT_ISSUED: Dictionary[int, String] = {
 }
 
 
+## Pure boundary decisions: tests exercise rejected values without stopping scripts.
+static func look_code_ok(code: int) -> bool:
+	return code >= 0 and code <= LOOK_MAX
+
+
+static func still_ok(still: float) -> bool:
+	return is_finite(still) and (still == 0.0 or still == 1.0 or (still >= -0.5 and still < 0.0))
+
+
+static func packed_still_ok(b: float) -> bool:
+	return is_finite(b) and b >= -0.5 and b <= 1023.0
+
+
+static func look_ticket_ok(ticket: int) -> bool:
+	return ticket >= 0 and ticket < 1000
+
+
+static func look_ticket_covered(ticket: int, cumulative: int) -> bool:
+	return ticket < cumulative
+
+
 ## Body/shell custom b: one hold bit and nine code bits. Negative b is the
 ## train's shiver, never an outfit. The bound also keeps every fp16 decode exact.
 static func pack_still(still: float, code: int) -> float:
-	assert(code >= 0 and code <= LOOK_MAX, "look code must be within 0..511")
-	assert(is_finite(still) and (still == 0.0 or still == 1.0 or (still >= -0.5 and still < 0.0)),
-		"still must be 0 or 1, or a shiver in -0.5..0")
+	assert(look_code_ok(code), "look code must be within 0..511")
+	assert(still_ok(still), "still must be 0 or 1, or a shiver in -0.5..0")
 	return still if still < 0.0 else still + 2.0 * code
 
 
 ## The same arithmetic as dead_vat.gdshaderinc. Living fractional b below 1.5
 ## remains unchanged; multiply before adding to stay exact in half arithmetic.
 static func unpack_still(b: float) -> Vector2:
-	assert(is_finite(b) and b >= -0.5 and b <= 1023.0, "packed still must be finite and within -0.5..1023")
+	assert(packed_still_ok(b), "packed still must be finite and within -0.5..1023")
 	var code := floorf(b * 0.5 + 0.25) if b >= 0.0 else 0.0
 	return Vector2(b - 2.0 * code, code)
 
 
 ## Empty/reserved outfit rows keep their saved number, but draw the old look.
 static func active_look_code(code: int) -> int:
-	return code if code >= 0 and code <= LOOK_MAX and LOOK_OUTFITS.has(code >> 3) else 0
+	return code if look_code_ok(code) and LOOK_OUTFITS.has(code >> 3) else 0
 
 
 ## A pure weighted choice over 1000 tickets; sort only a copy of the sparse keys.
 static func outfit_for_roll(ticket: int) -> int:
-	if ticket < 0 or ticket >= 1000:
-		assert(false, "look ticket must be within 0..999")
+	if not look_ticket_ok(ticket):
+		assert(look_ticket_ok(ticket), "look ticket must be within 0..999")
 		push_error("look ticket must be within 0..999")
 		return 0
 	var numbers: Array = COMMON_LOOK_WEIGHTS.keys()
@@ -116,9 +136,9 @@ static func outfit_for_roll(ticket: int) -> int:
 	var cumulative := 0
 	for number: int in numbers:
 		cumulative += COMMON_LOOK_WEIGHTS[number]
-		if ticket < cumulative:
+		if look_ticket_covered(ticket, cumulative):
 			return number
-	assert(false, "look weights must cover all 1000 tickets")
+	assert(look_ticket_covered(ticket, cumulative), "look weights must cover all 1000 tickets")
 	push_error("look weights must cover all 1000 tickets")
 	return 0
 

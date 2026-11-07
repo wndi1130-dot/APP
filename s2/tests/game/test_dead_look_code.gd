@@ -36,7 +36,8 @@ const COMMON_20261107: Dictionary[int, int] = {
 	21: 20, 22: 20, 23: 20, 25: 20, 26: 20, 41: 10, 42: 5, 43: 10, 44: 5,
 }
 const LOOK_METHODS: Array[String] = ["pack_still", "unpack_still", "active_look_code",
-	"outfit_for_roll", "look_code_for", "look_code_migrated", "shell_look_code"]
+	"outfit_for_roll", "look_code_for", "look_code_migrated", "shell_look_code",
+	"look_code_ok", "still_ok", "packed_still_ok", "look_ticket_ok", "look_ticket_covered"]
 var api: GDScript = DeadCast
 
 
@@ -94,16 +95,20 @@ func test_t1_negative_shiver_and_living_fraction_keep_their_value() -> void:
 		assert_eq(float(api.call("pack_still", b, 511)), b, "a shiver never carries a code")
 
 
-func test_t1_invalid_pack_inputs_assert_at_the_boundary() -> void:
-	for code: int in [-1, 512, 1024]:
-		api.call("pack_still", 0.0, code)
-		assert_engine_error("look code must be within 0..511")
-	for still: float in [0.5, 1.4, 1.5, 2.0, NAN, INF, -INF, -0.75]:
-		api.call("pack_still", still, 8)
-		assert_engine_error("still must be 0 or 1, or a shiver in -0.5..0")
-	for b: float in [-0.75, 1024.0, NAN, INF, -INF]:
-		api.call("unpack_still", b)
-		assert_engine_error("packed still must be finite and within -0.5..1023")
+func test_t1_input_predicates_classify_boundaries_without_triggering_asserts() -> void:
+	for method: String in ["look_code_ok", "still_ok", "packed_still_ok"]:
+		assert_true(api.has_method(method), "required pure input predicate: " + method)
+		if not api.has_method(method):
+			return
+	for code: int in [-1, 0, 511, 512, 1024]:
+		assert_eq(bool(api.call("look_code_ok", code)), code in [0, 511], "code %d" % code)
+	for pair: Array in [[0.5, false], [1.4, false], [1.5, false], [2.0, false],
+			[NAN, false], [INF, false], [-INF, false], [-0.75, false],
+			[-0.5, true], [-0.25, true], [0.0, true], [1.0, true]]:
+		assert_eq(bool(api.call("still_ok", float(pair[0]))), bool(pair[1]), "still %s" % str(pair[0]))
+	for pair: Array in [[-0.75, false], [-0.5, true], [1023.0, true], [1024.0, false],
+			[NAN, false], [INF, false], [-INF, false]]:
+		assert_eq(bool(api.call("packed_still_ok", float(pair[0]))), bool(pair[1]), "packed b %s" % str(pair[0]))
 
 
 func test_t2_half_boundaries_and_shader_use_the_same_safe_formula() -> void:
@@ -259,14 +264,17 @@ func test_named_ticket_boundaries_cross_sparse_outfit_numbers() -> void:
 		assert_eq(int(api.call("outfit_for_roll", ticket)), int(boundaries[ticket]), "ticket %d" % ticket)
 
 
-func test_out_of_range_tickets_assert_or_report_error_and_return_zero() -> void:
-	for ticket: int in [-1, 1000]:
-		if OS.is_debug_build():
-			api.call("outfit_for_roll", ticket)
-			assert_engine_error("look ticket must be within 0..999")
-		else:
-			assert_eq(int(api.call("outfit_for_roll", ticket)), 0)
-			assert_push_error("look ticket must be within 0..999")
+func test_ticket_predicates_cover_range_and_cumulative_boundaries_without_asserts() -> void:
+	for method: String in ["look_ticket_ok", "look_ticket_covered"]:
+		assert_true(api.has_method(method), "required pure ticket predicate: " + method)
+		if not api.has_method(method):
+			return
+	for ticket: int in [-1, 0, 999, 1000]:
+		assert_eq(bool(api.call("look_ticket_ok", ticket)), ticket in [0, 999], "ticket %d" % ticket)
+	for pair: Array in [[0, 0, false], [0, 1, true], [999, 999, false], [999, 1000, true]]:
+		assert_eq(bool(api.call("look_ticket_covered", int(pair[0]), int(pair[1]))), bool(pair[2]))
+	assert_eq(int(api.call("outfit_for_roll", 0)), 1)
+	assert_eq(int(api.call("outfit_for_roll", 999)), 44)
 
 
 func test_all_transport_codes_activate_only_current_outfit_rows() -> void:

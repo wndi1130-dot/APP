@@ -41,11 +41,12 @@ func _game(extra: Dictionary = {}, with_seed: bool = true):
 	opts.merge(extra, true)
 	game.opts = opts
 	game.map_script = BareLine
+	var resuming := opts.get("field_resume") is Dictionary
 	add_child(game)
 	game.set_process(false)
 	assert_true(game.zombies.has_method("look_code_of"), "required draw/migration method")
 	# _ready() applies field_resume itself; do not erase the result of that boot path.
-	if not game.opts.get("field_resume") is Dictionary:
+	if not resuming:
 		game.zombies.list.clear()
 		game.pending_spawn.clear()
 	fields.append(game)
@@ -54,6 +55,44 @@ func _game(extra: Dictionary = {}, with_seed: bool = true):
 
 func _saved(game) -> Dictionary:
 	return FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+
+
+func _save_value(value: Variant) -> String:
+	if value is float:
+		var bytes := PackedByteArray()
+		bytes.resize(8)
+		bytes.encode_double(0, value)
+		return "%s (float64 %s)" % [str(value), bytes.hex_encode()]
+	return "%s (%s)" % [var_to_str(value), type_string(typeof(value))]
+
+
+func _save_difference(actual: Variant, expected: Variant, at: String = "save") -> String:
+	if typeof(actual) == typeof(expected) and actual == expected:
+		return ""
+	if actual is Dictionary and expected is Dictionary:
+		for key: Variant in expected:
+			var path := "%s[%s]" % [at, str(key)]
+			if not actual.has(key):
+				return "%s: loaded=<missing>, saved=%s" % [path, _save_value(expected[key])]
+			var difference := _save_difference(actual[key], expected[key], path)
+			if difference != "":
+				return difference
+		for key: Variant in actual:
+			if not expected.has(key):
+				return "%s[%s]: loaded=%s, saved=<missing>" % [at, str(key), _save_value(actual[key])]
+	elif actual is Array and expected is Array:
+		if actual.size() != expected.size():
+			return "%s.size: loaded=%d, saved=%d" % [at, actual.size(), expected.size()]
+		for i: int in expected.size():
+			var difference := _save_difference(actual[i], expected[i], "%s[%d]" % [at, i])
+			if difference != "":
+				return difference
+	return "%s: loaded=%s, saved=%s" % [at, _save_value(actual), _save_value(expected)]
+
+
+func _assert_saved_equal(actual: Dictionary, expected: Dictionary, why: String) -> void:
+	# Keep exact equality: diagnostics must not normalise or hide a codec change.
+	assert_eq(actual, expected, "%s\n%s" % [why, _save_difference(actual, expected)])
 
 
 func _fixture() -> Dictionary:
@@ -232,8 +271,10 @@ func test_t6_fallback_view_rule_mismatch_preserves_and_migrates() -> void:
 	_fallback("view_rule")
 
 
-func _file_fixture() -> Dictionary:
-	var source = _game({}, false)
+func _file_fixture(seed_value: int = 831) -> Dictionary:
+	# Fix construction too, then remove the option before spawning/capturing the old run.
+	var source = _game({"seed": seed_value})
+	source.opts.erase("seed")
 	assert_false(source.opts.has("seed"), "the original run has no seed option")
 	var expected := {17: 0, 23: 88, 31: 511, 37: 24 * 8 + 3, 41: 27 * 8 + 7, 43: 13, 47: 0, 53: 0}
 	for id: int in [7, 17, 23, 31, 37, 41, 43, 47, 53]:
@@ -283,17 +324,19 @@ func _assert_file_resume_and_immediate_resave(saved: Dictionary, fixture: Dictio
 		assert_true(row.has("look_code"), "immediate disk resave persists every migrated code")
 		assert_eq(int(row.get("look_code", -1)), int(expected[int(row["id"])]))
 	assert_eq(game.rng.state, int(fixture["rng_state"]), "disk resave consumes no simulation dice")
-	assert_eq(saved, original, "startup and immediate resave do not rewrite the input snapshot")
+	_assert_saved_equal(saved, original, "startup and immediate resave do not rewrite the input snapshot")
 
 
 func test_real_file_round_trip_without_seed_option_preserves_mixed_legacy_looks() -> void:
 	var fixture := _file_fixture()
 	var saved: Dictionary = fixture["save"]
+	var untouched: Dictionary = saved.duplicate(true)
 	assert_false((saved["start_opts"] as Dictionary).has("seed"))
 	assert_true(FieldSave.write(saved, AT))
+	_assert_saved_equal(saved, untouched, "write must not mutate its source snapshot")
 	assert_true(FileAccess.file_exists(AT))
 	var loaded := FieldSave.read(AT)
-	assert_eq(loaded, saved, "write/read retains all missing and explicit codes before migration")
+	_assert_saved_equal(loaded, saved, "seed %d: write/read retains all missing and explicit codes before migration" % int(fixture["seed"]))
 	assert_true(FieldSave.exact(loaded))
 	_assert_file_resume_and_immediate_resave(loaded, fixture)
 
@@ -306,7 +349,7 @@ func test_invalid_look_in_primary_file_selects_valid_backup_and_resumes_it() -> 
 	next["clock"]["elapsed"] = float(next["clock"]["elapsed"]) + 1.0
 	assert_true(FieldSave.write(next, AT))
 	var backup_bytes := FileAccess.get_file_as_bytes(AT + ".bak")
-	assert_eq(FieldSave.from_json(backup_bytes.get_string_from_utf8()), saved)
+	_assert_saved_equal(FieldSave.from_json(backup_bytes.get_string_from_utf8()), saved, "backup contains the original snapshot")
 	next["zombies"][0]["look_code"] = 512
 	var broken_text := FieldSave.to_json(next)
 	var file := FileAccess.open(AT, FileAccess.WRITE)
@@ -317,11 +360,61 @@ func test_invalid_look_in_primary_file_selects_valid_backup_and_resumes_it() -> 
 	file.close()
 	assert_eq(FieldSave.from_json(FileAccess.get_file_as_string(AT)), {}, "invalid primary look code is rejected")
 	var loaded := FieldSave.read(AT)
-	assert_eq(loaded, saved, "the valid backup wins over the invalid primary look code")
+	_assert_saved_equal(loaded, saved, "the valid backup wins over the invalid primary look code")
 	assert_eq(FileAccess.get_file_as_bytes(AT + ".bak"), backup_bytes)
 	_assert_file_resume_and_immediate_resave(loaded, fixture)
 	assert_eq(FileAccess.get_file_as_bytes(AT + ".bak"), backup_bytes, "resave preserves the valid backup")
 	assert_eq(FileAccess.get_file_as_string(AT + ".broken"), broken_text)
+
+
+func test_save_difference_reports_the_nested_key_and_both_exact_values() -> void:
+	var saved := {"zombies": [{"id": 7, "probe": 9007199254740993}]}
+	var loaded := {"zombies": [{"id": 7, "probe": 9007199254740992}]}
+	var difference := _save_difference(loaded, saved)
+	assert_true(difference.contains("save[zombies][0][probe]"))
+	assert_true(difference.contains("loaded=9007199254740992"))
+	assert_true(difference.contains("saved=9007199254740993"))
+	assert_true(_save_difference({"x": 0.25}, {"x": 0.5}).contains("float64"))
+	assert_true(_save_difference({}, {"x": 1}).contains("loaded=<missing>"))
+	assert_true(_save_difference({"x": 1}, {}).contains("saved=<missing>"))
+	assert_eq(_save_difference(saved, saved.duplicate(true)), "")
+
+
+func test_int64_seed_and_rng_payload_round_trip_preserves_values_and_input() -> void:
+	for seed_value: int in [0, 9007199254740991, 9007199254740993, -19, 9223372036854775807]:
+		var saved := _minimal()
+		saved["kind"] = FieldSave.KIND
+		saved["seed"] = seed_value
+		saved["start_opts"] = {}
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed_value
+		rng.state = seed_value
+		saved["rng_probe"] = FieldSave._freeze(null, rng)
+		var untouched: Dictionary = saved.duplicate(true)
+		assert_true(FieldSave.write(saved, AT), "write seed %d" % seed_value)
+		_assert_saved_equal(saved, untouched, "source unchanged for seed %d" % seed_value)
+		var loaded := FieldSave.read(AT)
+		_assert_saved_equal(loaded, saved, "exact int64 file round trip for seed %d" % seed_value)
+		assert_eq(loaded.get("seed"), seed_value)
+		assert_eq(loaded.get("rng_probe"), {"$rng": [str(seed_value), str(seed_value)]})
+		assert_false((loaded.get("start_opts", {}) as Dictionary).has("seed"))
+
+
+func test_fixed_int64_seeds_preserve_full_capture_through_real_files() -> void:
+	# Isolate the intermittent dictionary difference from resume/scene reconstruction.
+	for seed_value: int in [0, 9007199254740991, 9007199254740993, -19, 9223372036854775807]:
+		var fixture := _file_fixture(seed_value)
+		var saved: Dictionary = fixture["save"]
+		var untouched: Dictionary = saved.duplicate(true)
+		assert_eq(saved["seed"], seed_value)
+		assert_false((saved["start_opts"] as Dictionary).has("seed"))
+		assert_true(FieldSave.write(saved, AT), "full capture seed %d" % seed_value)
+		_assert_saved_equal(saved, untouched, "full capture input unchanged, seed %d" % seed_value)
+		_assert_saved_equal(FieldSave.read(AT), saved, "full capture exact round trip, seed %d" % seed_value)
+		# Bound scene lifetime: only this iteration's source exists during the next build.
+		var source = fields.pop_back()
+		source.free()
+		await get_tree().process_frame
 
 
 func _minimal() -> Dictionary:
