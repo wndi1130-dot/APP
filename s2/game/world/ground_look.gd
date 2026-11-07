@@ -37,7 +37,7 @@ const SPREAD_MAX: float = 0.7
 const SPREAD_STEP: float = 0.05
 const SPREAD_NEAR: float = 0.3
 const SPREAD_NEAR_MAX: float = 0.45
-## Room left between two footprints so their dark rims (RIM) do not merge either.
+## Clearance between bare footprints (코디 ㉮); rims shrink after placement.
 const SPREAD_GAP: float = 0.04
 
 ## Kind -> [size (x, y, z: the long side along x), colour as seen (sRGB)].
@@ -91,7 +91,7 @@ static func kind_of(g: Dictionary) -> String:
 	return "small"
 
 
-## [{"lv", "model", "yaw", "size", "at" (footprint centre on floor), "color"}].
+## [{"lv", "model", "yaw", "size", "at" (footprint centre on floor), "color", "rim"}].
 static func pieces(items: Array, blocked: Callable = Callable()) -> Array:
 	var out: Array = []
 	var on_cell: Dictionary = {}  # Vector3i(x, y, lv) -> indexes into out drawn there
@@ -128,7 +128,10 @@ static func pieces(items: Array, blocked: Callable = Callable()) -> Array:
 		out.append({"item": item, "lv": lv, "model": model, "yaw": yaw, "size": size, "at": at, "color": color,
 			"turn": deg_to_rad(float(posmod(h, 360)))})
 	out = _lay_apart(out, on_cell, blocked)
-	for piece: Dictionary in out:
+	var widths: Array[float] = _rim_widths(out)
+	for slot: int in out.size():
+		var piece: Dictionary = out[slot]
+		piece["rim"] = widths[slot]
 		piece.erase("turn")
 	return out
 
@@ -360,6 +363,11 @@ static func footprint_gap(centre_a: Vector2, size_a: Vector2, yaw_a: float, cent
 	return Footprint.new(centre_a, size_a, yaw_a).gap_to(Footprint.new(centre_b, size_b, yaw_b))
 
 
+## Four-axis clearance at full RIM width, before adapting it to neighbours.
+static func rim_gap(centre_a: Vector2, size_a: Vector2, yaw_a: float, centre_b: Vector2, size_b: Vector2, yaw_b: float) -> float:
+	return Footprint.new(centre_a, size_a, yaw_a, RIM).rim_gap_to(Footprint.new(centre_b, size_b, yaw_b, RIM))
+
+
 ## Distance from the finger's floor-to-top segment to the rotated footprint.
 static func press_off(piece: Dictionary, low: Vector2, high: Vector2) -> float:
 	var at: Vector3 = piece["at"]
@@ -424,7 +432,7 @@ class Footprint:
 	var centre: Vector2
 	var half: Vector2
 	var yaw: float
-	## The slot of the last thing that gathered it as a neighbour (_lay_apart).
+	## The slot of the last neighbour query (placement or rim widths).
 	var mark: int = -1
 	var along_x: Vector2
 	var along_z: Vector2
@@ -433,12 +441,19 @@ class Footprint:
 	var reach: float
 	## Longest half side; like reach, unchanged by turn_to.
 	var long_half: float
+	## Padded bounds, cached once; walls and buckets still use the bare footprint.
+	var rim_half: Vector2
+	var rim_reach: float
+	var rim_long_half: float
 
-	func _init(at: Vector2, size: Vector2, turn: float) -> void:
+	func _init(at: Vector2, size: Vector2, turn: float, pad: float = 0.0) -> void:
 		centre = at
 		half = size * 0.5
 		reach = half.length()
 		long_half = maxf(half.x, half.y)
+		rim_half = half + Vector2.ONE * pad
+		rim_reach = rim_half.length()
+		rim_long_half = maxf(rim_half.x, rim_half.y)
 		turn_to(turn)
 
 	## Turn it to `turn` (radians, as Basis(UP, turn)): its side directions worked
@@ -462,36 +477,138 @@ class Footprint:
 	## them, as a negative). Along its own side direction a rectangle reaches its
 	## half side; the other reaches by how its sides lie across that direction.
 	func gap_to(other: Footprint) -> float:
+		return _gap_to(other, half, other.half)
+
+	func rim_gap_to(other: Footprint) -> float:
+		return _gap_to(other, rim_half, other.rim_half)
+
+	## Same axes for footprint and rim; only their half sides differ.
+	func _gap_to(other: Footprint, own_half: Vector2, other_half: Vector2) -> float:
 		var d: Vector2 = other.centre - centre
 		var xx: float = absf(along_x.dot(other.along_x))
 		var xz: float = absf(along_x.dot(other.along_z))
 		var zx: float = absf(along_z.dot(other.along_x))
 		var zz: float = absf(along_z.dot(other.along_z))
-		var on_x: float = absf(d.dot(along_x)) - half.x - xx * other.half.x - xz * other.half.y
-		var on_z: float = absf(d.dot(along_z)) - half.y - zx * other.half.x - zz * other.half.y
-		var on_other_x: float = absf(d.dot(other.along_x)) - other.half.x - xx * half.x - zx * half.y
-		var on_other_z: float = absf(d.dot(other.along_z)) - other.half.y - xz * half.x - zz * half.y
+		var on_x: float = absf(d.dot(along_x)) - own_half.x - xx * other_half.x - xz * other_half.y
+		var on_z: float = absf(d.dot(along_z)) - own_half.y - zx * other_half.x - zz * other_half.y
+		var on_other_x: float = absf(d.dot(other.along_x)) - other_half.x - xx * own_half.x - zx * own_half.y
+		var on_other_z: float = absf(d.dot(other.along_z)) - other_half.y - xz * own_half.x - zz * own_half.y
 		return maxf(maxf(on_x, on_z), maxf(on_other_x, on_other_z))
 
 
-## A dark rim round each thing (T0-6): a quad flat on its floor, RIM wider than
-## the thing on every side, that makes the floor there darker
-## (contact_shade.gdshader: black at RIM_STRENGTH over whatever the floor is, so
-## asphalt, boards and snow each go darker in their own colour, lighter on snow).
+## A dark rim round each thing (T0-6): a quad flat on its floor, up to RIM wider
+## than the thing on every side. Close neighbours narrow it to leave RIM_SPACE
+## of bare floor between rims, without moving the things. It darkens the floor
+## (ground_rim.gdshader: black at GROUND_RIM_STRENGTH over whatever the floor is,
+## so asphalt, boards and snow each go darker in their own colour).
 ## From above it is the outline of the flat things (a coat, a map, a knife) and
 ## the contact line of the taller ones, so a dark thing still stands off a
 ## street's grey asphalt at a phone's size; the things keep their colours (LOOKS).
 const RIM: float = 0.1
+## Bare floor left between two drawn rims (they narrow to keep it).
+const RIM_SPACE: float = 0.01
 const RIM_LIFT: float = 0.004
+## Container and sled bars' rims (map_view._rim_quad's default), as before.
 const RIM_STRENGTH: float = 0.8
+## A ground thing's rim at its full RIM width (rim_strength).
+const GROUND_RIM_STRENGTH: float = 0.8
+## A ground rim narrowed to nothing by a close neighbour (rim_strength): the
+## thinner it gets, the darker, so the line between two things still reads.
+const NARROW_RIM_STRENGTH: float = 1.0
+## ground_rim.gdshader controls: the share of the margin kept at full strength,
+## and what is left of the strength on deep snow out of doors. On the new thin
+## snow with grass showing (#1465) a light plank stood only 0.079 off the floor
+## with the bars' 0.5 (day bar 0.085); 0.85 keeps it at 0.108.
+const RIM_CORE: float = 0.6
+const RIM_SNOW_KEEP: float = 0.85
+
+
+## Largest common width that keeps these two rims RIM_SPACE apart (unclamped).
+## Each axis gap is b - r*w, with w > 0; SAT needs any one axis to clear.
+## Thus max((b - RIM_SPACE)/w) is exact. Giving both pieces no more than this
+## width only increases every gap, so taking each piece's minimum is safe.
+static func _rim_limit(a: Footprint, b: Footprint) -> float:
+	var d: Vector2 = b.centre - a.centre
+	var xx: float = absf(a.along_x.dot(b.along_x))
+	var xz: float = absf(a.along_x.dot(b.along_z))
+	var zx: float = absf(a.along_z.dot(b.along_x))
+	var zz: float = absf(a.along_z.dot(b.along_z))
+	var on_x: float = (absf(d.dot(a.along_x)) - a.half.x - xx * b.half.x - xz * b.half.y - RIM_SPACE) / (1.0 + xx + xz)
+	var on_z: float = (absf(d.dot(a.along_z)) - a.half.y - zx * b.half.x - zz * b.half.y - RIM_SPACE) / (1.0 + zx + zz)
+	var on_other_x: float = (absf(d.dot(b.along_x)) - b.half.x - xx * a.half.x - zx * a.half.y - RIM_SPACE) / (1.0 + xx + zx)
+	var on_other_z: float = (absf(d.dot(b.along_z)) - b.half.y - xz * a.half.x - zz * a.half.y - RIM_SPACE) / (1.0 + xz + zz)
+	return maxf(maxf(on_x, on_z), maxf(on_other_x, on_other_z))
+
+
+## Pure width pass after placement, once per rebuild. Buckets cover bare feet.
+static func _rim_widths(out: Array) -> Array[float]:
+	var widths: Array[float] = []
+	var feet: Array[Footprint] = []
+	var buckets: Dictionary = {}
+	for slot: int in out.size():
+		var piece: Dictionary = out[slot]
+		var at: Vector3 = piece["at"]
+		var size: Vector3 = piece["size"]
+		var foot := Footprint.new(Vector2(at.x, at.z), Vector2(size.x, size.z), float(piece["yaw"]))
+		feet.append(foot)
+		widths.append(RIM)
+		var bounds: Rect2i = foot.cells()
+		for y: int in range(bounds.position.y, bounds.end.y):
+			for x: int in range(bounds.position.x, bounds.end.x):
+				var key := Vector3i(x, y, int(piece["lv"]))
+				if not buckets.has(key):
+					buckets[key] = []
+				buckets[key].append(slot)
+	# Query both ways: cell rounding can expose a pair from just one side.
+	# Each found pair limits both widths; marks skip repeated footprint buckets.
+	# A pair whose bare boxes lie `m` apart along x or z is at least m apart; a
+	# full rim reaches RIM*sqrt(2) further at a corner, and the four-axis gap is
+	# at least the true distance over sqrt(2) — so beyond sqrt(2)*(2*RIM +
+	# RIM_SPACE) two full rims already keep RIM_SPACE and need no narrowing.
+	var margin: float = sqrt(2.0) * (2.0 * RIM + RIM_SPACE)
+	for slot: int in out.size():
+		var foot: Footprint = feet[slot]
+		var bounds: Rect2i = foot.cells(margin)
+		for y: int in range(bounds.position.y, bounds.end.y):
+			for x: int in range(bounds.position.x, bounds.end.x):
+				var key := Vector3i(x, y, int(out[slot]["lv"]))
+				var near: Variant = buckets.get(key)
+				if near == null:
+					continue
+				for other_slot: int in near:
+					if other_slot == slot:
+						continue
+					var other: Footprint = feet[other_slot]
+					if other.mark == slot:
+						continue
+					other.mark = slot
+					# Each full rim fits in reach + sqrt(2)*RIM about its centre.
+					# Beyond both radii plus sqrt(2)*RIM_SPACE, a SAT axis already
+					# keeps RIM_SPACE. Square the bound to skip four-axis work.
+					var far: float = foot.reach + other.reach + margin
+					if foot.centre.distance_squared_to(other.centre) > far * far:
+						continue
+					var width: float = clampf(_rim_limit(foot, other), 0.0, RIM)
+					widths[slot] = minf(widths[slot], width)
+					widths[other_slot] = minf(widths[other_slot], width)
+	return widths
+
+
+## How dark a ground thing's rim is drawn for its width (pieces()'s "rim"):
+## GROUND_RIM_STRENGTH at the full RIM, up to NARROW_RIM_STRENGTH as a close
+## neighbour narrows it, so a thin rim in a crowded spot keeps its outline.
+static func rim_strength(width: float) -> float:
+	return lerpf(NARROW_RIM_STRENGTH, GROUND_RIM_STRENGTH, clampf(width / RIM, 0.0, 1.0))
 
 
 ## The rim under one of pieces()'s boxes: {"lv", "at" (centre, on the floor),
 ## "size" (along x and z), "inner" (the thing's share of it along x and z)}.
+## Close neighbours narrow the stored width; legacy bars keep full RIM width.
 static func rim(piece: Dictionary) -> Dictionary:
 	var size: Vector3 = piece["size"]
 	var at: Vector3 = piece["at"]
-	var outer := Vector2(size.x + 2.0 * RIM, size.z + 2.0 * RIM)
+	var width: float = float(piece.get("rim", RIM))
+	var outer := Vector2(size.x + 2.0 * width, size.z + 2.0 * width)
 	# Existing container/sled bars pass a box centre, without the new model key.
 	var floor_y: float = at.y if piece.has("model") else at.y - size.y / 2.0
 	return {"lv": piece["lv"], "at": Vector3(at.x, floor_y + RIM_LIFT, at.z), "size": outer, "yaw": float(piece.get("yaw", 0.0)),

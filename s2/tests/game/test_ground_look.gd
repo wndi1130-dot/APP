@@ -8,6 +8,8 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const TwoLids = preload("res://tests/game/fixtures/two_lids_map.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const GroundModels = preload("res://game/world/ground_models.gd")
+## A mesh keeps vertex colours in 8 bits a channel.
+const COLOUR_STEP: float = 1.0 / 255.0
 
 var _old_cache: Dictionary = {}
 
@@ -19,6 +21,38 @@ func before_each() -> void:
 
 func after_each() -> void:
 	GroundModels.restore_cache(_old_cache)
+
+
+func test_ground_rim_shader_loads_with_its_two_float_controls() -> void:
+	var path := "res://fx/shaders/ground_rim.gdshader"
+	assert_true(ResourceLoader.exists(path), "ground rims have their own shader")
+	if not ResourceLoader.exists(path):
+		return
+	var shader := load(path) as Shader
+	assert_not_null(shader)
+	if shader == null:
+		return
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	assert_eq(shader.get_mode(), Shader.MODE_SPATIAL)
+	# Uniform reflection requests parsing, as in test_fx; GPU drawing is separate.
+	var uniforms: Dictionary = {}
+	for entry: Dictionary in shader.get_shader_uniform_list():
+		uniforms[String(entry["name"])] = entry["type"]
+	# Unset defaults are not read back without a renderer (headless gives null),
+	# so the declared default is read from the source itself.
+	# The shader's own defaults are the game's values, so a bare material looks the same.
+	var defaults := {"core": GroundLook.RIM_CORE, "snow_keep": GroundLook.RIM_SNOW_KEEP}
+	var declared := RegEx.create_from_string("uniform\\s+float\\s+(\\w+)\\s*:[^=;]*=\\s*([0-9.]+)\\s*;")
+	var found: Dictionary = {}
+	for hit: RegExMatch in declared.search_all(shader.code):
+		found[hit.get_string(1)] = float(hit.get_string(2))
+	for name: String in defaults:
+		assert_eq(int(uniforms.get(name, -1)), TYPE_FLOAT, name)
+		assert_true(found.has(name), name + " declares a default")
+		assert_almost_eq(float(found.get(name, -1.0)), float(defaults[name]), 0.000001, name + " default")
+	assert_false(uniforms.has("per_instance"))
+	assert_false(uniforms.has("rect_custom"))
 
 
 func test_each_thing_has_a_shape_of_its_kind() -> void:
@@ -73,6 +107,7 @@ func test_things_at_one_spot_are_spread_and_never_more_than_three_drawn() -> voi
 		assert_true(flat.distance_to(Vector2(at.x, at.z)) < 0.9, "within a tap of where it lies")
 		spots[flat.snapped(Vector2(0.01, 0.01))] = true
 	assert_eq(spots.size(), out.size(), "none on top of another")
+	_assert_gaps(out)
 	# Another cell gets its own three.
 	items.append({"pos": at + Vector3(3, 0, 0), "id": "cloth", "n": 1})
 	assert_eq(GroundLook.pieces(items).size(), GroundLook.PER_CELL + 1)
@@ -100,6 +135,7 @@ func test_clothes_and_a_knife_on_one_cell_lie_clear_of_one_another() -> void:
 					Vector2(b["at"].x, b["at"].z), Vector2(b["size"].x, b["size"].z), b["yaw"])
 				assert_gte(gap, GroundLook.SPREAD_GAP - 0.000001, "%s and %s keep their rims apart" % [ids[i], ids[j]])
 		assert_eq(GroundLook.pieces(items), out, "the same list lies the same")
+		_assert_gaps(out)
 
 
 func test_footprint_gap_is_the_room_between_turned_rectangles() -> void:
@@ -188,6 +224,83 @@ func test_diagonal_boundaries_agree_with_the_full_gap_at_several_rotations() -> 
 						var context := "yaw %.2f relative %.2f direction %.0f gap %.3f offset %.3f" % [yaw, relative_yaw, degrees, gap, offset]
 						assert_eq(GroundLook._clear_of(foot, laid, gap), foot.gap_to(other) >= gap, context)
 						assert_eq(GroundLook._clear_of(other, reverse, gap), other.gap_to(foot) >= gap, context + " reversed")
+
+
+func test_padded_gap_matches_plain_sat_and_clearance_uses_bare_feet() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1508
+	for n: int in 400:
+		var ca := Vector2(rng.randf_range(-1.5, 1.5), rng.randf_range(-1.5, 1.5))
+		var sa := Vector2(rng.randf_range(0.02, 1.2), rng.randf_range(0.02, 1.2))
+		var ya: float = rng.randf_range(-TAU, TAU)
+		var cb := Vector2(rng.randf_range(-1.5, 1.5), rng.randf_range(-1.5, 1.5))
+		var sb := Vector2(rng.randf_range(0.02, 1.2), rng.randf_range(0.02, 1.2))
+		var yb: float = rng.randf_range(-TAU, TAU)
+		var a := GroundLook.Footprint.new(ca, sa, ya, GroundLook.RIM)
+		var b := GroundLook.Footprint.new(cb, sb, yb, GroundLook.RIM)
+		var pair: Array[GroundLook.Footprint] = [b]
+		var reverse: Array[GroundLook.Footprint] = [a]
+		var full: float = a.rim_gap_to(b)
+		var pad := Vector2.ONE * (2.0 * GroundLook.RIM)
+		assert_almost_eq(full, _plain_gap(ca, sa + pad, ya, cb, sb + pad, yb), 0.00001, "padded case %d" % n)
+		assert_almost_eq(GroundLook.rim_gap(ca, sa, ya, cb, sb, yb), full, 0.00001)
+		assert_eq(GroundLook._clear_of(a, pair, GroundLook.SPREAD_GAP), a.gap_to(b) >= GroundLook.SPREAD_GAP, "padded case %d" % n)
+		assert_eq(GroundLook._clear_of(b, reverse, GroundLook.SPREAD_GAP), b.gap_to(a) >= GroundLook.SPREAD_GAP, "reversed case %d" % n)
+		# Padding must not change the footprint used against walls.
+		var bare: float = _plain_gap(ca, sa, ya, cb, sb, yb)
+		assert_almost_eq(a.gap_to(b), bare, 0.00001)
+		if bare < 0.0:
+			assert_almost_eq(GroundLook._wall_room(a, pair), bare, 0.00001)
+		else:
+			assert_gte(GroundLook._wall_room(a, pair), 0.0)
+		assert_almost_eq(GroundLook.Footprint.new(ca, sa, ya).rim_gap_to(GroundLook.Footprint.new(cb, sb, yb)), bare, 0.00001, "zero padding keeps the old gap")
+
+
+func test_padded_diagonal_boundaries_agree_with_the_full_rim_gap() -> void:
+	for yaw: float in [0.0, 0.37, PI * 0.5, -1.1]:
+		for relative_yaw: float in [0.0, -0.03, 0.03]:
+			var foot := GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.2, 0.2), yaw, GroundLook.RIM)
+			var other := GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.2, 0.2), yaw + relative_yaw, GroundLook.RIM)
+			var laid: Array[GroundLook.Footprint] = [other]
+			var reverse: Array[GroundLook.Footprint] = [foot]
+			for degrees: float in [44.0, 45.0, 46.0]:
+				var angle: float = deg_to_rad(degrees)
+				var direction: Vector2 = foot.along_x * cos(angle) + foot.along_z * sin(angle)
+				for gap: float in [0.01, GroundLook.SPREAD_GAP, 0.06]:
+					for offset: float in [-0.01, -0.001, 0.0, 0.001, 0.01]:
+						other.centre = direction * sqrt(2.0) * (0.2 + 2.0 * GroundLook.RIM + gap + offset)
+						var context := "padded yaw %.2f relative %.2f direction %.0f gap %.3f offset %.3f" % [yaw, relative_yaw, degrees, gap, offset]
+						var size := Vector2.ONE * (0.2 + 2.0 * GroundLook.RIM)
+						var plain: float = _plain_gap(foot.centre, size, foot.yaw, other.centre, size, other.yaw)
+						assert_almost_eq(foot.rim_gap_to(other), plain, 0.000001, context)
+						assert_almost_eq(other.rim_gap_to(foot), plain, 0.000001, context + " reversed")
+						assert_eq(GroundLook._clear_of(foot, laid, gap), foot.gap_to(other) >= gap, context)
+						assert_eq(GroundLook._clear_of(other, reverse, gap), other.gap_to(foot) >= gap, context + " reversed")
+
+
+func test_turned_rim_corners_overlap_despite_twice_the_padding_between_feet() -> void:
+	var size := Vector2(0.2, 0.2)
+	var corner_pad: float = (1.0 + sqrt(2.0)) * GroundLook.RIM
+	var bare_gap: float = (2.0 * GroundLook.RIM + GroundLook.SPREAD_GAP + corner_pad) * 0.5
+	var centre := Vector2(0.1 + sqrt(2.0) * 0.1 + bare_gap, 0.0)
+	var foot := GroundLook.Footprint.new(Vector2.ZERO, size, 0.0, GroundLook.RIM)
+	var other := GroundLook.Footprint.new(centre, size, PI * 0.25, GroundLook.RIM)
+	var laid: Array[GroundLook.Footprint] = [other]
+	assert_gt(foot.gap_to(other), 2.0 * GroundLook.RIM + GroundLook.SPREAD_GAP)
+	assert_almost_eq(foot.rim_gap_to(other), bare_gap - corner_pad, 0.000001)
+	assert_lt(foot.rim_gap_to(other), 0.0, "the rotated rim reaches further than twice RIM")
+	assert_true(GroundLook._clear_of(foot, laid, GroundLook.SPREAD_GAP), "rims shrink after placement")
+
+
+func test_rim_may_enter_a_wall_when_the_footprint_fits() -> void:
+	var foot := GroundLook.Footprint.new(Vector2(0.89, 0.5), Vector2(0.2, 0.2), 0.0, GroundLook.RIM)
+	var wall := GroundLook.Footprint.new(Vector2(1.5, 0.5), Vector2.ONE, 0.0)
+	var walls: Array[GroundLook.Footprint] = [wall]
+	var none: Array[GroundLook.Footprint] = []
+	assert_lt(foot.rim_gap_to(wall), 0.0)
+	assert_almost_eq(GroundLook._wall_room(foot, walls), 0.01, 0.000001)
+	assert_true(GroundLook._clear_spot(foot, 0.0, none, walls, true))
+	assert_eq(foot.centre, Vector2(0.89, 0.5), "rim overlap alone must not move the thing")
 
 
 ## Every one of the four side directions, each rectangle reaching along it by
@@ -353,7 +466,7 @@ func test_rotated_search_keeps_neighbours_across_the_cell_boundary() -> void:
 	var blocked := func(c: Vector2i, _lv: int) -> bool: return c == Vector2i(11, 10)
 	var out: Array = GroundLook._lay_apart(pieces, {Vector3i(10, 9, 0): [0], Vector3i(10, 10, 0): [1]}, blocked)
 	assert_eq(out.size(), 2, "both fit without dropping the small neighbour")
-	_assert_gaps(out)
+	_assert_gaps(_with_rims(out))
 	for piece: Dictionary in out:
 		assert_gte(GroundLook.footprint_gap(Vector2(piece["at"].x, piece["at"].z), Vector2(piece["size"].x, piece["size"].z), piece["yaw"], Vector2(11.5, 10.5), Vector2.ONE, 0.0), -0.000001)
 
@@ -366,7 +479,7 @@ func test_cell_order_cross_cell_gap_and_blocked_cells() -> void:
 	var pieces: Array = [_piece(0, Vector3(1.1, 0, 0.5), Vector3(0.3, 0.1, 0.3)), _piece(1, Vector3(0.9, 0, 0.5), Vector3(0.3, 0.1, 0.3)), _piece(2, Vector3(0.9, 0, 0.5), Vector3(0.2, 0.1, 0.2))]
 	out = GroundLook._lay_apart(pieces, {Vector3i(1, 0, 0): [0], Vector3i.ZERO: [2, 1]}, Callable())
 	assert_eq(out[1]["at"], Vector3(0.9, 0, 0.5), "left cell's biggest is placed before the right cell")
-	_assert_gaps(out)
+	_assert_gaps(_with_rims(out))
 	var blocked := func(c: Vector2i, lv: int) -> bool: return lv == 0 and c == Vector2i.ZERO
 	out = GroundLook.pieces([{"id": "no_art_550", "pos": Vector3(0.9, 0, 0.5)}], blocked)
 	assert_eq(out.size(), 1)
@@ -376,12 +489,238 @@ func test_cell_order_cross_cell_gap_and_blocked_cells() -> void:
 
 
 func _assert_gaps(out: Array) -> void:
+	for piece: Dictionary in out:
+		assert_true(piece.has("rim"), "every drawn piece carries its width")
+		assert_gte(float(piece.get("rim", -1.0)), 0.0)
+		assert_lte(float(piece.get("rim", INF)), GroundLook.RIM)
 	for i: int in out.size():
 		for j: int in range(i + 1, out.size()):
 			var a: Dictionary = out[i]
 			var b: Dictionary = out[j]
 			if a["lv"] == b["lv"]:
 				assert_gte(GroundLook.footprint_gap(Vector2(a["at"].x, a["at"].z), Vector2(a["size"].x, a["size"].z), a["yaw"], Vector2(b["at"].x, b["at"].z), Vector2(b["size"].x, b["size"].z), b["yaw"]), GroundLook.SPREAD_GAP - 0.000001)
+				# Use the actual drawn quads and an independent SAT, not the clearance shortcut.
+				var ra: Dictionary = GroundLook.rim(a)
+				var rb: Dictionary = GroundLook.rim(b)
+				var ca := Vector2(ra["at"].x, ra["at"].z)
+				var cb := Vector2(rb["at"].x, rb["at"].z)
+				var gap: float = _plain_gap(ca, ra["size"], ra["yaw"], cb, rb["size"], rb["yaw"])
+				assert_gte(gap, GroundLook.RIM_SPACE - 0.00001, "drawn rims %d and %d" % [i, j])
+
+
+## Internal placement tests apply the same separate width pass as pieces().
+func _with_rims(out: Array) -> Array:
+	var widths: Array[float] = GroundLook._rim_widths(out)
+	for i: int in out.size():
+		out[i]["rim"] = widths[i]
+	return out
+
+
+func test_three_hundred_drawn_things_keep_all_rim_pairs_apart() -> void:
+	var pieces: Array = []
+	var items: Array = []
+	var on_cell: Dictionary = {}
+	for y: int in 10:
+		for x: int in 10:
+			var cell := Vector3i(x * 3, y * 3, 0)
+			var at := Vector3(cell.x + 0.5, 0, cell.y + 0.5)
+			var slots: Array = []
+			for k: int in 3:
+				items.append({"id": "no_art_550", "pos": at})
+				slots.append(pieces.size())
+				var piece := _piece(pieces.size(), at, Vector3(0.2, 0.1, 0.2), TAU * k / 3.0)
+				piece["yaw"] = deg_to_rad(float((x * 17 + y * 23 + k * 31) % 360))
+				pieces.append(piece)
+			on_cell[cell] = slots
+	var out: Array = GroundLook._lay_apart(pieces, on_cell, Callable())
+	assert_eq(out.size(), 300, "three small things fit on each open cell")
+	_assert_gaps(_with_rims(out))
+	var drawn: Array = GroundLook.pieces(items)
+	assert_eq(drawn.size(), 300, "the public path keeps every item too")
+	_assert_gaps(drawn)
+	assert_eq(GroundLook.pieces(items), drawn, "same list, same positions and widths")
+
+
+func test_rim_width_pair_limit_is_exact_for_three_hundred_random_pairs() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 41107
+	for n: int in 300:
+		var ca := Vector2(rng.randf_range(-2, 2), rng.randf_range(-2, 2))
+		var sa := Vector2(rng.randf_range(0.02, 1.2), rng.randf_range(0.02, 1.2))
+		var sb := Vector2(rng.randf_range(0.02, 1.2), rng.randf_range(0.02, 1.2))
+		var ya: float = rng.randf_range(-TAU, TAU)
+		var yb: float = rng.randf_range(-TAU, TAU)
+		var direction := Vector2.RIGHT.rotated(rng.randf_range(-PI, PI))
+		var bare_gap: float = rng.randf_range(0.04, 0.16)
+		# Find a separated pair using independent SAT, without the width formula.
+		var low := 0.0
+		var high := 4.0
+		for step: int in 28:
+			var mid: float = (low + high) * 0.5
+			if _plain_gap(ca, sa, ya, ca + direction * mid, sb, yb) < bare_gap:
+				low = mid
+			else:
+				high = mid
+		var cb: Vector2 = ca + direction * high
+		var a := GroundLook.Footprint.new(ca, sa, ya)
+		var b := GroundLook.Footprint.new(cb, sb, yb)
+		var width: float = GroundLook._rim_limit(a, b)
+		assert_gt(width, 0.0, "case %d has an interior limit" % n)
+		assert_lt(width, GroundLook.RIM)
+		assert_almost_eq(width, GroundLook._rim_limit(b, a), 0.000001)
+		var padded_a := GroundLook.Footprint.new(ca, sa, ya, width)
+		var padded_b := GroundLook.Footprint.new(cb, sb, yb, width)
+		assert_almost_eq(padded_a.rim_gap_to(padded_b), GroundLook.RIM_SPACE, 0.00001)
+		var pad := Vector2.ONE * (2.0 * width)
+		assert_almost_eq(_plain_gap(ca, sa + pad, ya, cb, sb + pad, yb), GroundLook.RIM_SPACE, 0.00001)
+		var wider_a := GroundLook.Footprint.new(ca, sa, ya, width + 0.001)
+		var wider_b := GroundLook.Footprint.new(cb, sb, yb, width + 0.001)
+		assert_lt(wider_a.rim_gap_to(wider_b), GroundLook.RIM_SPACE)
+
+
+func test_rim_buckets_match_all_pairs_without_moving_or_mutating_pieces() -> void:
+	var pieces: Array = [
+		_piece(0, Vector3(-4, 0, -1), Vector3(8, 0.1, 0.2)),
+		_piece(1, Vector3(0.15, 0, -1), Vector3(0.2, 0.1, 0.2)),
+		_piece(2, Vector3(0.15, 3, -1), Vector3(0.2, 0.1, 0.2)),
+		_piece(3, Vector3(-0.15, 0, 2), Vector3(0.2, 0.1, 0.2)),
+		_piece(4, Vector3(0.15, 0, 2), Vector3(0.2, 0.1, 0.2)),
+	]
+	pieces[4]["yaw"] = PI * 0.25
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 41108
+	for n: int in 48:
+		var piece := _piece(pieces.size(), Vector3(rng.randf_range(-5, 5), 3.0 * (n % 4 - 1), rng.randf_range(-5, 5)), Vector3(rng.randf_range(0.02, 3), 0.1, rng.randf_range(0.02, 3)))
+		piece["yaw"] = rng.randf_range(-TAU, TAU)
+		pieces.append(piece)
+	var before: Array = pieces.duplicate(true)
+	var widths: Array[float] = GroundLook._rim_widths(pieces)
+	assert_eq(widths.size(), pieces.size())
+	assert_eq(pieces, before, "width calculation is pure")
+	assert_eq(GroundLook._rim_widths(pieces), widths, "repeatable widths")
+	for i: int in pieces.size():
+		var a: Dictionary = pieces[i]
+		var expected: float = GroundLook.RIM
+		for j: int in pieces.size():
+			var b: Dictionary = pieces[j]
+			if i == j or a["lv"] != b["lv"]:
+				continue
+			# Independent bisection includes pairs in distant footprint buckets.
+			var low := 0.0
+			var high: float = GroundLook.RIM
+			for step: int in 24:
+				var mid: float = (low + high) * 0.5
+				var pad := Vector2.ONE * (2.0 * mid)
+				if _plain_gap(Vector2(a["at"].x, a["at"].z), Vector2(a["size"].x, a["size"].z) + pad, a["yaw"], Vector2(b["at"].x, b["at"].z), Vector2(b["size"].x, b["size"].z) + pad, b["yaw"]) >= GroundLook.RIM_SPACE:
+					low = mid
+				else:
+					high = mid
+			expected = minf(expected, low)
+		assert_almost_eq(widths[i], expected, 0.00001, "bucket width %d" % i)
+	pieces.reverse()
+	widths.reverse()
+	assert_eq(GroundLook._rim_widths(pieces), widths, "pair order cannot change widths")
+	assert_eq(GroundLook._rim_widths([]), [])
+
+
+## No buckets or distance shortcut; the existing SAT tests check _rim_limit itself.
+func _all_pair_rim_widths(pieces: Array) -> Array[float]:
+	var feet: Array[GroundLook.Footprint] = []
+	var widths: Array[float] = []
+	for piece: Dictionary in pieces:
+		var at: Vector3 = piece["at"]
+		var size: Vector3 = piece["size"]
+		feet.append(GroundLook.Footprint.new(Vector2(at.x, at.z), Vector2(size.x, size.z), piece["yaw"]))
+		widths.append(GroundLook.RIM)
+	for i: int in pieces.size():
+		for j: int in range(i + 1, pieces.size()):
+			if pieces[i]["lv"] != pieces[j]["lv"]:
+				continue
+			var width: float = clampf(GroundLook._rim_limit(feet[i], feet[j]), 0.0, GroundLook.RIM)
+			widths[i] = minf(widths[i], width)
+			widths[j] = minf(widths[j], width)
+	return widths
+
+
+func test_rim_distance_skip_matches_all_pairs_on_seeded_layouts() -> void:
+	for seed_value: int in [51107, 51108, 51109, 51110]:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed_value
+		var pieces: Array = []
+		for n: int in 64:
+			var extent: float = 0.8 if n < 32 else 8.0
+			var at := Vector3(rng.randf_range(-extent, extent), 3.0 * (n % 4 - 1), rng.randf_range(-extent, extent))
+			var size := Vector3(rng.randf_range(0.02, 3.0), 0.1, rng.randf_range(0.02, 3.0))
+			var piece := _piece(n, at, size)
+			piece["yaw"] = rng.randf_range(-TAU, TAU)
+			pieces.append(piece)
+		var before: Array = pieces.duplicate(true)
+		assert_eq(GroundLook._rim_widths(pieces), _all_pair_rim_widths(pieces), "seed %d" % seed_value)
+		assert_eq(pieces, before, "width pass leaves inputs unchanged")
+		pieces.reverse()
+		assert_eq(GroundLook._rim_widths(pieces), _all_pair_rim_widths(pieces), "reversed seed %d" % seed_value)
+
+
+func test_rim_distance_skip_boundary_keeps_full_and_narrow_widths() -> void:
+	var size := Vector3(0.02, 0.1, 0.02)
+	var reach: float = Vector2(size.x, size.z).length() * 0.5
+	var threshold: float = 2.0 * reach + sqrt(2.0) * (2.0 * GroundLook.RIM + GroundLook.RIM_SPACE)
+	for yaw: float in [0.0, PI * 0.25, PI * 0.5]:
+		# All pairs share a bucket; include overlap, a narrowed rim and the skip boundary.
+		for distance: float in [0.0, 0.08, threshold - 0.00001, threshold, threshold + 0.00001, 0.7]:
+			var pieces: Array = [_piece(0, Vector3(0.1, 0, 0.1), size), _piece(1, Vector3(0.1 + distance, 0, 0.1), size)]
+			pieces[0]["yaw"] = yaw
+			pieces[1]["yaw"] = -yaw
+			assert_eq(GroundLook._rim_widths(pieces), _all_pair_rim_widths(pieces), "yaw %f distance %f" % [yaw, distance])
+
+
+func test_rim_buckets_find_two_diagonal_squares_across_an_integer_edge() -> void:
+	var pieces: Array = [
+		_piece(0, Vector3(0.60, 0, 0.5), Vector3(0.2, 0.1, 0.2)),
+		_piece(1, Vector3(1.15, 0, 0.5), Vector3(0.2, 0.1, 0.2)),
+	]
+	for piece: Dictionary in pieces:
+		piece["yaw"] = PI * 0.25
+	# Both diagonal rims grow sqrt(2)*RIM along world x. The ordered margin
+	# RIM*(1+sqrt(2))+RIM_SPACE leaves the first query below cell 1 here.
+	var expected: float = (0.55 / sqrt(2.0) - 0.2 - GroundLook.RIM_SPACE) * 0.5
+	var widths: Array[float] = GroundLook._rim_widths(pieces)
+	assert_almost_eq(widths[0], expected, 0.000001)
+	assert_almost_eq(widths[1], expected, 0.000001)
+	_assert_gaps(_with_rims(pieces))
+
+
+func test_isolated_rims_and_separate_floors_keep_full_width() -> void:
+	var items := [{"id": "no_art_550", "pos": Vector3(-0.1, 0, -0.1)}, {"id": "no_art_550", "pos": Vector3(-0.1, 3, -0.1)}]
+	for piece: Dictionary in GroundLook.pieces(items):
+		assert_eq(float(piece.get("rim", -1.0)), GroundLook.RIM)
+	var single: Array = GroundLook.pieces([items[0]])
+	assert_eq(float(single[0].get("rim", -1.0)), GroundLook.RIM)
+
+
+func test_rim_uses_explicit_width_including_zero_and_keeps_bar_default() -> void:
+	var piece := _piece(0, Vector3(2, 0.5, 3), Vector3.ONE)
+	assert_eq(GroundLook.rim(piece)["size"], Vector2.ONE * (1.0 + 2.0 * GroundLook.RIM))
+	for width: float in [0.0, 0.015, GroundLook.RIM]:
+		piece["rim"] = width
+		var rim: Dictionary = GroundLook.rim(piece)
+		assert_eq(rim["size"], Vector2.ONE * (1.0 + 2.0 * width))
+		assert_almost_eq(rim["inner"].x * rim["size"].x, 1.0, 0.000001)
+		assert_almost_eq(rim["inner"].y * rim["size"].y, 1.0, 0.000001)
+
+
+func test_a_narrowed_rim_is_drawn_darker_down_to_no_width() -> void:
+	assert_almost_eq(GroundLook.rim_strength(GroundLook.RIM), GroundLook.GROUND_RIM_STRENGTH, 0.000001, "full width")
+	assert_almost_eq(GroundLook.rim_strength(0.0), GroundLook.NARROW_RIM_STRENGTH, 0.000001, "no width")
+	assert_almost_eq(GroundLook.rim_strength(GroundLook.RIM * 2.0), GroundLook.GROUND_RIM_STRENGTH, 0.000001, "never lighter than full")
+	assert_almost_eq(GroundLook.rim_strength(-0.01), GroundLook.NARROW_RIM_STRENGTH, 0.000001, "never darker than none")
+	var last: float = GroundLook.rim_strength(0.0)
+	for step: int in range(1, 11):
+		var strength: float = GroundLook.rim_strength(GroundLook.RIM * step / 10.0)
+		assert_lte(strength, last, "thinner is never lighter")
+		last = strength
+	assert_lte(GroundLook.NARROW_RIM_STRENGTH, 1.0, "an alpha")
+	assert_gte(GroundLook.NARROW_RIM_STRENGTH, GroundLook.GROUND_RIM_STRENGTH)
 
 
 func test_item_numbers_far_spread_empty_glints_and_floors() -> void:
@@ -471,7 +810,7 @@ func test_it_lies_on_its_own_floor() -> void:
 
 
 func test_each_thing_has_a_dark_rim_round_it_on_its_floor() -> void:
-	# T0-6: a quad a little wider than the thing, flat on the thing's own floor (contact_shade darkens it).
+	# T0-6: a quad a little wider than the thing, flat on the thing's own floor (ground_rim darkens it).
 	var piece: Dictionary = GroundLook.pieces([{"pos": Vector3(4.5, 3.0, 4.5), "id": "undershirt_wool", "n": 1}])[0]
 	var rim: Dictionary = GroundLook.rim(piece)
 	var size: Vector3 = piece["size"]
@@ -492,7 +831,7 @@ func _rim_alphas(rim: Dictionary) -> Array:
 
 
 func test_a_rim_under_a_roof_says_so_in_its_alpha() -> void:
-	# contact_shade lightens a rim on snow out of doors only (alpha 1); under a roof (0) no snow lies
+	# ground_rim lightens a rim on snow out of doors only (alpha 1); under a roof (0) no snow lies
 	# on the floor, so the rim keeps its strength in deep winter too.
 	var piece: Dictionary = GroundLook.pieces([{"pos": Vector3(4.5, 0.0, 4.5), "id": "cloth", "n": 1}])[0]
 	var rim: Dictionary = GroundLook.rim(piece)
@@ -525,6 +864,36 @@ func test_a_thing_put_down_shows_on_the_map_and_goes_when_picked_up() -> void:
 	assert_null((game.view.ground_nodes[0].get_node("Rim") as MeshInstance3D).mesh, "its rim with it")
 
 
+func test_the_map_draws_each_rim_as_dark_as_its_width() -> void:
+	var game = FieldGame.new()
+	game.opts = {"seed": 4, "auto_pause": false}
+	game.map_script = TwoLids
+	add_child_autofree(game)
+	game.set_process(false)
+	var at: Vector3 = game.player.position + Vector3(0.4, 0, 0.4)
+	game.ground_items.append({"pos": at, "id": "plank", "n": 1})
+	game._update_zone(0.1)
+	var rim_node := game.view.ground_nodes[0].get_node("Rim") as MeshInstance3D
+	for c: Color in rim_node.mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]:
+		assert_almost_eq(c.b, GroundLook.GROUND_RIM_STRENGTH, COLOUR_STEP, "alone: full width, ground strength")
+	# Three on one cell: the spread lays them close, so some rims narrow.
+	game.ground_items.append({"pos": at, "id": "knife", "n": 1})
+	game.ground_items.append({"pos": at, "id": "can_beans", "n": 1})
+	game._update_zone(0.1)
+	var pieces: Array = game.view._drawn_ground.values()
+	pieces.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["order"]) < int(b["order"]))
+	var colours: PackedColorArray = rim_node.mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	assert_eq(colours.size(), pieces.size() * 6, "one quad each")
+	var narrowed: int = 0
+	for index: int in pieces.size():
+		var width: float = float(pieces[index]["rim"])
+		if width < GroundLook.RIM:
+			narrowed += 1
+		for corner: int in 6:
+			assert_almost_eq(colours[index * 6 + corner].b, GroundLook.rim_strength(width), COLOUR_STEP, "as dark as its width")
+	assert_gt(narrowed, 0, "the three lie close enough to narrow a rim")
+
+
 func _template() -> ArrayMesh:
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -533,6 +902,17 @@ func _template() -> ArrayMesh:
 		surface.set_color(Color(0.4, 0.3, 0.2, 0))
 		surface.add_vertex(vertex)
 	return surface.commit()
+
+
+func test_empty_mark_rims_keep_the_bars_strength() -> void:
+	# Only the ground things' rims darken as they narrow; the empty marks' bars keep theirs.
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	MapView._empty_rims(st, Vector3(2, 0, 3), 1.0)
+	var colours: PackedColorArray = st.commit().surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	assert_eq(colours.size(), 8 * 6, "eight bars, a quad each")
+	for c: Color in colours:
+		assert_almost_eq(c.b, GroundLook.RIM_STRENGTH, COLOUR_STEP)
 
 
 func test_model_name_footprint_yaw_and_floor_are_from_the_shared_template() -> void:

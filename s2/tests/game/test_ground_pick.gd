@@ -28,6 +28,40 @@ func before_each() -> void:
 	game.view.update_ground(game.ground_items)
 
 
+func test_ground_rims_use_their_own_shared_material_and_keep_contact_users() -> void:
+	var rim := game.view.ground_nodes[0].get_node("Rim") as MeshInstance3D
+	var material := rim.material_override as ShaderMaterial
+	assert_not_null(material)
+	if material == null:
+		return
+	assert_eq(material.shader.resource_path, "res://fx/shaders/ground_rim.gdshader")
+	var controls := {"core": GroundLook.RIM_CORE, "snow_keep": GroundLook.RIM_SNOW_KEEP}
+	for uniform_name: String in controls:
+		assert_eq(material.get_shader_parameter(uniform_name), controls[uniform_name], uniform_name)
+	assert_eq(material.render_priority, Material.RENDER_PRIORITY_MIN)
+	var contacts: Array[ShaderMaterial] = []
+	for kind: String in ["rim", "prop", "box"]:
+		var contact: ShaderMaterial = game.view._contact_material(kind)
+		contacts.append(contact)
+		assert_eq(contact.shader.resource_path, "res://fx/shaders/contact_shade.gdshader", kind)
+		assert_false(is_same(material, contact), kind + " keeps its own material")
+		assert_eq(contact.render_priority, material.render_priority)
+		assert_eq(contact.get_shader_parameter("per_instance"), kind == "prop")
+		assert_eq(contact.get_shader_parameter("rect_custom"), kind == "box")
+	_visible_root(1)
+	game.ground_items.append({"pos": item_at + Vector3(0, 3, 0), "id": "no_art_550"})
+	game.view.update_ground(game.ground_items)
+	var prop_shade := game.view.prop_shades as MultiMeshInstance3D
+	assert_not_null(prop_shade)
+	if prop_shade != null:
+		assert_true(is_same(prop_shade.material_override, contacts[1]), "props still draw with contact shade")
+	for lv: int in [0, 1]:
+		var node := game.view.ground_nodes[lv].get_node("Rim") as MeshInstance3D
+		assert_true(is_same(node.material_override, material), "one material across floors and rebuilds")
+	for i: int in contacts.size():
+		assert_true(is_same(contacts[i], game.view._contact_material(["rim", "prop", "box"][i])))
+
+
 func test_pick_each_drawn_position_and_empty_space() -> void:
 	var drawn: Dictionary = game.view.drawn_ground(game.ground_items)
 	assert_eq(drawn.size(), 3)
