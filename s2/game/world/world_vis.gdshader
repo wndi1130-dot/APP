@@ -93,10 +93,12 @@ const vec3 GRAVEL = vec3(0.55, 0.52, 0.47);
 // at the dry grass's lightness (linear 0.215 to its 0.22).
 const vec3 LATE_GREEN = vec3(0.46, 0.52, 0.40);
 
-// 코디 2026-11-07: 얇은 눈이 두꺼운 눈과 갈려 보이도록 바탕 풀빛을 약 절반 되살린다.
+// 코디 2026-11-07: 얇은 눈이 두꺼운 눈과 갈려 보이도록 바탕 풀빛을 되살린다.
 // 근거: 35c73dc8은 먼 거리에서 얇은 눈에 PNG 알파 면적만큼 풀빛을 섞었다 — 문턱 0.65에서 0.188,
-// 7.7 m 흔들림 0.59~0.71에서 0.286~0.113. 그 가운데 0.19~0.22의 절반 안팎.
-const float THIN_SNOW_GRASS_BASE = 0.11;
+// 7.7 m 흔들림 0.59~0.71에서 0.286~0.113, 가운데 0.19~0.22. 처음 넣은 그 절반 0.11은
+// 71be4d57 대비 화소 1~4 %만 바뀌어 얇은 눈이 두꺼운 눈과 갈리지 않았다(줌 20, 23자리).
+// 그래서 그 가운데의 아래 끝 0.19로 올린다(코디 11-07 11:5x).
+const float THIN_SNOW_GRASS_BASE = 0.19;
 
 // Decision 496: metres per layer; the K1 row is road, patch, pavement, grass.
 // Later bands add rows here. Until then every band uses the K1 materials.

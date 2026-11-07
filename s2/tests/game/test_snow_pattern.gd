@@ -577,7 +577,7 @@ func _grass_base_contract_errors(source: String) -> PackedStringArray:
 	var code := _compact(_strip_comments(source))
 	var errors: PackedStringArray = []
 	for expression: String in [
-		"constfloatTHIN_SNOW_GRASS_BASE=0.11;",
+		"constfloatTHIN_SNOW_GRASS_BASE=0.19;",
 		"floatgrass_holes=grass_share*thin_snow*mix(THIN_SNOW_GRASS_BASE,1.0,grass_cut);",
 	]:
 		if code.count(expression) != 1:
@@ -1210,7 +1210,7 @@ func test_thin_snow_grass_base_is_one_fraction_constant() -> void:
 	var value := float(found.get_string(1))
 	assert_gt(value, 0.0)
 	assert_lt(value, 1.0)
-	assert_almost_eq(value, 0.11, 0.000001, "코디 11-07의 바탕 풀빛 몫")
+	assert_almost_eq(value, 0.19, 0.000001, "코디 11-07 11:5x의 바탕 풀빛 몫(0.11에서 올림)")
 	assert_eq(code.count("constfloatTHIN_SNOW_GRASS_BASE="), 1)
 	assert_eq(code.count("THIN_SNOW_GRASS_BASE"), 2, "선언과 구멍 식에서만 사용")
 	var before := code.substr(0, found.get_start())
