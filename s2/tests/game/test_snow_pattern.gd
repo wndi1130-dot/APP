@@ -7,6 +7,8 @@ const SENSITIVE_CALLS := ["fwidth", "dFdx", "dFdy", "texture"]
 const UNSUPPORTED_PREFIX := "검사기가 지원하지 않는 구문: "
 const UNSUPPORTED_SHADER_WORDS := ["discard", "while", "for", "do", "break", "continue", "inout", "switch"]
 const WRITE_OPERATORS := ["=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", "&=", "|=", "^=", "++", "--"]
+const SNOW_FLOW_VALUES := ["thin_snow", "grass_holes", "cover", "grass_share", "local_snow"]
+const GRASS_OUTPUT_CALL := "bare_ground(kind,ground_detail,base,world_pos.xz,grain,ground_dx,ground_dy,grass_share)"
 const DECLARATION_QUALIFIERS := ["const", "in", "out", "lowp", "mediump", "highp"]
 const DECLARATION_TYPES := [
 	"bool", "int", "uint", "float", "vec2", "vec3", "vec4", "ivec2", "ivec3", "ivec4",
@@ -619,10 +621,100 @@ func _write_statements(tokens: Array[String], pairs: Dictionary, start: int, end
 	return result
 
 
-func _single_assignment_errors(source: String) -> PackedStringArray:
-	# 이 세 값은 선언과 최종 소비 두 자리만 허용한다. 별도 호출에 넘기는 것도 거절한다.
+func _snow_flow_steps() -> Array[Array]:
+	# 이름·문장·바깥 조건을 한 목록에 둔다. 빈 이름은 간접 쓰기와 최종 색 소비다.
+	var ground := ["if(ground_kind>0.5&&bare_k>0.001)"]
+	var room := ["if(sky<0.5&&up>0.9&&abs(world_pos.y-3.0*round(world_pos.y/3.0))<0.003)", "if(rc>0)"]
+	return [
+		["cover", "floatcover=0.0;", []],
+		["local_snow", "floatlocal_snow=0.0;", []],
+		["local_snow", "local_snow=clamp(fx_snow*(1.0+snow_shift+1.4*snow_melt*melt),0.0,1.0);", ["if(fx_snow>0.01)"]],
+		["cover", "cover=is_ground?0.97*ground_cover:prop_cover;", ["if(fx_snow>0.01)"]],
+		["cover", "cover*=smoothstep(0.6,0.9,up)*sky*(1.0-smoothstep(0.08,0.3,chroma));", []],
+		["grass_share", "floatgrass_share=0.0;", []],
+		["", "base=mix(base," + GRASS_OUTPUT_CALL + ",bare_k);", ground],
+		["grass_share", "grass_share*=bare_k;", ground],
+		["grass_share", "grass_share=0.0;", room],
+		["cover", "cover*=0.25;", ["if(paved)"]],
+		["cover", "cover=max(cover,0.8*clamp(bank,0.0,1.0));", []],
+		["cover", "cover=max(cover,1.0*pile*heaped);", ["if(heaped>0.001)"]],
+		["cover", "cover*=1.0-0.9*trodden;", []],
+		["thin_snow", "floatthin_snow=smoothstep(0.25,0.4,local_snow)*(1.0-smoothstep(0.5,0.65,local_snow));", []],
+		["grass_holes", "floatgrass_holes=grass_share*thin_snow*mix(THIN_SNOW_GRASS_BASE,1.0,grass_cut);", []],
+		["grass_holes", "grass_holes*=1.0-smoothstep(0.0,0.25,max(pile,bank));", []],
+		["cover", "cover*=1.0-grass_holes;", []],
+		["", "base=mix(base,FX_SNOW*mix(1.0,0.75,wet)*(1.0+(grain.r-0.5)*0.35*wander),cover);", []],
+	]
+
+
+func _snow_flow_errors(tokens: Array[String], pairs: Dictionary, opening: int, closing: int, steps: Array[Array]) -> PackedStringArray:
+	# 중괄호 경로까지 일치하는 독립 문장만 센다. 무괄호 분기·삼항 안의 식은 문장과 다르다.
 	var errors: PackedStringArray = []
-	var tokens := _tokens(_strip_comments(source))
+	var functions := {}
+	for info: Dictionary in _function_headers(tokens, pairs):
+		functions[info["name"]] = true
+	var sites: Array[Dictionary] = []
+	var contexts: Array[String] = []
+	var first := opening + 1
+	var grass_calls := 0
+	var snow_paints := 0
+	for i in range(opening + 1, closing):
+		if tokens[i] == "{":
+			# 빈 블록도 경로 한 칸을 차지하므로 최상위 쓰기로 오인하지 않는다.
+			contexts.append("".join(PackedStringArray(tokens.slice(first, i))))
+			first = i + 1
+		elif tokens[i] == "}":
+			contexts.pop_back()
+			first = i + 1
+		elif tokens[i] == ";":
+			sites.append({"text": "".join(PackedStringArray(tokens.slice(first, i + 1))), "contexts": contexts.duplicate(), "at": first})
+			first = i + 1
+		elif tokens[i] == "return":
+			_unsupported_error(errors, "fragment 조기 종료")
+		if i + 1 >= closing or tokens[i + 1] != "(":
+			continue
+		if i + 4 < closing and tokens[i] == "mix" and tokens[i + 2] == "base" and tokens[i + 3] == "," and tokens[i + 4] == "FX_SNOW":
+			snow_paints += 1
+		if not functions.has(tokens[i]):
+			continue
+		var call_end: int = pairs[i + 1]
+		var call := "".join(PackedStringArray(tokens.slice(i, call_end + 1)))
+		if call == GRASS_OUTPUT_CALL:
+			grass_calls += 1
+			continue
+		# bare_ground의 기존 출력 한 번만 허용한다. include에 정의된 함수도 같은 경계다.
+		for argument in range(i + 2, call_end):
+			if tokens[argument] in SNOW_FLOW_VALUES:
+				_unsupported_error(errors, "눈 계약 값을 사용자 함수에 전달: " + tokens[i])
+				break
+	if grass_calls != 1 or snow_paints != 1:
+		_unsupported_error(errors, "풀 몫 출력·눈 색 소비 횟수")
+	var previous := -1
+	for step: Array in steps:
+		var matches: Array[Dictionary] = []
+		for site: Dictionary in sites:
+			if site["text"] == step[1]:
+				matches.append(site)
+		if matches.size() != 1:
+			_unsupported_error(errors, "눈 계약 문장 누락·중복: " + String(step[1]))
+			continue
+		var matched: Dictionary = matches[0]
+		if matched["contexts"] != step[2] or int(matched["at"]) <= previous:
+			_unsupported_error(errors, "눈 계약 실행 위치·순서: " + String(step[1]))
+		previous = int(matched["at"])
+	return errors
+
+
+func _single_assignment_errors(source: String) -> PackedStringArray:
+	# 단일 소비 세 값과 최종·상류 쓰기를 함께 잠근다. 모르는 구문은 분석 전에 거절한다.
+	var errors: PackedStringArray = []
+	var included := _included_source(source)
+	if included.has("unsupported"):
+		return PackedStringArray(included["unsupported"])
+	if included.has("error"):
+		errors.append(String(included["error"]))
+		return errors
+	var tokens := _tokens(String(included["source"]))
 	var paired := _paired_tokens(tokens)
 	if paired.has("error"):
 		errors.append(String(paired["error"]))
@@ -653,29 +745,15 @@ func _single_assignment_errors(source: String) -> PackedStringArray:
 				writes += 1
 		if tokens[uses[0] - 1] != "float" or tokens[uses[0] + 1] != "=" or writes != 1:
 			errors.append("선언 뒤 덮어쓰기 또는 선언 전 사용: " + name)
-	# 71be4d57의 모든 최종 쓰기를 순서대로 잠근다. 정상 식 뒤의 추가 쓰기도 거절한다.
-	var expected_writes := {
-		"thin_snow": [
-			"floatthin_snow=smoothstep(0.25,0.4,local_snow)*(1.0-smoothstep(0.5,0.65,local_snow));",
-		],
-		"grass_holes": [
-			"floatgrass_holes=grass_share*thin_snow*mix(THIN_SNOW_GRASS_BASE,1.0,grass_cut);",
-			"grass_holes*=1.0-smoothstep(0.0,0.25,max(pile,bank));",
-		],
-		"cover": [
-			"floatcover=0.0;",
-			"cover=is_ground?0.97*ground_cover:prop_cover;",
-			"cover*=smoothstep(0.6,0.9,up)*sky*(1.0-smoothstep(0.08,0.3,chroma));",
-			"cover*=0.25;",
-			"cover=max(cover,0.8*clamp(bank,0.0,1.0));",
-			"cover=max(cover,1.0*pile*heaped);",
-			"cover*=1.0-0.9*trodden;",
-			"cover*=1.0-grass_holes;",
-		],
-	}
-	for name: String in expected_writes:
-		if _write_statements(tokens, pairs, opening + 1, closing, name) != expected_writes[name]:
+	var steps := _snow_flow_steps()
+	for name: String in SNOW_FLOW_VALUES:
+		var expected_writes: Array[String] = []
+		for step: Array in steps:
+			if step[0] == name:
+				expected_writes.append(String(step[1]))
+		if _write_statements(tokens, pairs, opening + 1, closing, name) != expected_writes:
 			errors.append("쓰기 목록·순서 오류: " + name)
+	errors.append_array(_snow_flow_errors(tokens, pairs, opening, closing, steps))
 	var body := "".join(PackedStringArray(tokens.slice(opening + 1, closing)))
 	if not body.contains("cover=is_ground?0.97*ground_cover:prop_cover;"):
 		errors.append("두 눈 덮임 값을 최종 cover에서 사용하지 않음")
@@ -1145,6 +1223,107 @@ func test_cover_write_sequence_rejects_missing_or_reordered_steps() -> void:
 	var reordered := source.replace(cleared, "__swap_cover_write__").replace(bank, cleared).replace("__swap_cover_write__", bank)
 	var qualified := source.replace("float cover = 0.0;", "highp float cover = 0.0;")
 	for changed: String in [source.replace(cleared, ""), reordered, qualified]:
+		assert_ne(changed, source)
+		assert_gt(_single_assignment_errors(changed).size(), 0)
+
+
+func test_snow_flow_rejects_out_helper_calls() -> void:
+	# 검사기 시험: 대입 토큰이 없는 out 호출도 최종 값·상류 입력을 바꿀 수 있다.
+	var source := _code()
+	assert_eq(_single_assignment_errors(source).size(), 0)
+	var paint := "base = mix(base, FX_SNOW"
+	for name: String in ["cover", "thin_snow", "grass_holes", "grass_share", "local_snow"]:
+		var value := "1.0" if name == "thin_snow" else "0.0"
+		var helper := "void reset_snow(out float value) { value = " + value + "; }\n"
+		var changed := source.replace("void fragment() {", helper + "void fragment() {")
+		assert_ne(changed, source)
+		var with_call := changed.replace(paint, "reset_snow(" + name + ");\n" + paint)
+		assert_ne(with_call, changed)
+		assert_true(_single_assignment_errors(with_call).has(UNSUPPORTED_PREFIX + "눈 계약 값을 사용자 함수에 전달: reset_snow"), name)
+
+
+func test_snow_flow_rejects_input_helper_calls() -> void:
+	# 검사기 시험: 함수 본문의 별칭 분석을 하지 않으므로 읽기 인자도 같은 경계로 거절한다.
+	var source := _code()
+	assert_eq(_single_assignment_errors(source).size(), 0)
+	var paint := "base = mix(base, FX_SNOW"
+	for name: String in ["cover", "thin_snow", "grass_holes", "grass_share", "local_snow"]:
+		var changed := source.replace("void fragment() {", "float read_snow(float value) { return value; }\nvoid fragment() {")
+		assert_ne(changed, source)
+		var with_call := changed.replace(paint, "float read_back = read_snow(" + name + ");\n" + paint)
+		assert_ne(with_call, changed)
+		assert_true(_single_assignment_errors(with_call).has(UNSUPPORTED_PREFIX + "눈 계약 값을 사용자 함수에 전달: read_snow"), name)
+
+
+func test_snow_flow_rejects_reused_grass_output() -> void:
+	# 검사기 시험: 기존 out 호출의 예외로 다른 값을 쓰거나 풀 몫을 다시 얻지 못한다.
+	var source := _code()
+	assert_eq(_single_assignment_errors(source).size(), 0)
+	var call := "bare_ground(kind, ground_detail, base, world_pos.xz, grain, ground_dx, ground_dy, grass_share)"
+	var thin := "float thin_snow ="
+	for changed: String in [
+		source.replace(call, call.replace(", grass_share)", ", cover)")),
+		source.replace(thin, call + ";\n" + thin),
+	]:
+		assert_ne(changed, source)
+		assert_gt(_single_assignment_errors(changed).size(), 0)
+
+
+func test_snow_flow_rejects_changed_or_duplicate_color_consumption() -> void:
+	# 검사기 시험: 쓰기를 그대로 두고 눈 색의 마지막 인자만 지우는 우회도 막는다.
+	var source := _code()
+	assert_eq(_single_assignment_errors(source).size(), 0)
+	var paint := "base = mix(base, FX_SNOW * mix(1.0, 0.75, wet) * (1.0 + (grain.r - 0.5) * 0.35 * wander), cover);"
+	for changed: String in [
+		source.replace(paint, paint.replace(", cover);", ", 0.0);")),
+		source.replace(paint, paint + "\n" + paint),
+		source.replace(paint, ""),
+	]:
+		assert_ne(changed, source)
+		assert_gt(_single_assignment_errors(changed).size(), 0)
+
+
+func test_snow_flow_rejects_conditional_hole_steps() -> void:
+	# 검사기 시험: 같은 식이어도 실행되지 않는 분기·반복·삼항 안이면 계약이 아니다.
+	var source := _code()
+	assert_eq(_single_assignment_errors(source).size(), 0)
+	for line: String in [
+		"grass_holes *= 1.0 - smoothstep(0.0, 0.25, max(pile, bank));",
+		"cover *= 1.0 - grass_holes;",
+	]:
+		for wrapped: String in [
+			"if (false) { " + line + " }",
+			"if (false) " + line,
+			"for (int i = 0; i < 0; i++) { " + line + " }",
+			"float skipped = false ? (" + line.trim_suffix(";") + ") : 0.0;",
+		]:
+			var changed := source.replace(line, wrapped)
+			assert_ne(changed, source)
+			assert_gt(_single_assignment_errors(changed).size(), 0, wrapped)
+
+
+func test_snow_flow_rejects_upstream_overwrites() -> void:
+	# 검사기 시험: 선언식 앞에서 풀 몫을 거리에 묶거나 깊이를 창 안으로 바꾸면 실패한다.
+	var source := _code()
+	assert_eq(_single_assignment_errors(source).size(), 0)
+	var thin := "float thin_snow ="
+	for write: String in ["grass_share *= grass_resolve;", "local_snow = 0.45;"]:
+		var changed := source.replace(thin, write + "\n" + thin)
+		assert_ne(changed, source)
+		assert_gt(_single_assignment_errors(changed).size(), 0, write)
+
+
+func test_snow_flow_rejects_moved_upstream_writes() -> void:
+	# 검사기 시험: 허용된 쓰기라도 원래 조건·소비 전 순서를 벗어나면 거절한다.
+	var source := _code()
+	assert_eq(_single_assignment_errors(source).size(), 0)
+	var scale := "grass_share *= bare_k;"
+	var thin := "float thin_snow ="
+	var depth := "local_snow = clamp(fx_snow * (1.0 + snow_shift + 1.4 * snow_melt * melt), 0.0, 1.0);"
+	for changed: String in [
+		source.replace(scale, "").replace(thin, scale + "\n" + thin),
+		source.replace(depth, "if (false) { " + depth + " }"),
+	]:
 		assert_ne(changed, source)
 		assert_gt(_single_assignment_errors(changed).size(), 0)
 
