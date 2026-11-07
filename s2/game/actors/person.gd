@@ -376,8 +376,9 @@ func start_action(id: String, label: String, seconds: float, done: Callable) -> 
 	action_t = seconds
 	action_total = seconds
 	action_done = _complete_simple_splint.bind(done) if id == "splint" else done
-	path = PackedVector3Array()
-	moving = false
+	if id != "door_walk":
+		path = PackedVector3Array()
+		moving = false
 	if id == "climb":
 		body.exert_climb(seconds, body_context())
 
@@ -418,6 +419,8 @@ func go_to(p: PackedVector3Array, run: bool = false) -> void:
 
 
 func stop() -> void:
+	if action == "door_walk":
+		cancel_action()
 	path = PackedVector3Array()
 	moving = false
 
@@ -552,7 +555,7 @@ func refresh_view(show_tag: bool) -> void:
 			text = "잡힘!"
 		elif body.downed:
 			text = "%s · 쓰러짐" % display_name
-		elif action != "" and action != "aim":
+		elif action != "" and action != "aim" and action != "door_walk":
 			text = "%s %d초" % [action_label, ceili(action_t)]
 		elif jam_t > 0.0:
 			text = "걸림 %d초" % ceili(jam_t)
