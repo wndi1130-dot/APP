@@ -31,6 +31,41 @@ func _triangle(alpha: float = 0.0, lift: float = 0.0, shift: float = 0.0) -> Arr
 	return mesh
 
 
+func test_area_and_height_failures_are_cached_misses() -> void:
+	var look = preload("res://game/world/ground_look.gd")
+	assert_gt(Models.MIN_HEIGHT, look.RIM_LIFT)
+	for height: float in [0.0, 0.004, 0.0059, 0.006, 0.008]:
+		var arrays: Array = _triangle().surface_get_arrays(0)
+		arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3(-0.4, 0, -0.2), Vector3(0.4, 0, -0.2), Vector3(0, height, 0.2)])
+		var mesh := ArrayMesh.new()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		assert_eq(Models.cache_template("height_check", mesh), height >= 0.006)
+		assert_eq(Models.template("height_check").is_empty(), height < 0.006)
+	var line: Array = _triangle().surface_get_arrays(0)
+	line[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3(-1, 0, -1), Vector3(0, 1, 0), Vector3(1, 2, 1)])
+	var line_mesh := ArrayMesh.new()
+	line_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, line)
+	assert_false(Models.cache_template("line_check", line_mesh))
+	assert_eq(Models.template("line_check"), {})
+	assert_eq(Models.resolve("line_check"), "")
+
+
+func test_template_bounds_use_only_referenced_vertices_and_stay_finite() -> void:
+	var arrays: Array = _triangle().surface_get_arrays(0)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3(-0.4, 0, -0.2), Vector3(0.4, 0, -0.2), Vector3(0, 0.1, 0.2), Vector3(-10, -10, -10)])
+	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.UP, Vector3.UP, Vector3.UP, Vector3.ZERO])
+	arrays[Mesh.ARRAY_COLOR] = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 0), Color(1, 1, 1, 0), Color.WHITE])
+	var valid: Dictionary = Models.checked_arrays(arrays)
+	assert_false(valid.is_empty(), "unused attributes and bounds cannot reject a template")
+	assert_eq(valid.get("size"), Vector3(0.8, 0.1, 0.4))
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3(9, 1, 9), Vector3(10, 1, 9), Vector3(9, 1.1, 10), Vector3(-10, 0, -10)])
+	arrays[Mesh.ARRAY_NORMAL][3] = Vector3.UP
+	arrays[Mesh.ARRAY_COLOR][3] = Color(1, 1, 1, 0)
+	assert_eq(Models.checked_arrays(arrays), {}, "unused vertices cannot conceal an off-centre floating mesh")
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3(-3e38, 0, -1), Vector3(3e38, 0, -1), Vector3(0, 0.1, 1), Vector3.ZERO])
+	assert_eq(Models.checked_arrays(arrays), {}, "finite endpoints can overflow the size")
+
+
 func test_templates_and_misses_are_cached_and_can_be_restored() -> void:
 	assert_true(Models.cache_template("knife", _triangle()))
 	var first: Dictionary = Models.template("knife")

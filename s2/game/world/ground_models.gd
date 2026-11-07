@@ -10,8 +10,10 @@ extends RefCounted
 const ItemArt = preload("res://game/ui/item_art.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const PATH: String = "res://assets/ground_items/%s.res"
+const MIN_HEIGHT: float = 0.006
+const MIN_TRIANGLE_AREA_TWICE: float = 1e-10
 ## Packs, boxes and bags keep their crate on the ground (금지선: no case, bundle
-## or bag shapes; 11-07 08:12 ㉠, put to the user as 3-1-129); one list for baking
+## or bag shapes; 11-07 08:12 ㉠, kept by the answer to 3-1-129); one list for baking
 ## and drawing alike.
 const BOX_ONLY_IDS: Dictionary = {
 	"food_pack": true, "med_box": true, "luxury_pack": true, "medkit": true, "ammo_box": true,
@@ -73,7 +75,32 @@ static func restore_cache(snapshot: Dictionary) -> void:
 static func arrays_of(mesh: ArrayMesh) -> Dictionary:
 	if mesh == null or mesh.get_surface_count() != 1 or mesh.surface_get_primitive_type(0) != Mesh.PRIMITIVE_TRIANGLES:
 		return {}
-	var arrays: Array = mesh.surface_get_arrays(0)
+	return checked_arrays(mesh.surface_get_arrays(0))
+
+
+static func triangle_area_twice(a: Vector3, b: Vector3, c: Vector3) -> float:
+	return (b - a).cross(c - a).length()
+
+
+## A mesh may contain collapsed faces; it must have at least one drawable face.
+static func has_triangle_area(vertices: PackedVector3Array, indices: PackedInt32Array) -> bool:
+	var count: int = indices.size() if not indices.is_empty() else vertices.size()
+	if count == 0 or count % 3 != 0:
+		return false
+	for index: int in indices:
+		if index < 0 or index >= vertices.size():
+			return false
+	for offset: int in range(0, count, 3):
+		var a: int = indices[offset] if not indices.is_empty() else offset
+		var b: int = indices[offset + 1] if not indices.is_empty() else offset + 1
+		var c: int = indices[offset + 2] if not indices.is_empty() else offset + 2
+		var area: float = triangle_area_twice(vertices[a], vertices[b], vertices[c])
+		if is_finite(area) and area > MIN_TRIANGLE_AREA_TWICE:
+			return true
+	return false
+
+
+static func checked_arrays(arrays: Array) -> Dictionary:
 	if arrays.size() != Mesh.ARRAY_MAX or not arrays[Mesh.ARRAY_VERTEX] is PackedVector3Array:
 		return {}
 	if not arrays[Mesh.ARRAY_NORMAL] is PackedVector3Array or not arrays[Mesh.ARRAY_COLOR] is PackedColorArray:
@@ -92,9 +119,11 @@ static func arrays_of(mesh: ArrayMesh) -> Dictionary:
 	for index: int in indices:
 		if index < 0 or index >= vertices.size():
 			return {}
-	var lo: Vector3 = vertices[0]
+	var first: int = indices[0] if not indices.is_empty() else 0
+	var lo: Vector3 = vertices[first]
 	var hi: Vector3 = lo
-	for index: int in vertices.size():
+	for offset: int in count:
+		var index: int = indices[offset] if not indices.is_empty() else offset
 		var vertex: Vector3 = vertices[index]
 		var normal: Vector3 = normals[index]
 		var color: Color = colors[index]
@@ -105,7 +134,9 @@ static func arrays_of(mesh: ArrayMesh) -> Dictionary:
 		lo = lo.min(vertex)
 		hi = hi.max(vertex)
 	var size: Vector3 = hi - lo
-	if size.x <= 0.0 or size.z <= 0.0 or absf(lo.y) > 0.0001 or absf(lo.x + hi.x) > 0.0001 or absf(lo.z + hi.z) > 0.0001:
+	if not size.is_finite() or size.x <= 0.0 or size.z <= 0.0 or size.y < MIN_HEIGHT or absf(lo.y) > 0.0001 or absf(lo.x + hi.x) > 0.0001 or absf(lo.z + hi.z) > 0.0001:
+		return {}
+	if not has_triangle_area(vertices, indices):
 		return {}
 	return {"vertices": vertices, "normals": normals, "colors": colors, "indices": indices, "size": size, "triangles": floori(float(count) / 3.0)}
 

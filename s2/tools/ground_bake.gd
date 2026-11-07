@@ -91,6 +91,7 @@ func _run() -> void:
 		file.close()
 		if entries.size() == entry_start:
 			failures.append("list %s: no entries" % args[list_index])
+	clear_stale(out_dir, entries)
 	var record_error: Error = write_record(out_dir.path_join(RECORD), record_lines(entries, failures))
 	if record_error != OK:
 		failures.append("record: " + error_string(record_error))
@@ -106,6 +107,10 @@ static func parse_line(text: String, line_number: int = 0) -> Dictionary:
 	if line.is_empty() or line.begins_with("#"):
 		return {}
 	var entry: Dictionary = {"name": "line_%d" % line_number, "line": line_number}
+	var first: String = line.replace("\t", " ").split(" ", false)[0]
+	if Models.valid_name(first):
+		entry["name"] = first
+		entry["output_name"] = first
 	var pattern := RegEx.new()
 	var compiled: Error = pattern.compile("^(\\S+)\\s+(res://.+?\\.(?:glb|gltf|obj|tscn|scn|res|tres|gd))(?:\\s+(\\S+))?(?:\\s+(\\S+))?(?:\\s+(\\S+))?(?:\\s+(\\S+))?$")
 	if compiled != OK:
@@ -195,6 +200,8 @@ static func centered(vertices: PackedVector3Array) -> Dictionary:
 	var size: Vector3 = hi - lo
 	if size.x <= 0.0 or size.z <= 0.0 or not size.is_finite():
 		return {"error": "zero or non-finite footprint"}
+	if size.y < Models.MIN_HEIGHT:
+		return {"error": "ground model below minimum height"}
 	var origin := Vector3((lo.x + hi.x) * 0.5, lo.y, (lo.z + hi.z) * 0.5)
 	var shifted := PackedVector3Array()
 	shifted.resize(vertices.size())
@@ -258,6 +265,8 @@ static func bake_node(source: Node, vertex_coloured: bool = false) -> Dictionary
 		reduced["dropped"] = data["dropped"]
 		return reduced
 	var final_arrays: Array = reduced["arrays"]
+	if not Models.has_triangle_area(final_arrays[Mesh.ARRAY_VERTEX], final_arrays[Mesh.ARRAY_INDEX]):
+		return {"error": "reduced mesh has no triangle area", "dropped": data["dropped"]}
 	var centred: Dictionary = centered(final_arrays[Mesh.ARRAY_VERTEX])
 	if centred.has("error"):
 		return {"error": centred["error"], "dropped": data["dropped"]}
@@ -376,6 +385,14 @@ static func cluster_vertices(arrays: Array, cell: float) -> Dictionary:
 	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
 	if vertices.is_empty() or normals.size() != vertices.size() or colors.size() != vertices.size() or indices.is_empty() or indices.size() % 3 != 0:
 		return {"error": "empty or inconsistent cluster arrays"}
+	for index: int in indices:
+		if index < 0 or index >= vertices.size():
+			return {"error": "cluster index out of range"}
+	# Every vertex contributes to a cell mean, including unreferenced vertices.
+	for index: int in vertices.size():
+		var color: Color = colors[index]
+		if not vertices[index].is_finite() or not normals[index].is_finite() or not is_finite(color.r) or not is_finite(color.g) or not is_finite(color.b) or not is_finite(color.a):
+			return {"error": "non-finite cluster attributes"}
 	var low: Vector3 = vertices[0]
 	for vertex: Vector3 in vertices:
 		low = low.min(vertex)
@@ -400,17 +417,6 @@ static func cluster_vertices(arrays: Array, cell: float) -> Dictionary:
 		normal_sums[id] += normals[index]
 		colour_sums[id] += colors[index]
 		counts[id] += 1
-	var kept_indices := PackedInt32Array()
-	for offset: int in range(0, indices.size(), 3):
-		var a: int = cluster[indices[offset]]
-		var b: int = cluster[indices[offset + 1]]
-		var c: int = cluster[indices[offset + 2]]
-		if a != b and b != c and a != c:
-			kept_indices.append(a)
-			kept_indices.append(b)
-			kept_indices.append(c)
-	if kept_indices.is_empty():
-		return {"error": "clustering left no triangles"}
 	var merged: Array = []
 	merged.resize(Mesh.ARRAY_MAX)
 	var merged_vertices := PackedVector3Array()
@@ -424,6 +430,22 @@ static func cluster_vertices(arrays: Array, cell: float) -> Dictionary:
 		var colour: Color = colour_sums[id] * share
 		colour.a = 0.0
 		merged_colors.append(colour)
+	var kept_indices := PackedInt32Array()
+	for offset: int in range(0, indices.size(), 3):
+		var a: int = cluster[indices[offset]]
+		var b: int = cluster[indices[offset + 1]]
+		var c: int = cluster[indices[offset + 2]]
+		if a != b and b != c and a != c:
+			var area: float = Models.triangle_area_twice(merged_vertices[a], merged_vertices[b], merged_vertices[c])
+			if not is_finite(area):
+				return {"error": "non-finite clustered triangle area"}
+			if area <= Models.MIN_TRIANGLE_AREA_TWICE:
+				continue
+			kept_indices.append(a)
+			kept_indices.append(b)
+			kept_indices.append(c)
+	if kept_indices.is_empty():
+		return {"error": "clustering left no triangles"}
 	merged[Mesh.ARRAY_VERTEX] = merged_vertices
 	merged[Mesh.ARRAY_NORMAL] = merged_normals
 	merged[Mesh.ARRAY_COLOR] = merged_colors
@@ -465,6 +487,8 @@ static func _reduce_geometry(arrays: Array) -> Dictionary:
 	if base.has("error"):
 		return base
 	var base_arrays: Array = base["arrays"]
+	if not Models.has_triangle_area(base_arrays[Mesh.ARRAY_VERTEX], base_arrays[Mesh.ARRAY_INDEX]):
+		return {"error": "source mesh has no triangle area"}
 	var base_count: int = base["vertices"]
 	var levels: Array[Dictionary] = [{"lod": 0, "indices": base_arrays[Mesh.ARRAY_INDEX]}]
 	if base_count > MAX_VERTICES:
@@ -487,6 +511,9 @@ static func _reduce_geometry(arrays: Array) -> Dictionary:
 	var result: Dictionary = compact_vertices(base_arrays, chosen["indices"])
 	if result.has("error"):
 		return result
+	var result_arrays: Array = result["arrays"]
+	if not Models.has_triangle_area(result_arrays[Mesh.ARRAY_VERTEX], result_arrays[Mesh.ARRAY_INDEX]):
+		return {"error": "LOD mesh has no triangle area"}
 	var limit_error: String = vertex_limit_error(result["vertices"])
 	if not limit_error.is_empty():
 		return {"error": limit_error}
@@ -513,10 +540,14 @@ static func _collect(node: Node, parent_pose: Transform3D, shown: bool, vertex_c
 				return
 			var part_vertices := PackedVector3Array()
 			for surface: int in mesh.get_surface_count():
-				var arrays: Array = mesh.surface_get_arrays(surface)
-				if arrays.size() != Mesh.ARRAY_MAX or not arrays[Mesh.ARRAY_VERTEX] is PackedVector3Array:
-					data["error"] = "invalid 3D part vertex array"
+				if mesh is PointMesh or (mesh is ArrayMesh and (mesh as ArrayMesh).surface_get_primitive_type(surface) != Mesh.PRIMITIVE_TRIANGLES):
+					data["error"] = "non-triangle surface"
 					return
+				var referenced: Dictionary = referenced_surface(mesh.surface_get_arrays(surface))
+				if referenced.has("error"):
+					data["error"] = referenced["error"]
+					return
+				var arrays: Array = referenced["arrays"]
 				part_vertices.append_array(arrays[Mesh.ARRAY_VERTEX])
 			if not part_vertices.is_empty():
 				var bounds: Dictionary = transformed_bounds(part_vertices, pose)
@@ -534,14 +565,66 @@ static func _collect(node: Node, parent_pose: Transform3D, shown: bool, vertex_c
 		_collect(child, pose, shown, vertex_coloured, data)
 
 
+## Preserve source order while removing unused positions and optional attributes.
+static func referenced_surface(arrays: Array) -> Dictionary:
+	if arrays.size() != Mesh.ARRAY_MAX or not arrays[Mesh.ARRAY_VERTEX] is PackedVector3Array:
+		return {"error": "invalid 3D vertex array"}
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	if vertices.is_empty():
+		return {"error": "empty surface"}
+	if arrays[Mesh.ARRAY_INDEX] != null and not arrays[Mesh.ARRAY_INDEX] is PackedInt32Array:
+		return {"error": "invalid triangle indices"}
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array()
+	if indices.is_empty():
+		for index: int in vertices.size():
+			indices.append(index)
+	if indices.size() % 3 != 0:
+		return {"error": "incomplete triangle indices"}
+	var used: Dictionary = {}
+	for index: int in indices:
+		if index < 0 or index >= vertices.size():
+			return {"error": "triangle index out of range"}
+		used[index] = true
+	var packed: Array = []
+	packed.resize(Mesh.ARRAY_MAX)
+	for slot: int in [Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL, Mesh.ARRAY_COLOR, Mesh.ARRAY_TEX_UV]:
+		var values: Variant = arrays[slot]
+		if values == null:
+			continue
+		var correct_type: bool = values is PackedColorArray if slot == Mesh.ARRAY_COLOR else (values is PackedVector2Array if slot == Mesh.ARRAY_TEX_UV else values is PackedVector3Array)
+		if not correct_type:
+			return {"error": "invalid surface attribute type"}
+		if values.is_empty():
+			continue
+		if values.size() != vertices.size():
+			return {"error": "inconsistent surface attributes"}
+		var kept: Variant = values.slice(0, 0)
+		for index: int in vertices.size():
+			if used.has(index):
+				if slot == Mesh.ARRAY_VERTEX and not vertices[index].is_finite():
+					return {"error": "non-finite surface vertex"}
+				kept.append(values[index])
+		packed[slot] = kept
+	var remap: Dictionary = {}
+	for index: int in vertices.size():
+		if used.has(index):
+			remap[index] = remap.size()
+	var kept_indices := PackedInt32Array()
+	for index: int in indices:
+		kept_indices.append(int(remap[index]))
+	packed[Mesh.ARRAY_INDEX] = kept_indices
+	return {"arrays": packed}
+
+
 static func _append_surface(mesh: Mesh, surface: int, material: Material, pose: Transform3D, vertex_coloured: bool, data: Dictionary) -> void:
 	if mesh is PointMesh or (mesh is ArrayMesh and (mesh as ArrayMesh).surface_get_primitive_type(surface) != Mesh.PRIMITIVE_TRIANGLES):
 		data["error"] = "non-triangle surface"
 		return
-	var arrays: Array = mesh.surface_get_arrays(surface)
-	if arrays.size() != Mesh.ARRAY_MAX or not arrays[Mesh.ARRAY_VERTEX] is PackedVector3Array:
-		data["error"] = "invalid 3D vertex array"
+	var referenced: Dictionary = referenced_surface(mesh.surface_get_arrays(surface))
+	if referenced.has("error"):
+		data["error"] = referenced["error"]
 		return
+	var arrays: Array = referenced["arrays"]
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	if vertices.is_empty():
 		return
@@ -655,6 +738,53 @@ static func paints_with_vertex_colours(path: String) -> bool:
 	return materials is Array and (materials as Array).is_empty()
 
 
+static func stale_file_matches(item_name: String, file_name: String) -> bool:
+	if not Models.valid_name(item_name) or file_name.get_file() != file_name:
+		return false
+	var key: String = item_name.to_lower()
+	var candidate: String = file_name.to_lower()
+	if candidate == key + ".res" or candidate == key + ".tmp.res":
+		return true
+	if candidate.begins_with(key + ".") and candidate.ends_with(".tmp.res"):
+		var process: String = candidate.trim_prefix(key + ".").trim_suffix(".tmp.res")
+		return process.is_valid_int() and process.to_int() > 0
+	return false
+
+
+## Every failed or skipped entry's old outputs go, but a name some entry saved
+## this run is never cleared by another entry's failure (a duplicate line, the
+## same name in a second list): that file is this run's good model.
+static func clear_stale(out_dir: String, entries: Array) -> void:
+	var saved_names: Dictionary = {}
+	for entry: Dictionary in entries:
+		if bool(entry.get("saved", false)):
+			saved_names[String(entry["name"]).to_lower()] = true
+	for entry: Dictionary in entries:
+		if entry.has("output_name") and not saved_names.has(String(entry["output_name"]).to_lower()):
+			remove_stale(out_dir, entry)
+
+
+## Failed and skipped entries cannot leave an older model available to load.
+static func remove_stale(out_dir: String, entry: Dictionary) -> void:
+	if not entry.has("error") and not entry.has("skipped"):
+		return
+	var item_name: String = String(entry.get("output_name", entry.get("name", "")))
+	if not Models.valid_name(item_name):
+		return
+	var directory := DirAccess.open(out_dir)
+	if directory == null:
+		entry["error"] = "%s; stale output: %s" % [entry.get("error", ""), error_string(DirAccess.get_open_error())]
+		return
+	for file_name: String in directory.get_files():
+		if not stale_file_matches(item_name, file_name):
+			continue
+		var error: Error = directory.remove(file_name)
+		if error != OK:
+			entry["error"] = "%s; stale %s: %s" % [entry.get("error", ""), file_name, error_string(error)]
+		else:
+			entry["removed_stale"] = int(entry.get("removed_stale", 0)) + 1
+
+
 static func exit_code(entries: Array, run_failures: Array) -> int:
 	if entries.is_empty() or not run_failures.is_empty():
 		return 1
@@ -670,11 +800,12 @@ static func record_lines(entries: Array, run_failures: Array) -> PackedStringArr
 		lines.append("failed run " + failure.replace("\n", " ").replace("\r", " "))
 	for entry: Dictionary in entries:
 		var item_name: String = entry["name"]
+		var stale: String = " removed_stale=%d" % int(entry["removed_stale"]) if entry.has("removed_stale") else ""
 		if entry.has("error"):
 			var dropped: String = " dropped=%d" % entry["dropped"] if entry.has("dropped") else ""
-			lines.append("failed %s %s%s" % [item_name, String(entry["error"]).replace("\n", " ").replace("\r", " "), dropped])
+			lines.append("failed %s %s%s%s" % [item_name, String(entry["error"]).replace("\n", " ").replace("\r", " "), dropped, stale])
 		elif entry.has("skipped"):
-			lines.append("skipped %s %s" % [item_name, entry["skipped"]])
+			lines.append("skipped %s %s%s" % [item_name, entry["skipped"], stale])
 		elif bool(entry.get("saved", false)):
 			var size: Vector3 = entry["size"]
 			var clustered: String = " cluster=%.6f" % float(entry["cluster"]) if float(entry.get("cluster", 0.0)) > 0.0 else ""

@@ -7,6 +7,159 @@ const Bake = preload("res://tools/ground_bake.gd")
 const COLOR_EPSILON: float = 1.5 / 255.0
 
 
+func _review_arrays(vertices: PackedVector3Array) -> Array:
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	var normals := PackedVector3Array()
+	normals.resize(vertices.size())
+	normals.fill(Vector3.UP)
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	var colors := PackedColorArray()
+	colors.resize(vertices.size())
+	colors.fill(Color(0.4, 0.3, 0.2, 0))
+	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2])
+	return arrays
+
+
+func test_area_checks_cover_original_and_reduced_geometry() -> void:
+	var line: Array = _review_arrays(PackedVector3Array([Vector3.ZERO, Vector3.ONE, Vector3.ONE * 2]))
+	assert_true(Bake._reduce_geometry(line).has("error"), "a whole mesh without area fails")
+	var mixed: Array = _review_arrays(PackedVector3Array([Vector3.ZERO, Vector3.ONE, Vector3.ONE * 2, Vector3.RIGHT]))
+	mixed[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2, 0, 1, 3])
+	var kept: Dictionary = Bake._reduce_geometry(mixed)
+	assert_false(kept.has("error"))
+	assert_eq(kept.get("triangles"), 2, "do not filter individual source triangles")
+	var merging: Array = _review_arrays(PackedVector3Array([Vector3.ZERO, Vector3(1, 0.2, 1), Vector3(2, 0, 2), Vector3(1, -0.2, 1)]))
+	merging[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2, 0, 3, 2])
+	assert_true(Bake.cluster_vertices(merging, 1.0).has("error"), "three distinct cells become collinear at their means")
+	assert_eq(Bake.Models.triangle_area_twice(Vector3.ZERO, Vector3.RIGHT, Vector3.UP), 1.0)
+	assert_false(Bake.Models.has_triangle_area(PackedVector3Array(), PackedInt32Array()))
+	assert_false(Bake.Models.has_triangle_area(line[Mesh.ARRAY_VERTEX], PackedInt32Array([0, 1])))
+	assert_false(Bake.Models.has_triangle_area(line[Mesh.ARRAY_VERTEX], PackedInt32Array([-1, 1, 2])))
+
+
+func test_unused_vertices_do_not_change_parts_or_generated_normals() -> void:
+	for extent: float in [0.01, 0.1]:
+		var arrays: Array = _review_arrays(PackedVector3Array([Vector3.ZERO, Vector3(extent, 0, 0), Vector3(0, extent, extent), Vector3(10, 10, 10)]))
+		arrays[Mesh.ARRAY_NORMAL] = null
+		var mesh := ArrayMesh.new()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		var source := MeshInstance3D.new()
+		source.mesh = mesh
+		var result: Dictionary = Bake.bake_node(source)
+		source.free()
+		if extent < 0.02:
+			assert_eq(result.get("dropped"), 1, "an unused outlier cannot save a tiny part")
+			assert_true(result.has("error"))
+		else:
+			assert_false(result.has("error"), str(result))
+			assert_eq(result.get("vertices"), 3, "only used vertices need generated normals")
+	var bad: Array = _review_arrays(PackedVector3Array([Vector3.ZERO, Vector3.RIGHT, Vector3.UP]))
+	bad[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 3])
+	assert_true(Bake.referenced_surface(bad).has("error"))
+	bad[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2])
+	bad[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.UP])
+	assert_true(Bake.referenced_surface(bad).has("error"))
+
+
+func test_height_floor_rejects_flat_and_thin_bakes() -> void:
+	for height: float in [0.0, 0.004, 0.0059, 0.006, 0.008]:
+		var source := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(0.1, height, 0.1)
+		source.mesh = mesh
+		var result: Dictionary = Bake.bake_node(source)
+		source.free()
+		assert_eq(result.has("error"), height < 0.006, "height %f" % height)
+
+
+func test_cluster_rejects_invalid_indices_and_nonfinite_attributes() -> void:
+	var arrays: Array = _review_arrays(PackedVector3Array([Vector3.ZERO, Vector3.RIGHT, Vector3.UP]))
+	assert_true(Bake.cluster_vertices([], 0.1).has("error"))
+	for indices: PackedInt32Array in [PackedInt32Array(), PackedInt32Array([0, 1]), PackedInt32Array([-1, 1, 2]), PackedInt32Array([0, 1, 3])]:
+		var bad: Array = arrays.duplicate(true)
+		bad[Mesh.ARRAY_INDEX] = indices
+		assert_true(Bake.cluster_vertices(bad, 0.1).has("error"))
+	for value: float in [NAN, INF]:
+		for slot: int in [Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL, Mesh.ARRAY_COLOR]:
+			var bad: Array = arrays.duplicate(true)
+			if slot == Mesh.ARRAY_COLOR:
+				bad[slot] = PackedColorArray([Color(1, 1, 1, value), Color.BLACK, Color.BLACK])
+			else:
+				bad[slot] = PackedVector3Array([Vector3(value, 0, 0), Vector3.RIGHT, Vector3.UP])
+			assert_true(Bake.cluster_vertices(bad, 0.1).has("error"))
+	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.UP])
+	assert_true(Bake.cluster_vertices(arrays, 0.1).has("error"))
+	assert_true(Bake.referenced_surface([]).has("error"))
+
+
+func test_failed_and_skipped_entries_remove_only_their_stale_files() -> void:
+	var folder: String = "user://ground_stale_%d_%d" % [OS.get_process_id(), Time.get_ticks_usec()]
+	assert_eq(DirAccess.make_dir_recursive_absolute(folder), OK)
+	var files := PackedStringArray(["Knife.RES", "knife.tmp.res", "KNIFE.123.tmp.res", "food_pack.res", "keep.res", "knife_extra.res", "knife.other.tmp.res"])
+	for name: String in files:
+		var file := FileAccess.open(folder.path_join(name), FileAccess.WRITE)
+		assert_not_null(file)
+		if file != null:
+			file.store_string("old")
+			file.close()
+	var failed := {"name": "knife", "error": "source missing"}
+	var skipped := {"name": "food_pack", "skipped": "BOX_ONLY"}
+	Bake.remove_stale(folder, failed)
+	Bake.remove_stale(folder, skipped)
+	assert_eq(failed.get("removed_stale"), 3)
+	assert_eq(skipped.get("removed_stale"), 1)
+	assert_true(Bake.record_lines([failed, skipped], [])[0].contains("removed_stale=3"))
+	assert_true(Bake.record_lines([failed, skipped], [])[1].contains("removed_stale=1"))
+	Bake.remove_stale(folder, failed)
+	assert_eq(failed.get("removed_stale"), 3, "cleanup is idempotent")
+	Bake.remove_stale(folder, {"name": "keep", "saved": true})
+	assert_false(Bake.stale_file_matches("../escape", "escape.res"))
+	var malformed: Dictionary = Bake.parse_line("knife invalid_source")
+	assert_true(malformed.has("error"))
+	assert_eq(malformed.get("output_name"), "knife", "malformed sources still identify their stale output")
+	for name: String in files:
+		var path: String = folder.path_join(name)
+		var should_remain: bool = name in ["keep.res", "knife_extra.res", "knife.other.tmp.res"]
+		assert_eq(FileAccess.file_exists(path), should_remain, name)
+		if FileAccess.file_exists(path):
+			assert_eq(DirAccess.remove_absolute(path), OK)
+	assert_eq(DirAccess.remove_absolute(folder), OK)
+	var missing := {"name": "knife", "skipped": "BOX_ONLY"}
+	Bake.remove_stale(folder, missing)
+	assert_true(missing.has("error"), "cleanup failures cannot be reported as a successful skip")
+
+
+## A name saved this run keeps its file when another entry of the same name fails
+## (a duplicate line, the same name in a second list): only names nobody saved
+## lose their old outputs.
+func test_a_saved_name_is_not_cleared_by_a_failed_duplicate() -> void:
+	var folder: String = "user://ground_dup_%d_%d" % [OS.get_process_id(), Time.get_ticks_usec()]
+	assert_eq(DirAccess.make_dir_recursive_absolute(folder), OK)
+	for name: String in ["knife.res", "axe.res"]:
+		var file := FileAccess.open(folder.path_join(name), FileAccess.WRITE)
+		assert_not_null(file)
+		if file != null:
+			file.store_string("baked")
+			file.close()
+	var entries: Array = [
+		{"name": "knife", "output_name": "knife", "saved": true},
+		{"name": "Knife", "output_name": "Knife", "error": "duplicate name across lists"},
+		{"name": "axe", "output_name": "axe", "error": "source missing"},
+	]
+	Bake.clear_stale(folder, entries)
+	assert_true(FileAccess.file_exists(folder.path_join("knife.res")), "this run's knife stays")
+	assert_false(entries[1].has("removed_stale"))
+	assert_false(FileAccess.file_exists(folder.path_join("axe.res")), "a failed name nobody saved is cleared")
+	assert_eq(entries[2].get("removed_stale"), 1)
+	for name: String in ["knife.res", "axe.res"]:
+		if FileAccess.file_exists(folder.path_join(name)):
+			assert_eq(DirAccess.remove_absolute(folder.path_join(name)), OK)
+	assert_eq(DirAccess.remove_absolute(folder), OK)
+
+
 func test_primitives_are_copied_and_only_reduced() -> void:
 	var cylinder := CylinderMesh.new()
 	cylinder.radial_segments = 32
@@ -135,7 +288,8 @@ func test_transforms_keep_metres_and_reflections_reverse_winding() -> void:
 		var face: Vector3 = (vertices[order[2]] - vertices[order[0]]).cross(vertices[order[1]] - vertices[order[0]])
 		assert_gt(face.dot(normals[order[0]]), 0.0, "a mirrored part is not drawn inside out")
 		assert_gt(normals[order[0]].y, 0.0, "its normal still points up")
-	source.scale = Vector3(0.01, 0.01, 0.01)
+	# Keep a small invertible transform while clearing the 6 mm height floor.
+	source.scale = Vector3(0.01, 0.04, 0.01)
 	assert_false(Bake.bake_node(source).has("error"), "small but invertible metre transforms are valid")
 	source.free()
 
