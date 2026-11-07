@@ -50,6 +50,7 @@ const FieldArrival = preload("res://game/politics/field_arrival.gd")
 const TurnCard = preload("res://game/ui/turn_card.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const ScreenLift = preload("res://game/ui/screen_lift.gd")
+const FieldPrefs = preload("res://game/ui/field_prefs.gd")
 const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
 const CouncilCard = preload("res://game/ui/council_card.gd")
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
@@ -349,7 +350,7 @@ func _ready() -> void:
 			run = String(opts.get("run", run))
 			if run.is_empty():
 				run = Crypto.new().generate_random_bytes(8).hex_encode()
-			train_g = RouteState.start(train_g, run)
+			train_g = RouteState.start(train_g, run, RouteState.world_seed_for_run(run))
 		if bool(opts.get("save", false)) and not train_g.is_empty():
 			_clear_slice_field()
 		_seed_shop_settle()
@@ -2469,10 +2470,7 @@ func _start_field() -> void:
 	if field_resume.is_empty():
 		field.opts = _field_opts()
 	else:
-		field.opts = field_resume
-		field.opts["field_save"] = bool(opts.get("save", false))
-		field.opts["field_save_path"] = String(opts.get("field_save_path", FieldSave.PATH))
-		field_resume = {}
+		field.opts = _resumed_field_opts()
 	if _is_campaign():
 		field.opts["map_data"] = _campaign_map
 		_campaign_map = {}
@@ -2529,6 +2527,18 @@ func _departure() -> Dictionary:
 	return contract
 
 
+## What a field stood up from its save (field_resume) starts with: what it was saved with,
+## this slice's save switch and path, and — it is the play's field as well — the kept settings
+## it lacks and the mark (field_prefs.gd; a save from before had none, so its changes went unkept).
+func _resumed_field_opts() -> Dictionary:
+	var o: Dictionary = field_resume
+	field_resume = {}
+	o["field_save"] = bool(opts.get("save", false))
+	o["field_save_path"] = String(opts.get("field_save_path", FieldSave.PATH))
+	FieldPrefs.fill(o)
+	return o
+
+
 ## What the slice's field goes out with: the train's departure contract (who goes, their
 ## bodies, kit, hunger and soreness, the promises riding on the stop).
 func _field_opts() -> Dictionary:
@@ -2536,6 +2546,9 @@ func _field_opts() -> Dictionary:
 	o["field_save"] = bool(opts.get("save", false))
 	o["field_save_path"] = String(opts.get("field_save_path", FieldSave.PATH))
 	o["slice"] = true
+	# The stick, the radio and the state icons as the player last chose them in a stop's
+	# settings, and the mark that keeps a change made in this one (field_prefs.gd).
+	FieldPrefs.fill(o)
 	if run != "":
 		o["slice_run"] = run
 	# When the train comes in (decision 471 B0): the departure contract's, rolled by the train
@@ -2577,6 +2590,8 @@ func _field_opts() -> Dictionary:
 		var visit: Dictionary = train_g["campaign"]["visit"]
 		var stop: Dictionary = RouteState.current_stop(train_g)
 		o["seed"] = int(visit["field_seed"])
+		if train_g["campaign"].has("world_seed"): o["world_seed"] = train_g["campaign"]["world_seed"]
+		if train_g["campaign"].has("furnish_rule"): o["furnish_rule"] = train_g["campaign"]["furnish_rule"]
 		o["place"] = stop["map"]
 		o["visit_id"] = visit["id"]
 		o["campaign_kind"] = stop["kind"]

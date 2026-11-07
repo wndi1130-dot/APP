@@ -1077,3 +1077,32 @@ func test_assembly_vocabulary_all_low_runs_and_unchanged_band_covers() -> void:
 			if r.intersects(d["bands"]["lower"]):
 				covers.y += 1
 		assert_eq(covers, ASSEMBLY_BAND_COVERS[i], d["place_id"])
+
+
+## 석탄(coal)은 물건 표에 없어서 뜯기 자리로 주면 이름이 영어로 뜨고 열차에 실을 때 사라진다
+## (loot-feel 11-07). church_04 야적장의 석탄은 옆 더미들과 같은 「식은 석탄 더미」 소품으로 둔다.
+func test_no_coal_salvage_and_church04_yard_coal_is_a_heap() -> void:
+	var checked: int = 0
+	for d: Dictionary in maps:
+		for id: String in d["spots"]:
+			var spot: Dictionary = d["spots"][id]
+			if spot.get("kind", "") == "salvage":
+				assert_ne(String(spot.get("material", "")), "coal", d["place_id"] + " " + id)
+		if d["place_id"] != "church_04":
+			continue
+		checked += 1
+		var yard := Vector2i(68, 18)
+		var heap_rect := Rect2i(68, 18, 4, 3)
+		var heaps: int = 0
+		for p: Dictionary in d["props"]:
+			var r: Rect2i = p["rect"]
+			if p["kind"] == "coal_heap" and int(p.get("level", 0)) == 0 and r.has_point(yard):
+				heaps += 1
+				assert_eq(r, heap_rect)
+				assert_eq(p["solid"], "low")
+				assert_eq(p["note"], "식은 석탄 더미")
+		assert_eq(heaps, 1, "church_04 야적장 [68,18] 석탄 더미")
+		var g: FieldGrid = d["grid"]
+		for c: Vector2i in _cells(heap_rect):
+			assert_eq(g.solid_at(c), S.LOW, "church_04 석탄 더미 칸 " + str(c))
+	assert_eq(checked, 1)
