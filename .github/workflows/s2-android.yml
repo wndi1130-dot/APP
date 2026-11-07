@@ -120,14 +120,15 @@ jobs:
           # The pass check is tested first, so a broken check cannot wave the shard through.
           python3 .github/test_gut_check.py
           # No report or log from an earlier run may stand in for this one.
-          rm -f s2/build/gut-results.xml s2/build/gut.log
+          rm -f s2/build/gut-results.xml s2/build/gut.log s2/build/gut-outside-errors.json
           "$GODOT_BIN" --headless --path s2 --script addons/gut/gut_cmdln.gd \
             -gtest="$(paste -sd, s2/build/gut-shard.txt)" -gexit \
+            -gpost_run_script=res://tests/hooks/outside_errors.gd \
             -gjunit_xml_file=res://build/gut-results.xml 2>&1 | tee s2/build/gut.log
           # Require a real passing test report, even if runner exits zero: every `func test_` of every
           # script, under that script (a script GUT could not load cannot drop out silently, nor hide
           # behind another script's extra cases), all "pass", and no SCRIPT ERROR in the run log.
-          python3 .github/gut_check.py s2/build/gut-shard.txt s2/build/gut-results.xml s2/build/gut.log
+          python3 .github/gut_check.py s2/build/gut-shard.txt s2/build/gut-results.xml s2/build/gut.log s2/build/gut-outside-errors.json
 
       - name: Upload GUT logs
         if: always()
@@ -136,6 +137,7 @@ jobs:
           name: s2-gut-${{ matrix.shard }}-${{ github.run_number }}
           path: |
             s2/build/*.log
+            s2/build/*.json
             s2/build/*.xml
             s2/build/*.txt
           if-no-files-found: warn
