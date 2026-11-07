@@ -9,8 +9,8 @@ const SimNoise = preload("res://game/sim/noise.gd")
 const FieldCombat = preload("res://game/field_combat.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 
-## One knob for how far the squad keeps from the chief while following (the 14 FOLLOW_* spacing
-## constants below are their 1.0 values times this). 1.3 since 11-07 (coordinator under decision 442,
+## One knob for the 14 FOLLOW_* spacing constants and one loud rescue shot threshold (SAVE_FAR),
+## each its 1.0 value times this. 1.3 since 11-07 (coordinator under decision 442,
 ## inside the decision 406 formation; player review round 1 item 9: a stopped squad read as one lump).
 ## The watch slots (LOOK_KEYS) are not scaled.
 const FOLLOW_SPREAD: float = 1.3
@@ -45,7 +45,8 @@ const SHOOT_MIN: float = 3.0
 ## A loud gun only when one of the dead is this near someone and the blade is
 ## farther than SAVE_FAR from it (the bow, silent, may shoot whenever in range).
 const SAVE_NEAR: float = 2.0
-const SAVE_FAR: float = 4.0
+## 대형 자리에서 구하는 방식이 1.0과 같게(결정 570).
+const SAVE_FAR: float = 4.0 * FOLLOW_SPREAD
 ## This many on a companion at once and it steps back toward the chief.
 const CROWD_R: float = 2.5
 const CROWD_N: int = 3
@@ -136,6 +137,7 @@ const FOLLOW_RUN_ON: float = 4.5
 const FOLLOW_RUN_OFF: float = 2.5
 const FOLLOW_ROOM: float = 0.95
 const FOLLOW_SLOT_STEP: float = 1.0
+const FOLLOW_SLOT_BASE_STEPS: int = 4   # Keep the full 1.0-spread search before extending it.
 const FOLLOW_SETTLE: float = 0.3
 const FOLLOW_WALK_MIN: float = 2.0 * FOLLOW_SPREAD
 const FOLLOW_WALK_MAX: float = 4.0 * FOLLOW_SPREAD
@@ -145,6 +147,9 @@ const FOLLOW_IDLE_MIN: float = 1.5 * FOLLOW_SPREAD
 const FOLLOW_IDLE_MAX: float = 2.5 * FOLLOW_SPREAD
 const FOLLOW_POINT_CLEAR: float = 1.5
 const FOLLOW_EPS: float = 0.001
+## Both mates may settle FOLLOW_SETTLE from their slots in opposite directions. The extra EPS
+## leaves their actual separation strictly below RESCUE_R, as required by _held_mate (decision 570).
+const FOLLOW_RESCUE_MARGIN: float = 2.0 * FOLLOW_SETTLE + FOLLOW_EPS
 const FOLLOW_TRAIL_STEP: float = 0.6
 const FOLLOW_TRAIL_CAP: int = 64
 const FOLLOW_QUEUE_GAP: float = 1.25
@@ -947,6 +952,65 @@ func _follow_mates() -> Array:
 	return mates
 
 
+## Enough steps to cross the minimum clearance on either side of the role's base offset.
+## Preserve the old 0, +1, -1, ... order, including all four steps at spread 1.0.
+static func _follow_slot_shifts(side: float, minimum_side: float) -> Array[int]:
+	var width := maxi(FOLLOW_SLOT_BASE_STEPS, ceili((absf(side) + minimum_side) / FOLLOW_SLOT_STEP))
+	var shifts: Array[int] = [0]
+	for step in range(1, width + 1):
+		shifts.append(step)
+		shifts.append(-step)
+	return shifts
+
+
+## Pure distance rule shared by role candidates and fallback candidates.
+static func _follow_slot_clear(spot: Vector3, occupied: Array[Vector3], claimed: Array[Vector3]) -> bool:
+	if not spot.is_finite():
+		return false
+	for body in occupied:
+		if spot.distance_to(body) <= FOLLOW_ROOM:
+			return false
+	for prior in claimed:
+		var gap := spot.distance_to(prior)
+		if gap <= FOLLOW_ROOM or gap > RESCUE_R - FOLLOW_RESCUE_MARGIN:
+			return false
+	return true
+
+
+func _follow_fallback_candidate(at: Vector3, occupied: Array[Vector3], claimed: Array[Vector3]) -> Vector3:
+	var spot: Vector3 = game.walkable_near(at, false, 1)
+	if spot.distance_to(game.player.position) > FOLLOW_WALK_MAX + FOLLOW_EPS:
+		return Vector3.INF
+	if not game.grid_at(spot).people_can_walk(FieldGrid.cell_of(spot)):
+		return Vector3.INF
+	return spot if _follow_slot_clear(spot, occupied, claimed) else Vector3.INF
+
+
+func _follow_fallback(current: Vector3, near: float, fwd: Vector3, right: Vector3,
+		occupied: Array[Vector3], claimed: Array[Vector3]) -> Vector3:
+	# First try the original destination, now with the same body, claim and rescue checks.
+	var behind: Vector3 = game.player.position - fwd * near
+	var spot := _follow_fallback_candidate(behind, occupied, claimed)
+	if spot.is_finite():
+		return spot
+	# Bounded nearby rings, rear before front and centre before sides. A fallback may give up
+	# its role's band, but every new slot keeps body room and the common rescue margin.
+	var rings := ceili(FOLLOW_WALK_MAX / FOLLOW_SLOT_STEP)
+	for ring in range(1, rings + 1):
+		var shifts := _follow_slot_shifts(0.0, float(ring) * FOLLOW_SLOT_STEP)
+		for ahead in range(-ring, ring + 1):
+			for side in shifts:
+				if maxi(absi(side), absi(ahead)) != ring:
+					continue
+				var at: Vector3 = game.player.position + (right * float(side) + fwd * float(ahead)) * FOLLOW_SLOT_STEP
+				spot = _follow_fallback_candidate(at, occupied, claimed)
+				if spot.is_finite():
+					return spot
+	# No safe nearby destination exists: keep the current body position, never force it into
+	# a wall or another mate's slot. Earlier claims already checked this body's position.
+	return current
+
+
 func _follow_spot(p, mates: Array, fwd: Vector3, right: Vector3) -> Vector3:
 	var walking: bool = game.player.moving
 	var claimed: Array[Vector3] = []
@@ -967,8 +1031,13 @@ func _follow_spot(p, mates: Array, fwd: Vector3, right: Vector3) -> Vector3:
 			"aside": off = Vector2(-FOLLOW_SIDE.x, FOLLOW_SIDE.y) if walking else FOLLOW_IDLE_ASIDE
 			"rear": off = Vector2(0.0, -FOLLOW_REAR_BACK) if walking else FOLLOW_IDLE_REAR
 			_: off = FOLLOW_SIDE if walking else FOLLOW_IDLE_SIDE
+		var occupied: Array[Vector3] = [game.player.position]
+		for other in game.squad:
+			if other != q and other != game.player and other.is_alive():
+				occupied.append(other.position)
 		var chosen := Vector3.INF
-		for shift in [0, 1, -1, 2, -2, 3, -3, 4, -4]:
+		var minimum_side := FOLLOW_POINT_CLEAR if walking and role == "point" else FOLLOW_ROOM
+		for shift in _follow_slot_shifts(off.x, minimum_side):
 			var offset := right * (off.x + float(shift) * FOLLOW_SLOT_STEP) + fwd * off.y
 			offset = offset.normalized() * clampf(offset.length(), near, far)
 			var spot: Vector3 = game.walkable_near(game.player.position + offset, false, 1)
@@ -979,21 +1048,13 @@ func _follow_spot(p, mates: Array, fwd: Vector3, right: Vector3) -> Vector3:
 				continue
 			if walking and role == "rear" and rel.dot(fwd) > -FOLLOW_REAR_BACK + FOLLOW_EPS:
 				continue
-			var free := rel.length() > FOLLOW_ROOM
-			for other in game.squad:
-				if other != q and other.is_alive() and spot.distance_to(other.position) <= FOLLOW_ROOM:
-					free = false
-			for prior in claimed:
-				if spot.distance_to(prior) <= FOLLOW_ROOM:
-					free = false
-			if free:
+			if _follow_slot_clear(spot, occupied, claimed):
 				chosen = spot
-				claimed.append(spot)
 				break
-		# Every candidate taken or walled off: still go behind the player rather than stand far off.
+		# All role candidates blocked: try a separate nearby slot before holding the current place.
 		if not chosen.is_finite():
-			chosen = game.walkable_near(game.player.position - fwd * near, false, 1)
-			claimed.append(chosen)
+			chosen = _follow_fallback(q.position, near, fwd, right, occupied, claimed)
+		claimed.append(chosen)
 		if q == p:
 			return chosen
 	return Vector3.INF
