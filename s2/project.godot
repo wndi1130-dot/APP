@@ -90,6 +90,10 @@ fx_sight={
 "type": "vec2",
 "value": Vector2(0.24, 0.54)
 }
+fx_fall={
+"type": "vec2",
+"value": Vector2(0, 0)
+}
 fx_ground={
 "type": "sampler2D",
 "value": "res://fx/textures/ground_detail.png"
