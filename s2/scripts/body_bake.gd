@@ -7,6 +7,12 @@ extends RefCounted
 
 const VatBaker = preload("res://scripts/vat_baker.gd")
 
+# Picture recovery for the 3 kg axe; rule cooldown remains separate.
+const AXE_RECOVER_SECONDS: float = 0.35
+const AXE_LOW_PHASE: float = 15.0 / 31.0
+const AXE_HOLD_PHASE: float = 20.0 / 31.0
+const AXE_BODY_PHASE: float = 0.45 + 0.55 * (0.6 / 0.9)
+
 # Body bone -> bone of the motion set.
 const MAP: Dictionary = {
 	"hips": "pelvis", "spine": "spine_01", "chest": "spine_03", "neck": "neck_01", "head": "Head",
@@ -1324,19 +1330,22 @@ const LAYERS: Dictionary = {
 	# Two-handed axe: both hands up over and behind the head, chopped down in
 	# front with the knees giving, lifted back.
 	"p_swing_axe": {
+		"forearm_arc": true,
 		"steps": [
-			["aim", "thigh.L", "shin.L", [0.1, -1.0, ["keys", [[0, 0.0], [0.33, 0.0], [0.45, 0.25], [1, 0.0]]]]],
-			["aim", "shin.L", "foot.L", [0.08, -1.0, ["keys", [[0, -0.02], [0.33, -0.02], [0.45, -0.25], [1, -0.02]]]]],
-			["aim", "thigh.R", "shin.R", [-0.1, -1.0, ["keys", [[0, 0.0], [0.33, 0.0], [0.45, 0.25], [1, 0.0]]]]],
-			["aim", "shin.R", "foot.R", [-0.08, -1.0, ["keys", [[0, -0.02], [0.33, -0.02], [0.45, -0.25], [1, -0.02]]]]],
-			["turn", "spine", "x", ["keys", [[0, 0.05], [0.33, -0.2], [0.45, 0.45], [1, 0.05]]]],
-			["turn", "neck", "x", ["keys", [[0, 0.0], [0.33, -0.2], [0.45, 0.15], [1, 0.0]]]],
+			["axe_support", ["keys", [[0.0, 4], [0.1005, 6], [0.2505, 8], [0.3255, 10, "in"], [0.4005, 26, "in"], [0.45, 36, "out"], [AXE_LOW_PHASE, 41], [AXE_HOLD_PHASE, 41], [AXE_BODY_PHASE, 4], [1.0, 4]]]],
+			["turn", "spine", "x", ["keys", [[0.0, 0.05], [0.1005, 0], [0.2505, -0.15], [0.3255, -0.2, "in"], [0.4005, 0.191566, "out"], [0.45, 0.45, "out"], [AXE_LOW_PHASE, 0.55], [AXE_HOLD_PHASE, 0.55], [AXE_BODY_PHASE, 0.05], [1.0, 0.05]]]],
+			# Body-space head target minus the exact spine track.
+			["turn", "neck", "x", [
+				["keys", [[0.0, 0.05], [0.1005, 0], [0.2505, -0.25], [0.3255, 0], [0.4005, 0], [0.45, 0], [AXE_HOLD_PHASE, 0.67], [AXE_BODY_PHASE, 0.05], [1.0, 0.05]]],
+				["keys", [[0.0, -0.05], [0.1005, 0], [0.2505, 0.15], [0.3255, 0.2, "in"], [0.4005, -0.191566, "out"], [0.45, -0.45, "out"], [AXE_LOW_PHASE, -0.55], [AXE_HOLD_PHASE, -0.55], [AXE_BODY_PHASE, -0.05], [1.0, -0.05]]],
+			]],
+			["turn", "chest", "y", ["keys", [[0.0, 0], [0.1005, 0.05], [0.2505, 0.1], [0.3255, 0.08, "in"], [0.4005, 0.03, "in"], [0.45, 0, "out"], [AXE_LOW_PHASE, -0.03], [AXE_HOLD_PHASE, -0.03], [AXE_BODY_PHASE, 0], [1.0, 0]]]],
 			["aim", "upper_arm.L", "forearm.L", [0.05, ["keys", [[0, -1.0], [0.33, 1.0], [0.45, -0.25], [1, -1.0]]], ["keys", [[0, 0.05], [0.33, -0.3], [0.45, 1.0], [1, 0.05]]]]],
 			["aim", "forearm.L", "hand.L", [-0.15, ["keys", [[0, -1.0], [0.33, 0.7], [0.45, -0.7], [1, -1.0]]], ["keys", [[0, 0.1], [0.33, -0.8], [0.45, 0.7], [1, 0.1]]]]],
-			["aim", "upper_arm.R", "forearm.R", [-0.05, ["keys", [[0, -1.0], [0.33, 1.0], [0.45, -0.25], [1, -1.0]]], ["keys", [[0, 0.05], [0.33, -0.3], [0.45, 1.0], [1, 0.05]]]]],
-			["aim", "forearm.R", "hand.R", [0.15, ["keys", [[0, -1.0], [0.33, 0.7], [0.45, -0.7], [1, -1.0]]], ["keys", [[0, 0.1], [0.33, -0.8], [0.45, 0.7], [1, 0.1]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0.0, -0.05], [0.1005, -0.5], [0.2505, -0.88], [0.3255, -0.88, "in"], [0.4005, -0.27, "in"], [0.45, -0.1, "out"], [AXE_LOW_PHASE, 0.03], [AXE_HOLD_PHASE, 0.02], [AXE_BODY_PHASE, 0.03], [1.0, -0.05]]], ["keys", [[0.0, -1], [0.1005, -0.86], [0.2505, 0.26], [0.3255, 0.36, "in"], [0.4005, -0.51, "in"], [0.45, -0.32, "out"], [AXE_LOW_PHASE, -0.59], [AXE_HOLD_PHASE, -0.57], [AXE_BODY_PHASE, -0.72], [1.0, -1]]], ["keys", [[0.0, 0.05], [0.1005, 0.11], [0.2505, 0.4], [0.3255, 0.32, "in"], [0.4005, 0.82, "in"], [0.45, 0.94, "out"], [AXE_LOW_PHASE, 0.81], [AXE_HOLD_PHASE, 0.82], [AXE_BODY_PHASE, 0.69], [1.0, 0.05]]]]],
+			# Frame 13 splits the turn so saved-frame chords stay inside the limit.
+			["aim", "forearm.R", "hand.R", [["keys", [[0.0, 0.15], [0.1005, 0.56], [0.2505, 0.44], [0.3255, 0.47, "in"], [0.4005, 0.39, "in"], [13.0 / 31.0, 0.3, "in"], [0.45, 0.53, "out"], [AXE_LOW_PHASE, 0.53], [AXE_HOLD_PHASE, 0.54], [AXE_BODY_PHASE, 0.53], [1.0, 0.15]]], ["keys", [[0.0, -1], [0.1005, -0.02], [0.2505, 0.68], [0.3255, 0.64, "in"], [0.4005, 0.89, "in"], [13.0 / 31.0, 0.255177619, "in"], [0.45, -0.81, "out"], [AXE_LOW_PHASE, -0.85], [AXE_HOLD_PHASE, -0.84], [AXE_BODY_PHASE, -0.84], [1.0, -1]]], ["keys", [[0.0, 0.1], [0.1005, 0.83], [0.2505, -0.59], [0.3255, -0.6, "in"], [0.4005, 0.25, "in"], [13.0 / 31.0, 0.919175926, "in"], [0.45, 0.24, "out"], [AXE_LOW_PHASE, 0.07], [AXE_HOLD_PHASE, 0.05], [AXE_BODY_PHASE, 0.06], [1.0, 0.1]]]]],
 		],
-		"sink": ["keys", [[0, 0.0], [0.33, 0.0], [0.45, 0.12], [1, 0.0]]],
 	},
 	# Knife: the right hand drawn back to the hip, thrust straight out with the
 	# body behind it, the left hand up in front.
@@ -2356,6 +2365,9 @@ static func _keyed(keys: Array, u: float) -> float:
 			if a.size() > 2:
 				if u >= float(b[0]):
 					return float(b[1])
+				var span: float = float(b[0]) - float(a[0])
+				if span > 0.0:
+					t = (u - float(a[0])) / span
 				var ease: String = String(a[2])
 				if ease == "in":
 					return lerpf(float(a[1]), float(b[1]), t * t)
@@ -2363,6 +2375,31 @@ static func _keyed(keys: Array, u: float) -> float:
 					return lerpf(float(a[1]), float(b[1]), 1.0 - (1.0 - t) * (1.0 - t))
 			return lerpf(float(a[1]), float(b[1]), smoothstep(0.0, 1.0, t))
 	return float(keys[keys.size() - 1][1])
+
+
+## Interpolate lateral share and the unwrapped angle in the body's YZ plane.
+static func _axe_forearm_direction(axes: Array, u: float) -> Vector3:
+	var lateral: Array = []
+	var angles: Array = []
+	var x_keys: Array = axes[0][1]
+	for index: int in x_keys.size():
+		var key: Array = x_keys[index]
+		var direction: Vector3 = Vector3(float(key[1]), float(axes[1][1][index][1]), float(axes[2][1][index][1])).normalized()
+		var sample_angle: float = atan2(direction.z, direction.y)
+		if not angles.is_empty():
+			var previous: float = float(angles[-1][1])
+			sample_angle = previous + wrapf(sample_angle - previous, -PI, PI)
+		var x_key: Array = [float(key[0]), direction.x]
+		var angle_key: Array = [float(key[0]), sample_angle]
+		if key.size() > 2:
+			x_key.append(key[2])
+			angle_key.append(key[2])
+		lateral.append(x_key)
+		angles.append(angle_key)
+	var x: float = _keyed(lateral, u)
+	var angle: float = _keyed(angles, u)
+	var radius: float = sqrt(maxf(0.0, 1.0 - x * x))
+	return Vector3(x, radius * cos(angle), radius * sin(angle))
 
 
 static func _key_ease_error(keys: Array, clip: String) -> String:
@@ -2473,8 +2510,86 @@ static func _relax_stand_support(body: Skeleton3D, knee_degrees: float, extra_wi
 	return failures
 
 
-## One failure slot per clip and leg, retaining each measurement's worst
-## value across all samples (a later good frame cannot erase a failure).
+## Fixed standing feet, with one pelvis height inside both knee intervals.
+static func _plant_axe_support(body: Skeleton3D, knee_degrees: float) -> Array[Dictionary]:
+	var legs: Array[Dictionary] = []
+	var low_drop: float = -INF
+	var high_drop: float = INF
+	var preferred: float = 0.0
+	var knee_min: float = maxf(0.0, knee_degrees - 5.0)
+	var knee_max: float = minf(50.0, knee_degrees + 5.0)
+	if not is_finite(knee_degrees) or knee_degrees < 0.0 or knee_degrees > 50.0:
+		return [{"side": "both", "reason": "knee_range"}]
+	for side: String in ["L", "R"]:
+		var thigh_name: String = "thigh." + side
+		var shin_name: String = "shin." + side
+		var foot_name: String = "foot." + side
+		var thigh: Vector3 = body.get_bone_global_rest(_bone(body, thigh_name)).origin
+		var shin: Vector3 = body.get_bone_global_rest(_bone(body, shin_name)).origin
+		var foot: Transform3D = body.get_bone_global_rest(_bone(body, foot_name))
+		var target: Vector3 = Vector3(thigh.x + (0.05 if side == "L" else -0.05), foot.origin.y, foot.origin.z)
+		var upper: float = thigh.distance_to(shin)
+		var lower: float = shin.distance_to(foot.origin)
+		var across_squared: float = Vector2(target.x - thigh.x, target.z - thigh.z).length_squared()
+		var drops: Array[float] = []
+		for angle: float in [knee_min, knee_max, knee_degrees]:
+			var height_squared: float = upper * upper + lower * lower + 2.0 * upper * lower * cos(deg_to_rad(angle)) - across_squared
+			if height_squared <= 0.0 or not is_finite(height_squared):
+				return [{"side": side, "reason": "unreachable"}]
+			drops.append(thigh.y - target.y - sqrt(height_squared))
+		low_drop = maxf(low_drop, drops[0])
+		high_drop = minf(high_drop, drops[1])
+		preferred += drops[2] * 0.5
+		legs.append({"side": side, "thigh": thigh_name, "shin": shin_name, "foot": foot_name,
+			"target": target, "upper": upper, "lower": lower, "basis": foot.basis.orthonormalized()})
+	if low_drop > high_drop:
+		return [{"side": "both", "reason": "no_shared_height"}]
+	sink(body, clampf(preferred, low_drop, high_drop))
+	for leg: Dictionary in legs:
+		var start: Vector3 = body.get_bone_global_pose(_bone(body, String(leg["thigh"]))).origin
+		var target: Vector3 = leg["target"]
+		var distance: float = start.distance_to(target)
+		var upper: float = leg["upper"]
+		var lower: float = leg["lower"]
+		if distance <= 0.000001 or distance > upper + lower or distance < absf(upper - lower):
+			return [{"side": leg["side"], "reason": "unreachable"}]
+		var axis: Vector3 = (target - start) / distance
+		var along: float = (upper * upper - lower * lower + distance * distance) / (2.0 * distance)
+		var bend: Vector3 = (Vector3.BACK - axis * axis.dot(Vector3.BACK)).normalized()
+		var knee: Vector3 = start + axis * along + bend * sqrt(maxf(0.0, upper * upper - along * along))
+		aim(body, String(leg["thigh"]), String(leg["shin"]), knee - start)
+		var shin: Vector3 = body.get_bone_global_pose(_bone(body, String(leg["shin"]))).origin
+		aim(body, String(leg["shin"]), String(leg["foot"]), target - shin)
+		var foot: int = _bone(body, String(leg["foot"]))
+		var parent_basis: Basis = body.get_bone_global_pose(body.get_bone_parent(foot)).basis.orthonormalized()
+		body.set_bone_pose_rotation(foot, (parent_basis.inverse() * (leg["basis"] as Basis)).get_rotation_quaternion())
+	var failures: Array[Dictionary] = []
+	for leg: Dictionary in legs:
+		var thigh: Vector3 = body.get_bone_global_pose(_bone(body, String(leg["thigh"]))).origin
+		var shin: Vector3 = body.get_bone_global_pose(_bone(body, String(leg["shin"]))).origin
+		var foot: Vector3 = body.get_bone_global_pose(_bone(body, String(leg["foot"]))).origin
+		var knee: float = rad_to_deg((shin - thigh).angle_to(foot - shin))
+		var ankle_error: float = foot.distance_to(leg["target"])
+		var axis: Vector3 = (foot - thigh).normalized()
+		var forward: float = ((shin - thigh) - axis * (shin - thigh).dot(axis)).dot(Vector3.BACK)
+		if not is_finite(knee) or not is_finite(ankle_error) or knee < knee_min - 0.001 or knee > knee_max + 0.001 or ankle_error > 0.001 or forward < -0.000001:
+			failures.append({"side": leg["side"], "reason": "post_solve", "knee": knee, "min": knee_min,
+				"max": knee_max, "ankle_error": ankle_error, "forward": forward})
+	return failures
+
+
+static func _record_axe_failures(ctx: Dictionary, clip: String, samples: Array[Dictionary]) -> void:
+	var records: Dictionary = ctx.get_or_add("axe_failures", {})
+	for sample: Dictionary in samples:
+		var key: String = clip + ":" + String(sample["side"])
+		if records.has(key):
+			continue
+		records[key] = sample.duplicate()
+		var failures: Array = ctx.get_or_add("fit_failures", [])
+		failures.append("AXE_SUPPORT_UNFIT clip=%s sample=%s" % [clip, str(sample)])
+
+
+## Retain each standing leg's worst measurements across all samples.
 static func _record_stand_failures(ctx: Dictionary, clip: String, samples: Array[Dictionary]) -> void:
 	if samples.is_empty():
 		return
@@ -2507,6 +2622,8 @@ static func apply_layer(body: Skeleton3D, layer: Dictionary, u: float, sink_scal
 	var failures: Array[Dictionary] = []
 	for step: Array in layer.get("steps", []):
 		match step[0]:
+			"axe_support":
+				failures.append_array(_plant_axe_support(body, _value(step[1], w)))
 			"stand_support":
 				# Only p_stand uses this layer. The rig's neutral legs are straight
 				# and its sole vertices already sit at y=0. Reset pelvis travel as
@@ -2522,7 +2639,10 @@ static func apply_layer(body: Skeleton3D, layer: Dictionary, u: float, sink_scal
 				turn(body, step[1], _value(step[3], w), AXES[step[2]])
 			"aim":
 				var dir: Array = step[3]
-				aim(body, step[1], step[2], Vector3(_value(dir[0], w), _value(dir[1], w), _value(dir[2], w)))
+				if bool(layer.get("forearm_arc", false)) and String(step[1]) == "forearm.R":
+					aim(body, step[1], step[2], _axe_forearm_direction(dir, u))
+				else:
+					aim(body, step[1], step[2], Vector3(_value(dir[0], w), _value(dir[1], w), _value(dir[2], w)))
 			"swing":
 				var angle := _value(step[4], w)
 				aim(body, step[1], step[2], Vector3(_value(step[3], w), -cos(angle), sin(angle)))
@@ -2578,7 +2698,10 @@ static func pose(ctx: Dictionary, clip: String, layer: String, u: float, report_
 		at = lerpf(float(span[0]), float(span[1]), at)
 	_pose_at(ctx, clip, at, spec.get("damp", {}))
 	var failures: Array[Dictionary] = apply_layer(ctx["body"], spec, u, float(ctx.get("sink_scale", 1.0)))
-	_record_stand_failures(ctx, layer if report_clip.is_empty() else report_clip, failures)
+	if layer == "p_swing_axe":
+		_record_axe_failures(ctx, layer if report_clip.is_empty() else report_clip, failures)
+	else:
+		_record_stand_failures(ctx, layer if report_clip.is_empty() else report_clip, failures)
 	_apply_person_stride(ctx, layer)
 
 
@@ -3535,6 +3658,7 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 	ctx["phase_fits"] = {}
 	ctx["fit_failures"] = []
 	ctx["stand_failures"] = {}
+	ctx["axe_failures"] = {}
 	for entry: Array in list:
 		_fit_person_stride(ctx, entry)
 		var phase := _fit_person_phase(ctx, entry)
@@ -3690,6 +3814,8 @@ const SMALL_DROPS: Array = ["hit"]             # the field never picks it: kept 
 ## 8 bits a channel inside that clip's own box, which clips.json carries as
 ## "lo" and "hi". The shader takes the box back (dead_vat.gdshader, quantized).
 static func compact(assets: Dictionary, keep_full: Array = []) -> Dictionary:
+	if not assets.has("image") and assets.has("fit_failures"):
+		return assets.duplicate(true)
 	var image: Image = assets["image"]
 	var width := image.get_width()
 	var rows: int = int(assets["rows_per_frame"])
