@@ -57,6 +57,36 @@ func _saved(game) -> Dictionary:
 	return FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
 
 
+## Godot's JSON text round trip can land one unit in the last place (ULP) off a float64 even though
+## FieldSave writes with full precision: seen 11-07 on zombies[*].angle and zombies[*].phase, both
+## directions (9c04804ea755f43f -> 9d04804ea755f43f, 000000e07b3ca13f -> ffffffdf7b3ca13f), on all
+## five fixed seeds, never two units. FieldSave._encode passes finite floats through untouched, so the
+## drift is the engine's decimal <-> double step, not this codec. A float counts as equal within
+## FLOAT_ULP_SLACK units; ints, strings, types, key sets and sizes stay exact, and two units or more
+## still fails, so a real codec change cannot hide behind this.
+const FLOAT_ULP_SLACK: int = 1
+const FAR_ULPS: int = 9223372036854775807
+
+
+## Units in the last place between two float64s of the same sign; FAR_ULPS when they cannot be near
+## (NaN, infinity, opposite signs).
+static func _float_ulps(a: float, b: float) -> int:
+	if a == b:
+		return 0
+	if is_nan(a) or is_nan(b) or is_inf(a) or is_inf(b) or signf(a) != signf(b):
+		return FAR_ULPS
+	var bytes := PackedByteArray()
+	bytes.resize(16)
+	bytes.encode_double(0, a)
+	bytes.encode_double(8, b)
+	# Same sign: the raw bit patterns sit in one half of int64 and count up with the magnitude.
+	return absi(bytes.decode_s64(0) - bytes.decode_s64(8))
+
+
+static func _float_from_bits(hex_le: String) -> float:
+	return hex_le.hex_decode().decode_double(0)
+
+
 func _save_value(value: Variant) -> String:
 	if value is float:
 		var bytes := PackedByteArray()
@@ -69,7 +99,10 @@ func _save_value(value: Variant) -> String:
 func _save_difference(actual: Variant, expected: Variant, at: String = "save") -> String:
 	if typeof(actual) == typeof(expected) and actual == expected:
 		return ""
-	if actual is Dictionary and expected is Dictionary:
+	if actual is float and expected is float:
+		if _float_ulps(actual, expected) <= FLOAT_ULP_SLACK:
+			return ""
+	elif actual is Dictionary and expected is Dictionary:
 		for key: Variant in expected:
 			var path := "%s[%s]" % [at, str(key)]
 			if not actual.has(key):
@@ -80,6 +113,7 @@ func _save_difference(actual: Variant, expected: Variant, at: String = "save") -
 		for key: Variant in actual:
 			if not expected.has(key):
 				return "%s[%s]: loaded=%s, saved=<missing>" % [at, str(key), _save_value(actual[key])]
+		return ""  # every key matched under the float rule above
 	elif actual is Array and expected is Array:
 		if actual.size() != expected.size():
 			return "%s.size: loaded=%d, saved=%d" % [at, actual.size(), expected.size()]
@@ -87,12 +121,15 @@ func _save_difference(actual: Variant, expected: Variant, at: String = "save") -
 			var difference := _save_difference(actual[i], expected[i], "%s[%d]" % [at, i])
 			if difference != "":
 				return difference
+		return ""
 	return "%s: loaded=%s, saved=%s" % [at, _save_value(actual), _save_value(expected)]
 
 
 func _assert_saved_equal(actual: Dictionary, expected: Dictionary, why: String) -> void:
-	# Keep exact equality: diagnostics must not normalise or hide a codec change.
-	assert_eq(actual, expected, "%s\n%s" % [why, _save_difference(actual, expected)])
+	# Exact except a float may sit FLOAT_ULP_SLACK units off (see FLOAT_ULP_SLACK); the message
+	# names the first key that differs with both values' float64 bits.
+	var difference := _save_difference(actual, expected)
+	assert_true(difference.is_empty(), "%s\n%s" % [why, difference])
 
 
 func _fixture() -> Dictionary:
@@ -378,6 +415,45 @@ func test_save_difference_reports_the_nested_key_and_both_exact_values() -> void
 	assert_true(_save_difference({}, {"x": 1}).contains("loaded=<missing>"))
 	assert_true(_save_difference({"x": 1}, {}).contains("saved=<missing>"))
 	assert_eq(_save_difference(saved, saved.duplicate(true)), "")
+
+
+func test_save_difference_allows_one_float_ulp_and_nothing_else() -> void:
+	var x := _float_from_bits("000000e07b3ca13f")
+	var one_down := _float_from_bits("ffffffdf7b3ca13f")   # the 11-07 phase pair, one unit apart
+	var bits := PackedByteArray()
+	bits.resize(8)
+	bits.encode_double(0, x)
+	bits.encode_s64(0, bits.decode_s64(0) + 2)
+	var two_up: float = bits.decode_double(0)
+	assert_eq(_float_ulps(x, one_down), 1)
+	assert_eq(_float_ulps(one_down, x), 1)
+	assert_eq(_float_ulps(x, two_up), 2)
+	assert_eq(_save_difference({"z": [{"phase": one_down}]}, {"z": [{"phase": x}]}), "",
+		"one unit in the last place, nested in a dictionary and an array, counts as equal")
+	var two := _save_difference({"z": [{"phase": two_up}]}, {"z": [{"phase": x}]})
+	assert_true(two.contains("save[z][0][phase]"), "two units still fail and name the key: %s" % two)
+	assert_true(two.contains("float64"), "two units still show both values' bits: %s" % two)
+	# The slack is for floats only: a type change, a sign flip, NaN and infinity stay differences.
+	assert_ne(_save_difference({"n": 8.0}, {"n": 8}), "", "float in place of int")
+	assert_ne(_save_difference({"n": 8}, {"n": 8.0}), "", "int in place of float")
+	assert_ne(_save_difference({"f": -x}, {"f": x}), "", "opposite sign")
+	assert_eq(_float_ulps(NAN, NAN), FAR_ULPS)
+	assert_eq(_float_ulps(INF, 1.0e308), FAR_ULPS)
+	assert_eq(_float_ulps(0.0, -0.0), 0, "the two zeros compare equal")
+	assert_eq(_save_difference({"a": [1, 2]}, {"a": [1, 2, 3]}), "save[a].size: loaded=2, saved=3")
+
+
+func test_engine_json_float_round_trip_stays_within_one_ulp() -> void:
+	# The saved bits from the five 11-07 failures; the log line says what the engine does today.
+	for hex: String in ["9c04804ea755f43f", "000000e07b3ca13f", "000000607836ed3f",
+			"00000020cd4d933f", "000000c091ffed3f"]:
+		var x := _float_from_bits(hex)
+		var text := JSON.stringify({"v": x}, "", false, true)
+		var back: Variant = JSON.parse_string(text)["v"]
+		assert_true(back is float, "%s reads back as a float" % hex)
+		var ulps := _float_ulps(float(back), x)
+		gut.p("engine JSON float round trip %s via %s -> %d ulp" % [hex, text, ulps])
+		assert_true(ulps <= FLOAT_ULP_SLACK, "%s: %d units off after the engine's JSON text" % [hex, ulps])
 
 
 func test_int64_seed_and_rng_payload_round_trip_preserves_values_and_input() -> void:
