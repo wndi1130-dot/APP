@@ -224,6 +224,100 @@ func test_partial_root_removal_and_return_refresh_the_same_list() -> void:
 	assert_not_null(game.view.ground_nodes[2].mesh)
 
 
+func test_cleared_roots_clear_body_and_rim_on_every_floor() -> void:
+	_visible_root(2)
+	game.ground_items.append({"pos": item_at + Vector3(0, 6, 0), "id": "no_art_550"})
+	assert_eq(game.view.drawn_ground(game.ground_items).size(), 4)
+	for lv in game.view.ground_nodes:
+		assert_not_null(game.view.ground_nodes[lv].mesh)
+		assert_not_null((game.view.ground_nodes[lv].get_node("Rim") as MeshInstance3D).mesh)
+	game.view.level_roots.clear()
+	game.view.update_ground(game.ground_items)
+	assert_true(game.view._drawn_ground.is_empty())
+	for lv in game.view.ground_nodes:
+		assert_null(game.view.ground_nodes[lv].mesh, "no body remains without roots")
+		assert_null((game.view.ground_nodes[lv].get_node("Rim") as MeshInstance3D).mesh, "no rim remains without roots")
+
+
+func test_same_floor_root_replacement_moves_existing_ground_node() -> void:
+	var old_root: Node3D = game.view.level_roots[0]
+	var node: MeshInstance3D = game.view.ground_nodes[0]
+	var local_transform: Transform3D = node.transform
+	var replacement := Node3D.new()
+	# The game owns both roots; its autofree also cleans up the replacement.
+	game.view.add_child(replacement)
+	replacement.position = Vector3(7, 0, 5)
+	game.view.level_roots[0] = replacement
+	game.view.update_ground(game.ground_items)
+	assert_true(is_same(game.view.ground_nodes[0], node), "reuse the live node")
+	assert_eq(node.get_parent(), replacement)
+	assert_false(old_root.get_children().has(node), "old root no longer owns the ground node")
+	assert_eq(node.transform, local_transform, "reparent keeps floor-local geometry")
+	assert_not_null(node.mesh)
+	assert_not_null((node.get_node("Rim") as MeshInstance3D).mesh)
+	var drawn: Dictionary = game.view.drawn_ground(game.ground_items)
+	assert_eq(drawn.size(), 3)
+	for item: int in drawn:
+		assert_eq(drawn[item]["lv"], 0)
+	var mesh: Mesh = node.mesh
+	game.view.update_ground(game.ground_items)
+	assert_true(is_same(node.mesh, mesh), "unchanged replacement reuses the mesh")
+
+
+func test_freed_root_replacement_recreates_ground_node() -> void:
+	var old_root := _visible_root(2)
+	game.ground_items.append({"pos": item_at + Vector3(0, 6, 0), "id": "no_art_550"})
+	assert_true(game.view.drawn_ground(game.ground_items).has(3))
+	var old_node: MeshInstance3D = game.view.ground_nodes[2]
+	var old_id: int = old_node.get_instance_id()
+	old_root.free()
+	assert_false(is_instance_valid(old_node))
+	var replacement := Node3D.new()
+	game.view.add_child(replacement)
+	game.view.level_roots[2] = replacement
+	game.view.update_ground(game.ground_items)
+	assert_true(is_instance_valid(game.view.ground_nodes.get(2)), "replace the freed cached node")
+	if not is_instance_valid(game.view.ground_nodes.get(2)):
+		return
+	var node: MeshInstance3D = game.view.ground_nodes[2]
+	assert_ne(node.get_instance_id(), old_id)
+	assert_eq(node.get_parent(), replacement)
+	assert_not_null(node.mesh)
+	assert_not_null((node.get_node("Rim") as MeshInstance3D).mesh)
+	var drawn: Dictionary = game.view.drawn_ground(game.ground_items)
+	assert_eq(drawn.size(), 4)
+	assert_true(drawn.has(3))
+	if drawn.has(3):
+		assert_eq(drawn[3]["lv"], 2)
+
+
+func test_freed_root_entry_skips_floor_and_prunes_ground_node() -> void:
+	var upper := _visible_root(2)
+	game.ground_items.append({"pos": item_at + Vector3(0, 6, 0), "id": "no_art_550"})
+	assert_true(game.view.drawn_ground(game.ground_items).has(3))
+	upper.free()
+	game.view.update_ground(game.ground_items)
+	assert_false(game.view.ground_nodes.has(2), "freed node leaves the cache")
+	var drawn: Dictionary = game.view.drawn_ground(game.ground_items)
+	assert_eq(drawn.size(), 3)
+	assert_false(drawn.has(3), "a freed root cannot own a drawn piece")
+	assert_not_null(game.view.ground_nodes[0].mesh)
+	assert_not_null((game.view.ground_nodes[0].get_node("Rim") as MeshInstance3D).mesh)
+
+
+func test_cleared_roots_prune_freed_nodes_and_clear_surviving_meshes() -> void:
+	var upper := _visible_root(2)
+	game.ground_items.append({"pos": item_at + Vector3(0, 6, 0), "id": "no_art_550"})
+	assert_true(game.view.drawn_ground(game.ground_items).has(3))
+	upper.free()
+	game.view.level_roots.clear()
+	game.view.update_ground(game.ground_items)
+	assert_false(game.view.ground_nodes.has(2))
+	assert_true(game.view._drawn_ground.is_empty())
+	assert_null(game.view.ground_nodes[0].mesh)
+	assert_null((game.view.ground_nodes[0].get_node("Rim") as MeshInstance3D).mesh)
+
+
 func test_missing_grid_and_replacement_at_the_same_revision() -> void:
 	game.view.levels.clear()
 	game.view.grid = null

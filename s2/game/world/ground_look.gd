@@ -205,11 +205,12 @@ static func _lay_apart(out: Array, on_cell: Dictionary, blocked: Callable) -> Ar
 ## SPREAD_NEAR_MAX by SPREAD_STEP (test_ground_look holds them to those).
 const FAR_TRIES: int = 5
 const NEAR_TRIES: int = 4
-## The wide search: RING16's sixteen directions on each of WIDE_RINGS.
+## The wide search: odd directions on the first ring, all sixteen on the rest.
+## The first ring equals SPREAD_MAX, whose eight even directions came earlier.
 const WIDE_ANGLES: int = 16
 const WIDE_RINGS: Array[float] = [0.7, 0.6, 0.5]
-## Tries in one turn (own yaw or quarter turned): far, near, eight round, wide.
-const SPIN_TRIES: int = FAR_TRIES + NEAR_TRIES + 8 + WIDE_ANGLES * 3
+## Tries in one turn: far, near, eight round, wide minus eight later repeats.
+const SPIN_TRIES: int = FAR_TRIES + NEAR_TRIES + 8 + WIDE_ANGLES * 3 - 8
 ## cos and sin of k·22.5°: the sixteen directions, every other one the eight.
 ## Turned by a thing's own angle (a complex product), so no try costs a sine:
 ## building every thing's 130 tries with cos/sin made laying 300 things 37 →
@@ -224,12 +225,13 @@ const RING16: Array[Vector2] = [
 
 ## Where `foot` (on its spot, at its own yaw) goes among `laid`, leaving it there:
 ## the first candidate SPREAD_GAP clear of every laid thing and off every wall
-## (`walls`, the blocked cells' squares). Candidates, in turn: its own spot (the
-## biggest on a cell only, `home`), then along its own angle SPREAD to SPREAD_MAX,
-## then SPREAD_NEAR to SPREAD_NEAR_MAX, the eight angles at SPREAD_MAX, and
-## WIDE_ANGLES angles on each of WIDE_RINGS — then all of it again a quarter turn
-## round (a knife across the gap two coats leave, a coat along a corridor; its
-## own yaw is only the drop's look, so turning it changes nothing played).
+## (`walls`, the blocked cells' squares). For `home` (the biggest on a cell), try
+## its own spot at its own yaw, then there a quarter turned: keep its pick-up
+## position when a turn alone fits; turning changes only the drop's look.
+## Next, at its own yaw: along its angle SPREAD to SPREAD_MAX, then SPREAD_NEAR to
+## SPREAD_NEAR_MAX, eight angles at SPREAD_MAX, then the wide rings without the
+## first ring's repeated even directions. Repeat these moves a quarter turned
+## (a knife across the gap two coats leave, a coat along a corridor).
 ## Before the wide search and the quarter turn, three on open floor had one left
 ## undrawn (11-07 14:4x: a third with 0-4 cm of room at the best of eight).
 ## If only walls stand in the way of every candidate, the least buried one still
@@ -295,6 +297,8 @@ static func try_at(index: int, home: bool, way: Vector2) -> Vector3:
 		distance = SPREAD_MAX
 	else:
 		var wide: int = k - FAR_TRIES - NEAR_TRIES - 8
+		# Map the eight remaining outer directions, then both full inner rings.
+		wide = wide * 2 + 1 if wide < 8 else wide + 8
 		along = _turned(RING16[wide % WIDE_ANGLES], way)
 		distance = WIDE_RINGS[floori(float(wide) / float(WIDE_ANGLES))]
 	return Vector3(along.x * distance, along.y * distance, spin)
@@ -310,12 +314,12 @@ const ROOM_EPSILON: float = 0.000001
 
 
 ## Whether `foot` keeps `gap` from every one of `laid`, stopping at the first
-## that it does not. Two rectangles whose centres lie further apart than both
-## reach (half diagonals) plus the gap are clear without the four-axis test.
+## that it does not. One of either rectangle's axes projects at least |d|/sqrt(2).
+## Thus gap_to >= |d|/sqrt(2) - min(long_half + other.reach, vice versa).
 static func _clear_of(foot: Footprint, laid: Array[Footprint], gap: float) -> bool:
 	for other: Footprint in laid:
-		var apart: float = foot.reach + other.reach + gap
-		if foot.centre.distance_squared_to(other.centre) > apart * apart:
+		var apart: float = minf(foot.long_half + other.reach, other.long_half + foot.reach) + gap
+		if foot.centre.distance_squared_to(other.centre) > 2.0 * apart * apart:
 			continue
 		if foot.gap_to(other) < gap:
 			return false
@@ -328,6 +332,7 @@ static func _clear_of(foot: Footprint, laid: Array[Footprint], gap: float) -> bo
 static func _wall_room(foot: Footprint, walls: Array[Footprint]) -> float:
 	var room: float = INF
 	for wall: Footprint in walls:
+		# Disjoint bounding circles cannot overlap; SAT needs no positive gap here.
 		var apart: float = foot.reach + wall.reach
 		if foot.centre.distance_squared_to(wall.centre) > apart * apart:
 			continue
@@ -426,11 +431,14 @@ class Footprint:
 
 	## Half its diagonal: no part of it lies further from its centre, at any yaw.
 	var reach: float
+	## Longest half side; like reach, unchanged by turn_to.
+	var long_half: float
 
 	func _init(at: Vector2, size: Vector2, turn: float) -> void:
 		centre = at
 		half = size * 0.5
 		reach = half.length()
+		long_half = maxf(half.x, half.y)
 		turn_to(turn)
 
 	## Turn it to `turn` (radians, as Basis(UP, turn)): its side directions worked

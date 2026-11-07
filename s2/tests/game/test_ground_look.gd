@@ -152,6 +152,44 @@ func test_the_far_pair_shortcut_agrees_with_the_full_gap() -> void:
 			assert_gte(room, 0.0, "case %d clear" % n)
 
 
+func test_diagonal_clearance_uses_the_four_axis_gap() -> void:
+	var foot := GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.2, 0.2), 0.0)
+	var other := GroundLook.Footprint.new(Vector2(0.23, 0.23), Vector2(0.2, 0.2), 0.0)
+	var laid: Array[GroundLook.Footprint] = [other]
+	assert_almost_eq(foot.gap_to(other), 0.03, 0.000001)
+	assert_lt(foot.gap_to(other), GroundLook.SPREAD_GAP)
+	assert_eq(GroundLook._clear_of(foot, laid, GroundLook.SPREAD_GAP), foot.gap_to(other) >= GroundLook.SPREAD_GAP)
+
+
+func test_diagonal_clearance_skips_the_first_far_spot() -> void:
+	var foot := GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.2, 0.2), 0.0)
+	var laid: Array[GroundLook.Footprint] = [GroundLook.Footprint.new(Vector2(0.27, -0.23), Vector2(0.2, 0.2), 0.0)]
+	assert_true(GroundLook._clear_spot(foot, 0.0, laid))
+	assert_almost_eq(foot.centre.x, 0.55, 0.000001, "the 0.5 m candidate has only 0.03 m on either axis")
+	assert_almost_eq(foot.centre.y, 0.0, 0.000001)
+	assert_eq(foot.yaw, 0.0)
+	assert_gte(foot.gap_to(laid[0]), GroundLook.SPREAD_GAP)
+
+
+## Aim at diagonal boundaries deliberately; random centres rarely land here.
+func test_diagonal_boundaries_agree_with_the_full_gap_at_several_rotations() -> void:
+	for yaw: float in [0.0, 0.37, PI * 0.5, -1.1]:
+		for relative_yaw: float in [0.0, -0.03, 0.03]:
+			var foot := GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.2, 0.2), yaw)
+			var other := GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.2, 0.2), yaw + relative_yaw)
+			var laid: Array[GroundLook.Footprint] = [other]
+			var reverse: Array[GroundLook.Footprint] = [foot]
+			for degrees: float in [44.0, 45.0, 46.0]:
+				var angle: float = deg_to_rad(degrees)
+				var direction: Vector2 = foot.along_x * cos(angle) + foot.along_z * sin(angle)
+				for gap: float in [0.02, GroundLook.SPREAD_GAP, 0.06]:
+					for offset: float in [-0.01, -0.001, 0.0, 0.001, 0.01]:
+						other.centre = direction * sqrt(2.0) * (0.2 + gap + offset)
+						var context := "yaw %.2f relative %.2f direction %.0f gap %.3f offset %.3f" % [yaw, relative_yaw, degrees, gap, offset]
+						assert_eq(GroundLook._clear_of(foot, laid, gap), foot.gap_to(other) >= gap, context)
+						assert_eq(GroundLook._clear_of(other, reverse, gap), other.gap_to(foot) >= gap, context + " reversed")
+
+
 ## Every one of the four side directions, each rectangle reaching along it by
 ## both its sides.
 func _plain_gap(ca: Vector2, sa: Vector2, ya: float, cb: Vector2, sb: Vector2, yb: float) -> float:
@@ -194,16 +232,15 @@ func test_a_clear_spot_starts_far_and_omits_overlap() -> void:
 	assert_lte(square.centre.length(), GroundLook.SPREAD_MAX + 0.0001)
 
 
-## A long thing that fits no spot at its own yaw lies a quarter turned: a 1.2 m
-## plank dropped in a one-metre corridor running along x stays on its spot, along
-## the corridor, instead of being left undrawn or buried in the wall.
 ## The tries worked out one at a time (try_at, a turned table) are the list the
 ## plain working gives — own angle far then near, eight round at SPREAD_MAX, the
-## wide rings, then all again a quarter turned — at any angle, home or not.
+## wide rings, then all again a quarter turned; home tries both yaws in place first.
+## Only the first wide ring's repeats of the earlier eight directions are removed.
 func test_tries_one_at_a_time_match_the_plain_list() -> void:
 	assert_almost_eq(GroundLook.SPREAD + GroundLook.SPREAD_STEP * (GroundLook.FAR_TRIES - 1), GroundLook.SPREAD_MAX, 0.00001)
 	assert_almost_eq(GroundLook.SPREAD_NEAR + GroundLook.SPREAD_STEP * (GroundLook.NEAR_TRIES - 1), GroundLook.SPREAD_NEAR_MAX, 0.00001)
 	assert_eq(GroundLook.WIDE_RINGS.size(), 3, "SPIN_TRIES counts three wide rings")
+	assert_eq(GroundLook.WIDE_RINGS[0], GroundLook.SPREAD_MAX, "only this wide ring repeats the earlier eight directions")
 	for turn: float in [0.0, 0.7, -2.4, 5.9]:
 		for home: bool in [false, true]:
 			var plain: Array[Vector3] = []
@@ -223,13 +260,48 @@ func test_tries_one_at_a_time_match_the_plain_list() -> void:
 					for step: int in GroundLook.WIDE_ANGLES:
 						var angle: float = turn + TAU * step / float(GroundLook.WIDE_ANGLES)
 						plain.append(Vector3(cos(angle) * ring, sin(angle) * ring, spin))
-			assert_eq(GroundLook.try_count(home), plain.size())
-			var way := Vector2(cos(turn), sin(turn))
+			# Build the old full list above, then keep the first of each repeated
+			# outer-ring candidate. Straight-range candidates keep their old order.
+			var unique: Array[Vector3] = []
+			var home_count: int = 2 if home else 0
+			var old_spin_count: int = GroundLook.FAR_TRIES + GroundLook.NEAR_TRIES + 8 + GroundLook.WIDE_ANGLES * GroundLook.WIDE_RINGS.size()
+			var round_start: int = GroundLook.FAR_TRIES + GroundLook.NEAR_TRIES
 			for index: int in plain.size():
+				var repeated := false
+				if index >= home_count:
+					var within_spin: int = (index - home_count) % old_spin_count
+					if within_spin >= round_start + 8 and within_spin < round_start + 8 + GroundLook.WIDE_ANGLES:
+						var first_round: int = index - within_spin + round_start
+						for earlier: int in range(first_round, first_round + 8):
+							if plain[index].distance_to(plain[earlier]) < 0.000001:
+								repeated = true
+								break
+				if not repeated:
+					unique.append(plain[index])
+			assert_eq(plain.size() - unique.size(), 16, "eight later duplicates removed at each yaw")
+			assert_eq(GroundLook.try_count(home), unique.size())
+			var way := Vector2(cos(turn), sin(turn))
+			for index: int in unique.size():
 				var got: Vector3 = GroundLook.try_at(index, home, way)
-				assert_true(got.is_equal_approx(plain[index]) or got.distance_to(plain[index]) < 0.000001, "try %d at %.1f" % [index, turn])
+				assert_true(got.is_equal_approx(unique[index]) or got.distance_to(unique[index]) < 0.000001, "try %d at %.1f" % [index, turn])
 
 
+func test_home_turns_in_place_before_moving_away_from_a_wall() -> void:
+	var origin := Vector2(10.5, 10.5)
+	var size := Vector2(1.2, 0.2)
+	var foot := GroundLook.Footprint.new(origin, size, 0.0)
+	var walls: Array[GroundLook.Footprint] = [GroundLook.Footprint.new(Vector2(11.5, 10.5), Vector2.ONE, 0.0)]
+	var none: Array[GroundLook.Footprint] = []
+	assert_lt(GroundLook._wall_room(foot, walls), 0.0, "the original yaw is buried")
+	var moved := GroundLook.Footprint.new(Vector2(10.0, 10.5), size, 0.0)
+	assert_gte(GroundLook._wall_room(moved, walls), 0.0, "moving left would also fit")
+	assert_true(GroundLook._clear_spot(foot, PI, none, walls, true))
+	assert_eq(foot.centre, origin, "keep the biggest thing at its pick-up position")
+	assert_almost_eq(foot.yaw, PI * 0.5, 0.000001)
+	assert_gte(GroundLook._wall_room(foot, walls), 0.0)
+
+
+## A 1.2 m plank in a one-metre corridor stays on its spot after a quarter turn.
 func test_a_quarter_turn_is_tried_before_giving_up() -> void:
 	var walls: Array[GroundLook.Footprint] = []
 	for x: int in range(-3, 4):

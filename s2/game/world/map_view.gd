@@ -925,20 +925,15 @@ var _ground_recording: bool = false
 static func _ground_signature(items: Array, roots: Dictionary) -> int:
 	var floors: Array = roots.keys()
 	floors.sort()
-	return hash([items.hash(), floors])
+	var root_ids: Array[int] = []
+	for lv in floors:
+		root_ids.append(roots[lv].get_instance_id() if is_instance_valid(roots[lv]) else 0)
+	return hash([items.hash(), floors, root_ids])
 
 
 func update_ground(items: Array) -> void:
 	var sig: int = _ground_signature(items, level_roots)
-	if level_roots.is_empty():
-		_drawn_ground.clear()
-		_ground_cells.clear()
-		_ground_grids.clear()
-		_ground_revisions.clear()
-		_drawn_ground_sig = -1
-		_ground_sig = -1
-		return
-	if sig == _ground_sig and sig == _drawn_ground_sig:
+	if not level_roots.is_empty() and sig == _ground_sig and sig == _drawn_ground_sig:
 		var changed := false
 		for lv: int in _ground_cells:
 			var floor_grid: FieldGrid = levels.get(lv, grid if lv == 0 else null)
@@ -961,6 +956,17 @@ func update_ground(items: Array) -> void:
 	_ground_cells.clear()
 	_ground_grids.clear()
 	_ground_revisions.clear()
+	# A removed root may leave a live mesh or a freed cache entry.
+	for lv in ground_nodes.keys():
+		if not is_instance_valid(ground_nodes[lv]):
+			ground_nodes.erase(lv)
+			continue
+		ground_nodes[lv].mesh = null
+		(ground_nodes[lv].get_node("Rim") as MeshInstance3D).mesh = null
+	if level_roots.is_empty():
+		_drawn_ground_sig = -1
+		_ground_sig = -1
+		return
 	var tools: Dictionary = {}
 	var rims: Dictionary = {}
 	_ground_recording = true
@@ -968,7 +974,7 @@ func update_ground(items: Array) -> void:
 	_ground_recording = false
 	for piece: Dictionary in pieces:
 		var lv: int = piece["lv"]
-		if not level_roots.has(lv):
+		if not is_instance_valid(level_roots.get(lv)):
 			continue
 		if not tools.has(lv):
 			tools[lv] = GroundModels.begin()
@@ -980,9 +986,6 @@ func update_ground(items: Array) -> void:
 		var rim: Dictionary = GroundLook.rim(piece)
 		rim["sky"] = sky_alpha(grid, FieldGrid.cell_of(piece["at"])) if lv == 0 and grid != null else 0.0
 		_rim_quad(rims[lv], rim)
-	for lv in ground_nodes:
-		ground_nodes[lv].mesh = null
-		(ground_nodes[lv].get_node("Rim") as MeshInstance3D).mesh = null
 	for lv in tools:
 		if not ground_nodes.has(lv):
 			ground_nodes[lv] = _mesh_node(lv)
@@ -991,6 +994,8 @@ func update_ground(items: Array) -> void:
 			rim_node.material_override = _contact_material("rim")
 			rim_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			ground_nodes[lv].add_child(rim_node)
+		elif ground_nodes[lv].get_parent() != level_roots[lv]:
+			ground_nodes[lv].reparent(level_roots[lv], false)
 		ground_nodes[lv].mesh = GroundModels.commit(tools[lv])
 		(ground_nodes[lv].get_node("Rim") as MeshInstance3D).mesh = rims[lv].commit()
 	_drawn_ground_sig = sig
