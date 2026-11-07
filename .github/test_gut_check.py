@@ -134,6 +134,74 @@ class CheckTests(unittest.TestCase):
         self.assertIn('(4 cases)', line)
 
 
+class LexingTests(unittest.TestCase):
+    def test_commented_triple_quotes_keep_real_tests(self):
+        for quotes in ('"""', "'''"):
+            with self.subTest(quotes=quotes):
+                source = (f'extends GutTest\nfunc test_visible():\n\tpass\n# {quotes}\n'
+                          f'func test_hidden():\n\tpass\n# {quotes}\n')
+                self.assertEqual(gut_check.expected_tests({A: source})[A],
+                                 {'test_visible', 'test_hidden'})
+                found = gut_check.problems({A: source}, report(case(A, 'test_visible')), '')
+                self.assertEqual(len(found), 1, found)
+                self.assertIn('test_hidden', found[0])
+
+    def test_literal_forms_keep_following_test(self):
+        cases = []
+        for prefix in ('', 'r', '&', '^'):
+            for quote in ('"', "'"):
+                cases.append((prefix + quote, prefix + quote + 'a # b' + quote))
+        for quote in ('"""', "'''"):
+            cases.append((quote, quote + '\nfunc test_x():\n\tpass\n' + quote))
+        for label, literal in cases:
+            with self.subTest(literal=label):
+                source = f'extends GutTest\nconst TEXT = {literal}\nfunc test_y():\n\tpass\n'
+                self.assertEqual(gut_check.expected_tests({A: source})[A], {'test_y'})
+
+    def test_single_line_quotes_do_not_hide_following_tests(self):
+        cases = (
+            ('triple double in single', '\'"""\''),
+            ('triple single in double', '"\'\'\'"'),
+            ('escaped double quotes', r'"a \"\"\" b"'),
+            ('escaped single quotes', r"'a \'\'\' b'"),
+            ('escaped backslash', r'"a \\"'),
+            ('raw escaped quote', r'r"a \" # b"'),
+        )
+        for label, literal in cases:
+            with self.subTest(literal=label):
+                source = (f'extends GutTest\nconst FIRST = {literal}\nfunc test_y():\n\tpass\n'
+                          f'const LAST = {literal}\n')
+                self.assertEqual(gut_check.expected_tests({A: source})[A], {'test_y'})
+
+    def test_unclosed_strings_hide_rest(self):
+        for prefix in ('', 'r', '&', '^'):
+            for quote in ('"', "'", '"""', "'''"):
+                with self.subTest(prefix=prefix, quote=quote):
+                    source = (f'func test_before():\n\tpass\nconst TEXT = {prefix}{quote}unfinished\n'
+                              'func test_hidden():\n\tpass\n')
+                    self.assertEqual(gut_check.expected_tests({A: source})[A], {'test_before'})
+
+    def test_mask_preserves_positions_and_newlines(self):
+        cases = (
+            ('# """\r\nfunc test_y():\n', '     \r\nfunc test_y():\n'),
+            ('const S = r"a # b"\r\n', 'const S =         \r\n'),
+            ('const S = &"name"\n', 'const S =        \n'),
+            ('const S = ^"path"\n', 'const S =        \n'),
+            ('const S = """a\r\nb"""\n', 'const S =     \r\n    \n'),
+        )
+        for source, expected in cases:
+            with self.subTest(source=source):
+                self.assertEqual(gut_check._code(source), expected)
+
+    def test_inner_class_text_in_strings_is_ignored(self):
+        for quote in ('"""', "'''"):
+            for base in ('GutTest', '"res://addons/gut/test.gd"'):
+                with self.subTest(quote=quote, base=base):
+                    source = (f'extends GutTest\nconst TEXT = {quote}\nclass Hidden extends {base}:\n'
+                              f'\tpass\n{quote}\nfunc test_one():\n\tpass\n')
+                    self.assertEqual(gut_check.problems({A: source}, report(case(A, 'test_one')), ''), [])
+
+
 class OutsideTests(unittest.TestCase):
     def test_missing_file_fails(self):
         found = gut_check.outside_problems(None)
@@ -178,6 +246,17 @@ class OutsideTests(unittest.TestCase):
         self.assertEqual(len(found), 2, found)
         for error in OUTSIDE_ERRORS:
             self.assertTrue(any(error['code'] in p for p in found), found)
+
+    def test_rationale_is_optional_and_limited_to_200_characters(self):
+        base = 'engine-0 엔진 오류 (res://tests/한글 파일.gd:12 before_all)'
+        for rationale in ('', '한글 원인 설명', '가' * 200, '가' * 200 + '끝'):
+            with self.subTest(length=len(rationale)):
+                error = {**OUTSIDE_ERRORS[0], 'rationale': rationale}
+                expected = base + (' — ' + rationale[:200] if rationale else '')
+                self.assertEqual(gut_check._outside_line(error), expected)
+                text = json.dumps({'count': 1, 'errors': [error]}, ensure_ascii=False)
+                self.assertEqual(gut_check.outside_problems(text), ['outside-test error: ' + expected])
+                self.assertEqual(gut_check._outside_report(text)['errors'][0]['rationale'], rationale)
 
 
 class MainTests(unittest.TestCase):
@@ -282,6 +361,19 @@ class MainTests(unittest.TestCase):
         self.assertIn('GUT outside-test errors: 2', p.stdout)
         self.assertIn('  engine-0 엔진 오류 (res://tests/한글 파일.gd:12 before_all)', p.stdout)
         self.assertIn('  push_error second error (res://tests/test_a.gd:24 push_error)', p.stdout)
+
+
+    def test_rationale_is_printed_in_outside_list(self):
+        for rationale in ('', '한글 원인 설명', '가' * 200 + '끝'):
+            with self.subTest(length=len(rationale)):
+                error = {**OUTSIDE_ERRORS[0], 'rationale': rationale}
+                text = json.dumps({'count': 1, 'errors': [error]}, ensure_ascii=False)
+                p = self.run_main(SOURCES, [A, B], WHOLE, '', outside=text)
+                self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+                expected = '  engine-0 엔진 오류 (res://tests/한글 파일.gd:12 before_all)'
+                if rationale:
+                    expected += ' — ' + rationale[:200]
+                self.assertEqual(p.stdout.splitlines()[-1], expected)
 
 
 if __name__ == '__main__':

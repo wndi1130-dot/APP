@@ -26,7 +26,6 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 
-STRINGS = re.compile(r'"""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'')
 TEST_FUNC = re.compile(r'(?m)^func\s+(test_\w+)\s*\(')
 INNER_TEST_CLASS = re.compile(r'(?m)^class\s+\w+\s+extends\s+(?:GutTest\b|"res://addons/gut/test\.gd")')
 ANSI = re.compile(r'\x1b\[[0-9;?]*[A-Za-z]')
@@ -34,9 +33,47 @@ SCRIPT_ERROR = re.compile(r'SCRIPT ERROR:.*')
 RES = 'res://'
 
 
-def _code(source):
-    """Source without multi-line strings, so a function written inside one is not a test."""
-    return STRINGS.sub('', source)
+def _code(source: str) -> str:
+    """Mask comments and strings in one scan, keeping offsets and line endings intact."""
+    masked = list(source)
+    i, size = 0, len(source)
+    while i < size:
+        char = source[i]
+        if char == '#':
+            while i < size and source[i] not in '\r\n':
+                masked[i] = ' '
+                i += 1
+            continue
+        if char in 'r&^' and i + 1 < size and source[i + 1] in '"\'':
+            masked[i] = ' '
+            i += 1
+            char = source[i]
+        if char not in '"\'':
+            i += 1
+            continue
+
+        delimiter = char * 3 if source.startswith(char * 3, i) else char
+        width = len(delimiter)
+        masked[i:i + width] = [' '] * width
+        i += width
+        # An unclosed string masks everything through EOF; newlines still keep their positions.
+        while i < size:
+            if source[i] == '\\':
+                masked[i] = ' '
+                i += 1
+                if i < size:
+                    if source[i] not in '\r\n':
+                        masked[i] = ' '
+                    i += 1
+            elif source.startswith(delimiter, i):
+                masked[i:i + width] = [' '] * width
+                i += width
+                break
+            else:
+                if source[i] not in '\r\n':
+                    masked[i] = ' '
+                i += 1
+    return ''.join(masked)
 
 
 def expected_tests(sources):
@@ -64,7 +101,10 @@ def problems(sources, report_xml, log):
         out.append('this shard has no test scripts')
     expected = expected_tests(sources)
     for script, names in sorted(expected.items()):
-        if INNER_TEST_CLASS.search(_code(sources[script])):
+        code = _code(sources[script])
+        # Match the quoted base path in the original, but only at an unmasked class declaration.
+        if any(code.startswith('class', match.start())
+               for match in INNER_TEST_CLASS.finditer(sources[script])):
             out.append(f'{script}: has an inner test class — gut_check.py does not map those yet')
         if not names:
             out.append(f'{script}: no top-level `func test_` — every test script must declare one')
@@ -116,7 +156,10 @@ def _outside_report(text: str | None) -> dict:
 
 
 def _outside_line(error: dict) -> str:
-    return f"{error['type']} {error['code']} ({error['file']}:{error['line']} {error['function']})"
+    line = f"{error['type']} {error['code']} ({error['file']}:{error['line']} {error['function']})"
+    if error['rationale']:
+        line += ' — ' + error['rationale'][:200]
+    return line
 
 
 def outside_problems(text: str | None) -> list[str]:
