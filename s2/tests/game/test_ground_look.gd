@@ -23,7 +23,7 @@ func after_each() -> void:
 	GroundModels.restore_cache(_old_cache)
 
 
-func test_ground_rim_shader_loads_with_four_float_controls() -> void:
+func test_ground_rim_shader_loads_with_its_two_float_controls() -> void:
 	var path := "res://fx/shaders/ground_rim.gdshader"
 	assert_true(ResourceLoader.exists(path), "ground rims have their own shader")
 	if not ResourceLoader.exists(path):

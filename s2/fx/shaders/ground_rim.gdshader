@@ -30,7 +30,10 @@ void fragment() {
 	float d = length(lo + hi);
 	float k = 1.0 - smoothstep(core, 1.0, d);
 	// The last pixel is smoothed so a thin rim does not crawl as the camera moves.
-	k *= 1.0 - smoothstep(1.0 - fwidth(d), 1.0, d);
+	// On the flat footprint fwidth(d) is 0: a floor keeps the two edges apart
+	// (smoothstep with equal edges is undefined on some GPUs).
+	float aa = max(fwidth(d), 0.00001);
+	k *= 1.0 - smoothstep(1.0 - aa, 1.0, d);
 	ALBEDO = vec3(0.0);
 	ALPHA = strength * k * mix(1.0, snow_keep, clamp(fx_snow, 0.0, 1.0) * sky);
 }
