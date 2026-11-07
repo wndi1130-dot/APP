@@ -60,14 +60,14 @@ func _saved(game) -> Dictionary:
 ## Godot's JSON text round trip can land one unit in the last place (ULP) off a float64 even though
 ## FieldSave writes with full precision: seen 11-07 on zombies[*].angle and zombies[*].phase, both
 ## directions (9c04804ea755f43f -> 9d04804ea755f43f, 000000e07b3ca13f -> ffffffdf7b3ca13f), on all
-## five fixed seeds, never two units. FieldSave._encode passes finite floats through untouched, so the
-## drift is the engine's decimal <-> double step, not this codec. Only comparisons across the JSON file
-## round trip (_assert_saved_equal) count a float as equal within FLOAT_ULP_SLACK units; checks that an
-## in-memory source was not mutated (_assert_unchanged) stay bit-exact, so a one-unit change made before
-## the JSON step still fails there. Ints, strings, types, key sets and sizes stay exact everywhere. Two
-## units or more fails the round trip too, which catches most precision losses (a float32 cut of an
-## ordinary value lands millions of units away); a value already exact in float32 cut by one unit is the
-## one case the round trip alone cannot tell apart, and the exact source checks cover it before JSON.
+## five fixed seeds, never two units. Three checks cover different boundaries:
+## - _assert_unchanged compares the input with its deep copy, including every float's bits. It catches
+##   input mutation, but cannot catch a codec that changes only its newly returned output.
+## - Codec-stage tests compare finite float bits in _encode and decode_checked (which calls _decode)
+##   outputs before any JSON text step, including float64 neighbours of float32-exact values.
+## - _assert_saved_equal allows FLOAT_ULP_SLACK units only across the engine's JSON text round trip.
+##   That allowance alone cannot distinguish engine rounding from a one-unit codec regression.
+## Ints, strings, types, key sets and sizes stay exact everywhere. Two units fail the round trip too.
 const FLOAT_ULP_SLACK: int = 1
 const FAR_ULPS: int = 9223372036854775807
 
@@ -98,6 +98,13 @@ static func _float_from_bits(hex_le: String) -> float:
 	return hex_le.hex_decode().decode_double(0)
 
 
+static func _float_bytes(value: float) -> PackedByteArray:
+	var bytes := PackedByteArray()
+	bytes.resize(8)
+	bytes.encode_double(0, value)
+	return bytes
+
+
 func _save_value(value: Variant) -> String:
 	if value is float:
 		var bytes := PackedByteArray()
@@ -108,10 +115,12 @@ func _save_value(value: Variant) -> String:
 
 
 func _save_difference(actual: Variant, expected: Variant, at: String = "save", ulp_slack: int = FLOAT_ULP_SLACK) -> String:
-	if typeof(actual) == typeof(expected) and actual == expected:
-		return ""
+	# Visit containers before comparing leaves: container == hides signed-zero changes.
 	if actual is float and expected is float:
-		if _float_ulps(actual, expected) <= ulp_slack:
+		if ulp_slack == 0:
+			if _float_bytes(actual) == _float_bytes(expected):
+				return ""
+		elif _float_ulps(actual, expected) <= ulp_slack:
 			return ""
 	elif actual is Dictionary and expected is Dictionary:
 		for key: Variant in expected:
@@ -133,6 +142,8 @@ func _save_difference(actual: Variant, expected: Variant, at: String = "save", u
 			if difference != "":
 				return difference
 		return ""
+	elif typeof(actual) == typeof(expected) and actual == expected:
+		return ""  # non-float leaves retain exact type and value
 	return "%s: loaded=%s, saved=%s" % [at, _save_value(actual), _save_value(expected)]
 
 
@@ -481,6 +492,99 @@ func test_ulp_count_reads_the_sign_bit_and_source_checks_allow_no_slack() -> voi
 	assert_true(exact.contains("save[z][0][p]") and exact.contains("float64"), "slack 0 names the key and bits: %s" % exact)
 
 
+func test_exact_save_difference_rejects_nested_signed_zero_swaps() -> void:
+	for zero_bits: String in ["0000000000000000", "0000000000000080"]:
+		var other_bits := "0000000000000080" if zero_bits == "0000000000000000" else "0000000000000000"
+		var expected_zero := _float_from_bits(zero_bits)
+		var actual_zero := _float_from_bits(other_bits)
+		var saved := {"outer": [{"value": expected_zero}]}
+		var changed := {"outer": [{"value": actual_zero}]}
+		assert_ne(_save_difference(actual_zero, expected_zero, "save", 0), "", "scalar zero sign is exact")
+		var difference := _save_difference(changed, saved, "save", 0)
+		assert_true(difference.contains("save[outer][0][value]"), "nested zero swap names its path")
+		assert_true(difference.contains(zero_bits) and difference.contains(other_bits), "both zero patterns are reported")
+		assert_ne(_save_difference([changed], [saved], "save", 0), "", "array-root comparison also visits leaves")
+
+
+func test_exact_save_difference_accepts_identical_nan_bits() -> void:
+	var first_nan := _float_from_bits("010000000000f87f")
+	var same_nan := _float_from_bits("010000000000f87f")
+	var other_nan := _float_from_bits("020000000000f87f")
+	assert_true(is_nan(first_nan) and is_nan(same_nan) and is_nan(other_nan), "quiet NaN fixtures")
+	assert_eq(_save_difference(first_nan, same_nan, "save", 0), "", "identical NaN bits are unchanged")
+	assert_eq(_save_difference({"outer": [first_nan]}, {"outer": [same_nan]}, "save", 0), "",
+		"nested identical NaN bits are unchanged")
+	assert_ne(_save_difference({"outer": [first_nan]}, {"outer": [other_nan]}, "save", 0), "",
+		"a different NaN payload is a bit change")
+
+
+func test_json_save_difference_keeps_signed_zeros_equal() -> void:
+	var positive_zero := _float_from_bits("0000000000000000")
+	var negative_zero := _float_from_bits("0000000000000080")
+	assert_eq(_save_difference({"outer": [positive_zero]}, {"outer": [negative_zero]}, "save", 1), "")
+	assert_eq(_save_difference({"outer": [negative_zero]}, {"outer": [positive_zero]}, "save", 1), "")
+	assert_eq(_float_ulps(positive_zero, negative_zero), 0, "JSON comparison keeps the two-zero policy")
+
+
+func _codec_float_patterns() -> Array[String]:
+	return [
+		# Float64 immediately below, at and above the float32-exact anchors 1.0 and 0.5.
+		"ffffffffffffef3f", "000000000000f03f", "010000000000f03f",
+		"ffffffffffffdf3f", "000000000000e03f", "010000000000e03f",
+		# The same neighbours around float32-exact 0.033664580434560776.
+		"ffffffdf7b3ca13f", "000000e07b3ca13f", "010000e07b3ca13f",
+		# Negative anchors and their two neighbours (in increasing magnitude order).
+		"ffffffffffffefbf", "000000000000f0bf", "010000000000f0bf",
+		"ffffffffffffdfbf", "000000000000e0bf", "010000000000e0bf",
+		"ffffffdf7b3ca1bf", "000000e07b3ca1bf", "010000e07b3ca1bf",
+		# Signed zeros, smallest subnormals and the positive normal/subnormal boundary.
+		"0000000000000000", "0000000000000080", "0100000000000000", "0100000000000080",
+		"ffffffffffff0f00", "0000000000001000", "0100000000001000",
+		# The other four 11-07 samples; 000000e07b3ca13f is already included above.
+		"9c04804ea755f43f", "000000607836ed3f", "00000020cd4d933f", "000000c091ffed3f",
+	]
+
+
+func _assert_float_pattern(actual: Variant, expected_bits: String, why: String) -> void:
+	assert_true(actual is float, "%s: output remains a float" % why)
+	if not actual is float:
+		return
+	assert_eq(_float_bytes(float(actual)).hex_encode(), expected_bits, why)
+
+
+func test_encode_preserves_finite_float_bits_before_json() -> void:
+	for sample_bits: String in _codec_float_patterns():
+		var sample_value := _float_from_bits(sample_bits)
+		assert_true(is_finite(sample_value), "finite codec fixture %s" % sample_bits)
+		var encoded: Variant = FieldSave._encode(sample_value)
+		_assert_float_pattern(encoded, sample_bits, "_encode output %s" % sample_bits)
+
+
+func test_decode_preserves_finite_float_bits_before_json() -> void:
+	for sample_bits: String in _codec_float_patterns():
+		# Independent input: a compensating encode/decode pair cannot hide either stage's change.
+		var sample_value := _float_from_bits(sample_bits)
+		assert_true(is_finite(sample_value), "finite codec fixture %s" % sample_bits)
+		var decoded: Variant = FieldSave.decode_checked(sample_value)
+		_assert_float_pattern(decoded, sample_bits, "_decode output through decode_checked %s" % sample_bits)
+
+
+func test_codec_nested_outputs_preserve_finite_float_bits() -> void:
+	var samples: Array = []
+	for sample_bits: String in _codec_float_patterns():
+		samples.append(_float_from_bits(sample_bits))
+	var source_payload := {"outer": [{"values": samples}]}
+	var untouched: Dictionary = source_payload.duplicate(true)
+	var encoded: Variant = FieldSave._encode(source_payload)
+	assert_eq(_save_difference(encoded, untouched, "encoded", 0), "", "nested encode output keeps every bit")
+	_assert_unchanged(source_payload, untouched, "nested encode input is unchanged")
+	# Decode a fresh, unencoded fixture so output regressions cannot cancel each other.
+	var decode_input: Dictionary = untouched.duplicate(true)
+	var decoded: Variant = FieldSave.decode_checked(decode_input)
+	assert_eq(_save_difference(decoded, untouched, "decoded", 0), "", "nested decode output keeps every bit")
+	_assert_unchanged(decode_input, untouched, "nested decode input is unchanged")
+
+
 func test_engine_json_float_round_trip_stays_within_one_ulp() -> void:
 	# The saved bits from the five 11-07 failures; the log line says what the engine does today.
 	for hex: String in ["9c04804ea755f43f", "000000e07b3ca13f", "000000607836ed3f",
@@ -550,3 +654,192 @@ func test_whole_accepts_missing_zero_max_and_integral_json_numbers() -> void:
 		var saved := _minimal()
 		saved["zombies"][0]["look_code"] = value
 		assert_true(FieldSave._whole(saved), "valid transport even if the outfit is reserved")
+
+
+func _saved_person_row(saved: Dictionary, person_pid: String) -> Dictionary:
+	for row: Dictionary in saved.get("people", []):
+		if String(row.get("pid", "")) == person_pid:
+			return row
+	return {}
+
+
+func _release_person_probe_games() -> void:
+	# Each parameter case releases its own scenes before constructing the next one.
+	while not fields.is_empty():
+		var game = fields.pop_back()
+		if is_instance_valid(game):
+			game.free()
+
+
+func _assert_bad_person_primary_uses_backup(bad_brain: Variant, why: String) -> void:
+	var fixture := _file_fixture()
+	var saved: Dictionary = fixture["save"]
+	var source = fields.back()
+	var person_pid := String(source.people[-1].pid)
+	var primary: Dictionary = saved.duplicate(true)
+	var person_row := _saved_person_row(primary, person_pid)
+	assert_false(person_row.is_empty(), "%s: corrupt a real restored person's row" % why)
+	if person_row.is_empty():
+		return
+	var wrote_backup := FieldSave.write(saved, AT)
+	assert_true(wrote_backup, "%s: first valid save" % why)
+	if not wrote_backup:
+		return
+	primary["clock"]["elapsed"] = float(primary["clock"]["elapsed"]) + 1.0
+	var wrote_primary := FieldSave.write(primary, AT)
+	assert_true(wrote_primary, "%s: rotate the valid backup" % why)
+	if not wrote_primary:
+		return
+	var backup_bytes := FileAccess.get_file_as_bytes(AT + ".bak")
+	var backup := FieldSave.from_json(backup_bytes.get_string_from_utf8())
+	assert_false(backup.is_empty(), "%s: backup is valid before corruption" % why)
+	if backup.is_empty():
+		return
+	_assert_saved_equal(backup, saved, "%s: backup holds the original save" % why)
+	# The valid primary changes in only this restored person's brain.
+	person_row["state"]["brain"] = bad_brain
+	var broken_text := FieldSave.to_json(primary)
+	var file := FileAccess.open(AT, FileAccess.WRITE)
+	assert_not_null(file)
+	if file == null:
+		return
+	file.store_string(broken_text)
+	file.close()
+	var rejected := FieldSave.from_json(FileAccess.get_file_as_string(AT)).is_empty()
+	assert_true(rejected, "%s: reject the primary before apply can change game state" % why)
+	var reads_before: int = FieldSave._test_reads
+	var loaded := FieldSave.read(AT)
+	assert_eq(FieldSave._test_reads - reads_before, 2, "%s: read tries primary then backup" % why)
+	var difference := _save_difference(loaded, backup)
+	assert_true(difference.is_empty(), "%s: read selects backup\n%s" % [why, difference])
+	assert_eq(FileAccess.get_file_as_bytes(AT + ".bak"), backup_bytes)
+	# On the old product these assertions fail; never feed its malformed result to apply().
+	if not rejected or not difference.is_empty():
+		return
+	_assert_file_resume_and_immediate_resave(loaded, fixture)
+	var restored_person = FieldSave._person_with_id(fields.back(), person_pid)
+	assert_not_null(restored_person, "%s: the selected person really restores" % why)
+	if restored_person != null:
+		assert_eq(int(restored_person.brain.get("rising_id", -1)), 53)
+	assert_eq(FileAccess.get_file_as_bytes(AT + ".bak"), backup_bytes)
+	assert_eq(FileAccess.get_file_as_string(AT + ".broken"), broken_text)
+
+
+func test_bad_person_brain_primary_selects_backup_and_resumes() -> void:
+	_assert_bad_person_primary_uses_backup(1, "brain is an integer")
+
+
+func test_bad_rising_id_primary_selects_backup_and_resumes() -> void:
+	for bad_id: Variant in [{}, "7", 7.5, 9007199254740994.0, -9007199254740994.0]:
+		_assert_bad_person_primary_uses_backup({"rising_id": bad_id}, "invalid rising_id %s" % var_to_str(bad_id))
+		_release_person_probe_games()
+		await get_tree().process_frame
+
+
+func _assert_person_link_acceptance(mode: String, exact_restore: bool) -> void:
+	var fixture := _file_fixture()
+	var saved: Dictionary = fixture["save"]
+	var source = fields.back()
+	var person_pid := String(source.people[-1].pid)
+	var person_row := _saved_person_row(saved, person_pid)
+	assert_false(person_row.is_empty(), "probe uses an actual captured person")
+	if person_row.is_empty():
+		return
+	match mode:
+		"integral_float":
+			person_row["state"]["brain"]["rising_id"] = 7.0
+		"missing_brain":
+			person_row["state"].erase("brain")
+		"missing_rising_id":
+			person_row["state"]["brain"].erase("rising_id")
+	if not exact_restore:
+		saved["version"] = 1
+		saved.erase("runtime")
+	var untouched: Dictionary = saved.duplicate(true)
+	var wrote := FieldSave.write(saved, AT)
+	assert_true(wrote, "%s: accepted for exact=%s" % [mode, str(exact_restore)])
+	if not wrote:
+		return
+	var loaded := FieldSave.read(AT)
+	assert_false(loaded.is_empty(), "%s: accepted after the real JSON file" % mode)
+	if loaded.is_empty():
+		return
+	assert_eq(FieldSave.exact(loaded), exact_restore)
+	var loaded_person := _saved_person_row(loaded, person_pid)
+	assert_false(loaded_person.is_empty())
+	if loaded_person.is_empty():
+		return
+	if mode == "integral_float":
+		var json_id: Variant = loaded_person["state"]["brain"]["rising_id"]
+		assert_true(json_id is float, "the transport really delivers a JSON float")
+		assert_eq(json_id, 7.0)
+	elif mode == "missing_brain":
+		assert_false(loaded_person["state"].has("brain"), "legacy missing brain remains absent")
+	else:
+		assert_false(loaded_person["state"]["brain"].has("rising_id"), "legacy missing link remains absent")
+	var game = _game(FieldSave.resume_opts(loaded), false)
+	var restored_person = FieldSave._person_with_id(game, person_pid)
+	assert_not_null(restored_person, "the accepted row is restored by pid")
+	if restored_person == null:
+		return
+	if mode == "integral_float":
+		assert_eq(int(restored_person.brain.get("rising_id", -1)), 7)
+	else:
+		assert_false(restored_person.brain.has("rising_id"))
+	var expected_seven: int = 0 if mode == "integral_float" else int(api.call("look_code_for", int(fixture["seed"]), 7))
+	assert_eq(int(game.zombies.find(7).get("look_code", -1)), expected_seven,
+		"migration maps JSON 7.0 to integer zombie id 7 only when the link exists")
+	assert_eq(int(game.zombies.find(53).get("look_code", -1)), int(api.call("look_code_for", int(fixture["seed"]), 53)),
+		"the old 53 link is absent, so its unnamed row gets an ordinary look")
+	_assert_unchanged(saved, untouched, "acceptance and restoration leave the source unchanged")
+
+
+func test_integral_json_rising_id_is_accepted_and_migrates() -> void:
+	for exact_restore: bool in [true, false]:
+		_assert_person_link_acceptance("integral_float", exact_restore)
+		_release_person_probe_games()
+		await get_tree().process_frame
+
+
+func test_legacy_person_without_brain_is_accepted() -> void:
+	for exact_restore: bool in [true, false]:
+		_assert_person_link_acceptance("missing_brain", exact_restore)
+		_release_person_probe_games()
+		await get_tree().process_frame
+
+
+func test_legacy_person_without_rising_id_is_accepted() -> void:
+	for exact_restore: bool in [true, false]:
+		_assert_person_link_acceptance("missing_rising_id", exact_restore)
+		_release_person_probe_games()
+		await get_tree().process_frame
+
+
+func test_person_brain_guard_checks_types_and_integer_boundaries() -> void:
+	var save_api: GDScript = FieldSave
+	var has_guard := save_api.has_method("_person_brain_ok")
+	assert_true(has_guard, "person brain acceptance has a pure guard")
+	if not has_guard:
+		return  # Old product fails the assertion without calling a missing method.
+	for legacy_row: Dictionary in [{}, {"state": {}}, {"state": {"brain": {}}}]:
+		assert_true(save_api.call("_person_brain_ok", legacy_row), "absent legacy keys are allowed")
+	# Typed int64 values do not go through JSON's untyped float range restriction.
+	for good_id: Variant in [0, -7, 9007199254740993, -9007199254740993,
+			9223372036854775807, -9223372036854775807 - 1,
+			0.0, -0.0, 7.0, -7.0, 9007199254740991.0, -9007199254740991.0,
+			9007199254740992.0, -9007199254740992.0]:
+		assert_true(save_api.call("_person_brain_ok", {"state": {"brain": {"rising_id": good_id}}}),
+			"whole safe JSON float or typed integer %s" % var_to_str(good_id))
+	for bad_brain: Variant in [1, 1.0, "brain", [], null, true]:
+		assert_false(save_api.call("_person_brain_ok", {"state": {"brain": bad_brain}}),
+			"a present brain must be a dictionary")
+	for bad_id: Variant in [{}, [], "7", 7.5, -7.5, true, false, null, NAN, INF, -INF,
+			9007199254740994.0, -9007199254740994.0, 1.0e308]:
+		assert_false(save_api.call("_person_brain_ok", {"state": {"brain": {"rising_id": bad_id}}}),
+			"invalid rising_id %s" % var_to_str(bad_id))
+	assert_false(save_api.call("_person_brain_ok", {"state": 1}), "invalid state cannot reach brain")
+	var row := {"state": {"brain": {"rising_id": 7.0, "unrelated": {"keep": [1, null]}}}}
+	var untouched: Dictionary = row.duplicate(true)
+	assert_true(save_api.call("_person_brain_ok", row), "other brain fields are outside this guard")
+	_assert_unchanged(row, untouched, "pure acceptance does not rewrite its input")
+

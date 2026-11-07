@@ -48,6 +48,8 @@ const INT64_MAX_DIGITS := "9223372036854775807"
 const INT64_MIN_DIGITS := "9223372036854775808"
 const INT32_MIN := -2147483648
 const INT32_MAX := 2147483647
+## Untyped JSON floats can carry whole identifiers exactly only within this inclusive range.
+const MAX_SAFE_JSON_INTEGER: int = 9007199254740992
 ## Tag types and the length of their fixed number list.
 const NUMBER_TAGS := {"Vector3": 3, "Vector2": 2, "Color": 4}
 const INT_TAGS := {"Vector2i": 2, "Rect2i": 4}
@@ -302,6 +304,25 @@ static func _counts(d: Dictionary) -> bool:
 	return true
 
 
+## Missing legacy keys are allowed; present person links must be safe before apply().
+static func _person_brain_ok(row: Dictionary) -> bool:
+	var state: Variant = row.get("state", {})
+	if not state is Dictionary:
+		return false
+	if not state.has("brain"):
+		return true
+	var brain: Variant = state["brain"]
+	if not brain is Dictionary:
+		return false
+	if not brain.has("rising_id"):
+		return true
+	var rising_id: Variant = brain["rising_id"]
+	if rising_id is int:
+		return true  # Tagged int64 values retain their full range.
+	return rising_id is float and is_finite(rising_id) \
+		and absf(rising_id) <= MAX_SAFE_JSON_INTEGER and floorf(rising_id) == rising_id
+
+
 static func _whole(d: Dictionary) -> bool:
 	if d.has("bounds_rule") and not _valid_bounds_rule(d["bounds_rule"]):
 		return false
@@ -326,6 +347,8 @@ static func _whole(d: Dictionary) -> bool:
 			"bag": TYPE_STRING, "items": TYPE_DICTIONARY, "hands": TYPE_ARRAY, "body": TYPE_DICTIONARY}, {
 			"wear": TYPE_DICTIONARY, "heat": TYPE_DICTIONARY, "meta": TYPE_DICTIONARY, "state": TYPE_DICTIONARY, "aim": TYPE_DICTIONARY,
 		}):
+			return false
+		if not _person_brain_ok(row):
 			return false
 		if not _counts(row["items"]):
 			return false
