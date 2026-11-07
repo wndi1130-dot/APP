@@ -86,6 +86,9 @@ const ALLY_TURN_DEG: float = 35.0
 ## runs to its end and no blow or shove starts meanwhile.
 const BLOW_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear", "take", "loot"]
 
+## Transient order ownership belongs to the person, not to a HUD-wide held flag.
+const MELEE_ORDER: StringName = &"melee_input_order"
+var _melee_serial: int = 0
 var game
 ## Decision 501: only live inside _strike -> swing; empty between calls.
 var _blow_now: Dictionary = {}
@@ -239,6 +242,7 @@ func update(delta: float) -> void:
 func melee_target(p, z: Dictionary, hold: bool = false) -> void:
 	if p.sled_weapon_stowed:
 		return
+	_begin_melee_order(p)
 	p.target_zombie = z
 	p.target_person = null
 	p.hold_attack = hold
@@ -248,6 +252,7 @@ func melee_target(p, z: Dictionary, hold: bool = false) -> void:
 func melee_person(p, other) -> void:
 	if p.sled_weapon_stowed:
 		return
+	_begin_melee_order(p)
 	p.target_person = other
 	p.target_zombie = {}
 	p.hold_attack = true
@@ -278,19 +283,64 @@ func fight(p, target, hold: bool) -> void:
 		p.hold_attack = hold
 
 
+func _begin_melee_order(p) -> void:
+	_melee_serial += 1
+	p.set_meta(MELEE_ORDER, {"id": _melee_serial, "path": PackedVector3Array()})
+
+
+func _melee_order(p) -> Dictionary:
+	return p.get_meta(MELEE_ORDER) if p.has_meta(MELEE_ORDER) else {}
+
+
+func melee_order_id(p) -> int:
+	return int(_melee_order(p).get("id", 0)) if fighting(p) else 0
+
+
+func owns_melee_order(p, order_id: int) -> bool:
+	return order_id > 0 and melee_order_id(p) == order_id
+
+
+## Movement removes points from the front; a different route is not this approach.
+static func _remaining_approach(path: PackedVector3Array, issued: PackedVector3Array) -> bool:
+	if path.is_empty() or path.size() > issued.size():
+		return false
+	var offset: int = issued.size() - path.size()
+	for i: int in range(path.size()):
+		if path[i] != issued[offset + i]:
+			return false
+	return true
+
+
+func _approach_melee(p, path: PackedVector3Array) -> void:
+	p.go_to(path, p.running)
+	if p.has_meta(MELEE_ORDER):
+		var order: Dictionary = p.get_meta(MELEE_ORDER)
+		order["path"] = path.duplicate()
+
+
 ## The finger holding the swing is gone: finish this swing, then stop.
 func stop_holding(p) -> void:
 	# A repeating order ends here, without touching the blow already in strike_at.
 	# A one-swing order (hold=false) still owes its first accepted blow.
 	if p.hold_attack:
-		call_off(p)
+		var issued: PackedVector3Array = _melee_order(p).get("path", PackedVector3Array())
+		if not p.brain.has("goal") and _remaining_approach(p.path, issued):
+			p.path = PackedVector3Array()
+		# A later walking goal, the stick and its drive speed are not this order's.
+		_end_melee_order(p)
+
+
+func _end_melee_order(p) -> void:
+	p.target_zombie = {}
+	p.target_person = null
+	p.hold_attack = false
+	if p.has_meta(MELEE_ORDER):
+		p.remove_meta(MELEE_ORDER)
 
 
 ## Call the fight off where you stand (a tap on open ground).
 func call_off(p) -> void:
-	p.target_zombie = {}
-	p.target_person = null
-	p.hold_attack = false
+	_end_melee_order(p)
 	p.brain.erase("goal")
 
 
@@ -364,7 +414,7 @@ func _pursue_zombie(p, delta: float) -> void:
 			var path: PackedVector3Array = game.find_path(p.position, z["pos"], false)
 			if path.size() > 0:
 				path[path.size() - 1] = seen + (p.position - seen).normalized() * (reach * 0.8)
-			p.go_to(path, p.running)
+			_approach_melee(p, path)
 		return
 	p.stop()
 	p.face_point(seen)
@@ -506,7 +556,7 @@ func _pursue_person(p, delta: float) -> void:
 		p.brain["repath_t"] = float(p.brain.get("repath_t", 0.0)) - delta
 		if p.brain["repath_t"] <= 0.0 or p.path.is_empty():
 			p.brain["repath_t"] = 0.4
-			p.go_to(game.find_path(p.position, o.position, false), p.running)
+			_approach_melee(p, game.find_path(p.position, o.position, false))
 		return
 	p.stop()
 	p.face_point(o.position)

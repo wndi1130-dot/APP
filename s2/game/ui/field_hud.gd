@@ -1618,7 +1618,7 @@ func tick(delta: float) -> void:
 	if pressing and melee_pending != null and not melee_holding and Time.get_ticks_msec() - press_ms >= int(HOLD_TIME * 1000.0):
 		# 결정 564: 한 번씩이어도 이 누름은 처리했다. 계속 누르거나 떼면서 다시 치지 않는다.
 		melee_holding = true
-		_melee(melee_pending, not MeleePress.enabled(game.opts))
+		_melee(melee_pending, not MeleePress.enabled(game.opts), _hand_gesture())
 	_tick_auto_aim(delta)
 	_drop_stale_person()
 	_tick_context_hold()
@@ -4163,7 +4163,7 @@ func finger_down(index: int, pos: Vector2) -> bool:
 			if _pad_blocked(b):
 				return true
 			fingers[index] = {"kind": "pad", "pad": b, "start": pos, "ms": Time.get_ticks_msec()}
-			_pad_down(b, pos)
+			_pad_down(b, pos, fingers[index])
 			return true
 	# The portrait: a tap opens the body picture (on the lift, if it never moved).
 	if portrait.get_global_rect().has_point(pos):
@@ -4192,7 +4192,7 @@ func finger_down(index: int, pos: Vector2) -> bool:
 			if _pad_blocked(near as Button):
 				return true
 			fingers[index] = {"kind": "pad", "pad": near, "start": pos, "ms": Time.get_ticks_msec()}
-			_pad_down(near as Button, pos)
+			_pad_down(near as Button, pos, fingers[index])
 		elif near == portrait:
 			fingers[index] = {"kind": "portrait", "start": pos}
 		elif near is Button:
@@ -4205,7 +4205,7 @@ func finger_down(index: int, pos: Vector2) -> bool:
 	if fingers.values().any(func(f): return f["kind"] == "hand"):
 		return false
 	fingers[index] = {"kind": "hand", "start": pos}
-	_press(pos)
+	_press(pos, fingers[index])
 	return true
 
 
@@ -4470,28 +4470,59 @@ func finger_cancel(index: int) -> bool:
 		"button":
 			_finger_key_up(f)
 		"pad":
-			if auto_aim:
-				aim_cancel = true
-				_auto_aim_end(Vector2.ZERO)
+			_cancel_owned_aim(f)
 			for b in [aim_button, context_button, depart_button, shove_button]:
 				if f["pad"] == b:
 					b.button_pressed = false
 			if f["pad"] == run_button and run_hold():
 				_run_key_up()
 		"hand":
-			if aiming and game.player.aim.active:
-				game.player.aim.stop()
+			_cancel_owned_aim(f)
 			pressing = false
 			press_ms = 0
-			aiming = false
-			aim_cancel = false
-			aim_armed = false
-			aim_target = null
 			melee_pending = null
-			if melee_holding:
-				game.combat.stop_holding(game.player)
+			_cancel_hand_melee(f)
 			melee_holding = false
 	return true
+
+
+## Only the gesture that most recently started the aim may end it.
+static func _owns_aim(f: Dictionary) -> bool:
+	return bool(f.get("aim_owner", false))
+
+
+func _claim_aim(f: Dictionary) -> void:
+	for held: Dictionary in fingers.values():
+		held.erase("aim_owner")
+	if not f.is_empty():
+		f["aim_owner"] = true
+
+
+func _cancel_owned_aim(f: Dictionary) -> void:
+	if not _owns_aim(f):
+		return
+	if auto_aim:
+		aim_cancel = true
+		_auto_aim_end(Vector2.ZERO)
+	elif game.player.aim.active:
+		game.player.aim.stop()
+	aiming = false
+	aim_cancel = false
+	aim_armed = false
+	aim_target = null
+	f.erase("aim_owner")
+
+
+func _hand_gesture() -> Dictionary:
+	for held: Dictionary in fingers.values():
+		if held.get("kind", "") == "hand":
+			return held
+	return {}
+
+
+func _cancel_hand_melee(f: Dictionary) -> void:
+	if game.player != null and game.combat.owns_melee_order(game.player, int(f.get("melee_order", 0))):
+		game.combat.stop_holding(game.player)
 
 
 ## The glass a tap folds or opens: the clock, or a goal or promise line that is
@@ -4686,7 +4717,7 @@ func _pad_blocked(b: Button) -> bool:
 	return b.disabled or (p.sled_weapon_stowed and b in [attack_button, aim_button, shove_button, manual_button])
 
 
-func _pad_down(b: Button, pos: Vector2) -> void:
+func _pad_down(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
 	if _pad_blocked(b):
 		return
 	var p = game.player
@@ -4709,7 +4740,7 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 		game.actions.self_bandage(p)
 	elif b == aim_button:
 		aim_button.button_pressed = true
-		_auto_aim_start()
+		_auto_aim_start(f)
 	elif b == attack_button:
 		# One press fights the one in reach until it is down, then the next
 		# within 2 m; a second press stops (field_unified 10, coordinator 18:10).
@@ -4722,7 +4753,7 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 			game.combat.swing_air(p)
 			return
 		# 결정 564: 공격 패드(주 행동의 근접 패드 포함)도 같은 누름 설정을 따른다.
-		_melee(t, not MeleePress.enabled(game.opts))
+		_melee(t, not MeleePress.enabled(game.opts), f)
 		attack_button.button_pressed = _repeating_melee(p)
 	elif b == context_button:
 		context_button.button_pressed = true
@@ -4807,7 +4838,8 @@ func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
 		return
 	if b == aim_button:
 		aim_button.button_pressed = false
-		_auto_aim_end(pos)
+		if f.is_empty() or _owns_aim(f):
+			_auto_aim_end(pos)
 	elif b == context_button:
 		context_button.button_pressed = false
 		if not f.get("opened", false) and touch_rect(b).has_point(pos):
@@ -4828,13 +4860,14 @@ func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
 
 ## Hold the aim pad: the gun comes up and, after a moment that shortens with
 ## shooting skill, settles on the nearest threat ahead (field_unified 10).
-func _auto_aim_start() -> void:
+func _auto_aim_start(f: Dictionary = {}) -> void:
 	var p = game.player
 	if not W.is_ranged(p.weapon_id()):
 		toast("총 없음")
 		return
 	if not game.combat.start_aim(p):
 		return
+	_claim_aim(f)
 	auto_aim = true
 	aiming = true
 	aim_armed = true
@@ -4895,7 +4928,7 @@ func _target_ok(t) -> bool:
 	return game.combat.hostile(t) and t.visible
 
 
-func _press(pos: Vector2) -> void:
+func _press(pos: Vector2, f: Dictionary = {}) -> void:
 	pressing = true
 	press_pos = pos
 	press_ms = Time.get_ticks_msec()
@@ -4912,6 +4945,7 @@ func _press(pos: Vector2) -> void:
 		return
 	if gun:
 		if game.combat.start_aim(p):
+			_claim_aim(f)
 			aiming = true
 			# An enemy at your feet: pressing on it must not count as letting go on yourself.
 			aim_armed = not _over_player(pos)
@@ -4980,6 +5014,8 @@ func drop_touch() -> void:
 	for index: int in fingers:
 		if String(fingers[index].get("kind", "")) == "button":
 			_finger_key_up(fingers[index])
+		elif String(fingers[index].get("kind", "")) == "hand":
+			_cancel_hand_melee(fingers[index])
 		modal_fingers[index] = {"owner": null}
 	if fingers.has(0):
 		modal_fingers[-1] = {"owner": null}
@@ -5003,8 +5039,6 @@ func drop_touch() -> void:
 	aim_armed = false
 	aim_target = null
 	melee_pending = null
-	if melee_holding and game.player != null:
-		game.combat.stop_holding(game.player)
 	melee_holding = false
 	if game.player != null:
 		game.player.aim.stop()
@@ -5070,8 +5104,12 @@ func _fight_dir(p) -> Vector2:
 	return d.normalized() if d.length() > 0.05 else Vector2.ZERO
 
 
-func _melee(target, hold: bool) -> void:
+func _melee(target, hold: bool, f: Dictionary = {}) -> void:
+	var before: int = game.combat.melee_order_id(game.player)
 	game.combat.fight(game.player, target, hold)
+	var order_id: int = game.combat.melee_order_id(game.player)
+	if not f.is_empty() and order_id > 0 and order_id != before:
+		f["melee_order"] = order_id
 
 
 ## The finger's point moved to the floor the target stands on (shooting

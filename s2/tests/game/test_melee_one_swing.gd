@@ -23,6 +23,7 @@ var melee_press: Variant = null
 class SurvivingCombat extends FieldCombat:
 	var holds: Array[bool] = []
 	var landed: Array = []
+	var shots: Array = []
 
 	func _init(field_game) -> void:
 		super(field_game)
@@ -35,6 +36,11 @@ class SurvivingCombat extends FieldCombat:
 		# 살아 있는 같은 적에게 두 번째 공격이 나오는지 피해 난수 없이 확인한다.
 		landed.append({"person": p, "target": at})
 		p.swing_t = 1.0
+
+	func fire(p, at: Vector3, target = null) -> String:
+		# 명중·걸림 난수 대신 실제 HUD의 발사 호출 도달만 기록한다.
+		shots.append({"person": p, "at": at, "target": target})
+		return "shot"
 
 
 class MenuProbe extends Boot:
@@ -730,15 +736,17 @@ func test_reused_hand_index_accepts_a_new_hand_target() -> void:
 		assert_eq(_recorder().landed[0]["target"], next)
 
 
-## shove_button is not toggle_mode, and Godot 4 keeps button_pressed only on toggle
-## buttons, so its face cannot be the witness here (the first run held this at line 737
-## before and after the fix). The old pad finger is witnessed through the finger record
-## and the hand state the new press builds and the cancel clears.
+## Hold RUN is released only by the old pad's cancellation, not by overwriting its record.
 func test_reused_pad_index_hands_over_to_a_new_hand_and_cancels_cleanly() -> void:
-	_field({"melee_one_swing": true})
+	_field({"melee_one_swing": true, "run_mode": "hold"})
 	var target := _target()
-	_pad_press(game.hud.shove_button, 7)
+	game.player.moving = true
+	_pad_press(game.hud.run_button, 7)
+	assert_true(game.hud.run_button.button_pressed, "누르는 동안 달리기")
+	assert_true(game.player.running)
 	_finger_press(target)
+	assert_false(game.hud.run_button.button_pressed, "옛 RUN 누름을 실제로 놓는다")
+	assert_false(game.player.running)
 	assert_eq(game.hud.fingers.size(), 1, "옛 pad 기록이 남지 않는다")
 	assert_true(game.hud.pressing, "새 hand 누름")
 	assert_true(game.hud.finger_cancel(7))
@@ -967,3 +975,186 @@ func test_start_swing_reports_rejection_and_a_running_shove_start() -> void:
 	assert_gt(game.player.shove_t, 0.0)
 	assert_false(game.combat.start_swing(game.player, target), "이미 준비 중이면 거절")
 	assert_eq(_swings(), 0, "달리는 동안의 기존 밀치기를 그대로 쓴다")
+
+
+func _gun_for_fingers() -> void:
+	game.player.set_weapon_slots([{"id": "pistol", "quality": "factory", "condition": 0.9, "loaded": 8}])
+	game.hud.tick(0.0)
+
+
+func test_reused_run_finger_preserves_another_fingers_aim_and_release_shot() -> void:
+	_field({"run_mode": "hold"})
+	_gun_for_fingers()
+	_pad_press(game.hud.run_button, 7)
+	var aim_at := _pad_press(game.hud.aim_button, 8)
+	assert_true(game.hud.auto_aim)
+	assert_true(game.player.aim.active)
+	var crouch_at := _pad_press(game.hud.crouch_button, 7)
+	assert_false(game.hud.run_button.button_pressed)
+	assert_true(game.hud.auto_aim, "7번 RUN 취소는 8번 조준을 끝내지 않는다")
+	assert_true(game.player.aim.active)
+	assert_true(game.hud.finger_up(7, crouch_at))
+	assert_true(_recorder().shots.is_empty())
+	assert_true(game.hud.finger_up(8, aim_at))
+	assert_eq(_recorder().shots.size(), 1, "8번의 정상 손 떼기는 발사 길로 간다")
+	assert_false(game.player.aim.active)
+
+
+func test_old_aim_pad_finger_does_not_cancel_the_new_aim_owner() -> void:
+	_field()
+	_gun_for_fingers()
+	_pad_press(game.hud.aim_button, 7)
+	var aim_at := _pad_press(game.hud.aim_button, 8)
+	_pad_press(game.hud.crouch_button, 7)
+	assert_true(game.hud.auto_aim, "같은 조준 pad도 마지막으로 시작한 손가락의 것")
+	assert_true(game.player.aim.active)
+	assert_true(game.hud.finger_up(8, aim_at))
+	assert_eq(_recorder().shots.size(), 1)
+
+
+func test_reusing_the_aim_owner_cancels_without_a_shot() -> void:
+	_field()
+	_gun_for_fingers()
+	_pad_press(game.hud.aim_button, 7)
+	assert_true(game.player.aim.active)
+	_pad_press(game.hud.crouch_button, 7)
+	assert_false(game.hud.auto_aim)
+	assert_false(game.player.aim.active, "자기 조준은 재사용 때 끝낸다")
+	assert_true(_recorder().shots.is_empty(), "취소는 발사가 아니다")
+
+
+func test_stale_hand_cancellation_preserves_a_new_pad_melee_order() -> void:
+	for how: String in ["reuse", "cancel", "focus"]:
+		_field({"melee_one_swing": false, "melee_chain": false})
+		var first := _target()
+		_finger_press(first, 7)
+		_hold()
+		_wait_landed(1)
+		first["state"] = "dead"
+		_step(2.0)
+		_assert_no_target()
+		assert_false(game.player.hold_attack)
+		assert_true(game.hud.melee_holding, "손 떼기를 잃은 옛 hand 표식은 아직 남음")
+		var second := _target()
+		var pad_at := _pad_press(game.hud.attack_button, 8)
+		assert_true(game.hud.finger_up(8, pad_at))
+		_assert_target(second)
+		var before := _swings()
+		if how == "reuse":
+			_pad_press(game.hud.crouch_button, 7)
+		elif how == "cancel":
+			assert_true(game.hud.finger_cancel(7))
+		else:
+			game.hud.drop_touch()
+		_assert_target(second)
+		assert_true(game.player.hold_attack, "옛 hand는 새 pad의 B 연타를 소유하지 않는다: " + how)
+		_step(4.0)
+		assert_gt(_swings(), before + 1, "B의 반복이 이어진다")
+
+
+func test_same_target_new_pad_order_is_not_owned_by_the_old_hand() -> void:
+	_field({"melee_one_swing": false})
+	var target := _target()
+	_finger_press(target, 7)
+	_hold()
+	_wait_swings(1)
+	var pad_at := _pad_press(game.hud.attack_button, 8)
+	assert_true(game.hud.finger_up(8, pad_at))
+	_assert_no_target()
+	pad_at = _pad_press(game.hud.attack_button, 8)
+	assert_true(game.hud.finger_up(8, pad_at))
+	_assert_target(target)
+	_pad_press(game.hud.crouch_button, 7)
+	_assert_target(target)
+	assert_true(game.player.hold_attack, "표적과 hold가 같아도 새로 받은 명령은 다른 소유권")
+	_step(4.0)
+	assert_gt(_swings(), 1)
+
+
+func test_reused_hand_cancels_its_own_started_melee_order() -> void:
+	_field({"melee_one_swing": false})
+	var target := _target()
+	_finger_press(target, 7)
+	_hold()
+	_wait_swings(1)
+	assert_gt(game.player.strike_t, 0.0)
+	_pad_press(game.hud.crouch_button, 7)
+	_assert_no_target()
+	assert_false(game.player.hold_attack)
+	assert_eq(game.player.strike_at, target, "진행 중인 자기 타격은 끝까지")
+	_step(4.0)
+	assert_eq(_swings(), 1)
+	assert_eq(_recorder().landed.size(), 1)
+
+
+func _begin_far_repeat(person: bool) -> void:
+	var target = _enemy(person)
+	var far: Vector3 = game.player.position + Vector3(4.0, 0, 0)
+	if target is Dictionary:
+		target["pos"] = far
+	else:
+		target.position = far
+	game._refresh_vision()
+	_finger_press(target, 7)
+	_hold()
+	_step(0.05)
+	assert_false(game.player.path.is_empty(), "전투가 실제 접근 길을 만들었다")
+	assert_eq(_swings(), 0)
+
+
+func _step_with_player_movement(seconds: float) -> void:
+	for _i in range(ceili(seconds / 0.05)):
+		_step(0.05)
+		game._update_person(game.player, 0.05)
+
+
+func test_cancel_before_first_swing_stops_the_melee_approach() -> void:
+	for person: bool in [false, true]:
+		_field({"melee_one_swing": false})
+		_begin_far_repeat(person)
+		_step_with_player_movement(0.3)
+		assert_eq(_swings(), 0, "첫 공격 전에 취소하는 시험")
+		assert_false(game.player.path.is_empty())
+		var before: Vector3 = game.player.position
+		assert_true(game.hud.finger_cancel(7))
+		assert_true(game.player.path.is_empty(), "연타 명령이 만든 접근 길도 끝낸다")
+		assert_false(game.player.brain.has("goal"))
+		_assert_no_target()
+		_step_with_player_movement(4.0)
+		assert_eq(game.player.position, before, "취소 뒤 실제 이동 소비를 해도 적에게 가지 않는다")
+		assert_eq(_swings(), 0)
+
+
+func test_old_hand_cancel_does_not_stop_stick_movement() -> void:
+	_field({"melee_one_swing": false})
+	_begin_far_repeat(false)
+	var home: Vector2 = game.hud.stick_home()
+	var away: Vector2 = (-game.hud._fight_dir(game.player)).rotated(deg_to_rad(game.CAM_YAW))
+	assert_true(game.hud.finger_down(8, home))
+	assert_true(game.hud.finger_move(8, home + away * game.hud.STICK_R * 0.8))
+	_step_with_player_movement(0.2)
+	var stick: Vector2 = game.player.stick
+	var speed: float = game.player.drive_speed
+	var before: Vector3 = game.player.position
+	assert_gt(stick.length(), 0.0)
+	assert_gt(speed, 0.0)
+	assert_true(game.hud.finger_cancel(7))
+	assert_eq(game.player.stick, stick)
+	assert_eq(game.player.drive_speed, speed, "전투 취소가 직접 걷기의 관성을 지우지 않는다")
+	_step_with_player_movement(0.2)
+	assert_gt(game.player.position.distance_to(before), 0.0)
+	assert_eq(game.hud.stick_index, 8)
+
+
+func test_melee_cancel_keeps_a_replacement_path_and_its_goal() -> void:
+	_field({"melee_one_swing": false})
+	_begin_far_repeat(false)
+	var goal: Vector3 = game.player.position + Vector3(0, 0, 3.0)
+	var replacement := PackedVector3Array([goal])
+	game.player.go_to(replacement, false)
+	game.player.brain["goal"] = goal
+	assert_true(game.hud.finger_cancel(7))
+	_assert_no_target()
+	assert_false(game.player.hold_attack)
+	assert_eq(game.player.path, replacement, "뒤에 받은 별도 이동 경로는 남긴다")
+	assert_eq(game.player.brain.get("goal"), goal, "전투가 소유하지 않은 이동 목표 보존")
