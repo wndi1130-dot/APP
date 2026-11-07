@@ -15,12 +15,9 @@ const SCENE_TIMEOUT: float = 90.0
 const ZOOM: float = 24.0
 const CLOSE_ZOOM: float = 18.0
 const CHANGE: float = 2.0 / 255.0
-## A thing with fewer changed pixels than this is behind something at its cell
-## (a tree, a wall — 11-07 first run: three things read 0 so): it goes to a
-## spare cell and the pair is taken again, PLACE_ROUNDS times at most. One still
-## hidden is reported, never counted in the summary.
+## Low pixel counts are reported, never used to move or exclude a drawn row.
 const MIN_VISIBLE_PIXELS: int = 40
-const PLACE_ROUNDS: int = 3
+const PROBE_VISIBLE: float = 0.95
 const SPARE_CELLS: int = 24
 ## The three on one cell and the clothes cell lie this far from where the camera
 ## looks from (the hidden leader's cell) at least.
@@ -50,6 +47,7 @@ var _game: FieldGame = null
 var _scene_started: int = 0
 var _scene_serial: int = 0
 var _shots: Array[String] = []
+var _probe_captures: int = 0
 var _report: Dictionary = {
 	"place": FieldMaps.DEFAULT_PLACE, "region": "K1", "seed": 5, "zoom": ZOOM,
 	"rules_weather": ["clear"], "day_look": ["overcast"], "night_look": ["clear"],
@@ -148,79 +146,71 @@ func _scene(scene: Dictionary, hour: float) -> void:
 	# The leader and the squad stand where the camera looks; they would cover
 	# the things near them, in both versions alike.
 	_hide_people(game)
+	_probe_captures = 0
 	var cells: Array[Vector2i] = _cells(game, grid, centre, spot, THINGS.size() + 1 + SPARE_CELLS)
 	if cells.size() < THINGS.size() + 1:
 		_fail(tag + ": insufficient visible walkable cells for all things")
 		return
-	var triple_cell: Vector2i = _far_cell(cells, centre)
-	if triple_cell == Vector2i(-1, -1):
-		_fail(tag + ": no cell %.0f cells from the camera's for the three" % CLOSE_MIN_DISTANCE)
-		return
-	cells.erase(triple_cell)
-	var spare: Array[Vector2i] = cells.slice(THINGS.size())
-	var rows: Array[Dictionary] = []
-	for index: int in THINGS.size():
-		rows.append({"id": THINGS[index], "n": 1, "pos": FieldGrid.center(cells[index])})
-	for id: String in TRIPLE:
-		rows.append({"id": id, "n": 1, "pos": FieldGrid.center(triple_cell)})
 	_put(game, [])
 	var floor_image: Image = await _capture(tag + "_floor.jpg")
 	if floor_image == null:
 		return
-	var boxes: Array[Rect2i] = []
-	var update_ms: float = 0.0
-	var item_image: Image = null
-	var measurements: Array[Dictionary] = []
-	var moved: Array[String] = []
-	for place_round: int in PLACE_ROUNDS + 1:
-		# Prefixes let us read the exact newly appended vertices for every item in
-		# BOTH versions, including the spread of all three sharing one cell. There
-		# is no dependency on new piece fields or the template's topology.
-		boxes = _item_boxes(game, rows, floor_image.get_size())
-		if _failed:
-			return
-		_put(game, [])
-		update_ms = _put(game, rows)
-		item_image = await _capture(tag + "_items.jpg")
-		if item_image == null:
-			return
-		if item_image.get_size() != floor_image.get_size():
-			_fail(tag + ": viewport size changed within pair")
-			return
-		measurements = _measure(floor_image, item_image, boxes, rows)
-		var hidden: Array[int] = hidden_slots(measurements, THINGS.size())
-		if hidden.is_empty() or place_round == PLACE_ROUNDS or spare.is_empty():
-			break
-		for slot: int in hidden:
-			if spare.is_empty():
-				break
-			if slot < THINGS.size():
-				rows[slot]["pos"] = FieldGrid.center(spare.pop_front())
-				moved.append(String(rows[slot]["id"]))
-			else:
-				var next_cell: Vector2i = _far_cell(spare, centre)
-				if next_cell == Vector2i(-1, -1):
-					continue
-				spare.erase(next_cell)
-				triple_cell = next_cell
-				for at: int in range(THINGS.size(), rows.size()):
-					rows[at]["pos"] = FieldGrid.center(triple_cell)
-				moved.append("triple")
-	var counted: Array[Dictionary] = []
-	var still_hidden: Array[String] = []
-	for measured: Dictionary in measurements.slice(0, THINGS.size()):
-		if int(measured["changed_pixels"]) >= MIN_VISIBLE_PIXELS:
-			counted.append(measured)
-		else:
-			still_hidden.append(String(measured["id"]))
-	if counted.is_empty():
-		_fail(tag + ": every thing is hidden")
+	var single_probes: Dictionary = await _probe_cells(game, cells, 0.7, floor_image)
+	if _failed:
 		return
-	var summary: Dictionary = summarize(counted)
+	cells.assign(single_probes["cells"])
+	if cells.size() < THINGS.size() + 1:
+		_fail(tag + ": insufficient probe-visible cells for all things: " + str(cells.size()))
+		return
+	var far_cells: Array[Vector2i] = []
+	for cell: Vector2i in cells:
+		if Vector2(cell).distance_to(Vector2(centre)) >= CLOSE_MIN_DISTANCE:
+			far_cells.append(cell)
+	var triple_probes: Dictionary = await _probe_cells(game, far_cells, 2.4, floor_image)
+	if _failed:
+		return
+	var triple_candidates: Array[Vector2i] = []
+	triple_candidates.assign(triple_probes["cells"])
+	var triple_cell: Vector2i = _far_cell(triple_candidates, centre)
+	if triple_cell == Vector2i(-1, -1):
+		_fail(tag + ": no cell %.0f cells from the camera's for the three" % CLOSE_MIN_DISTANCE)
+		return
+	cells.erase(triple_cell)
+	var rows: Array[Dictionary] = []
+	var selected_singles: Array = []
+	for index: int in THINGS.size():
+		rows.append({"id": THINGS[index], "n": 1, "pos": FieldGrid.center(cells[index])})
+		selected_singles.append([cells[index].x, cells[index].y])
+	for id: String in TRIPLE:
+		rows.append({"id": id, "n": 1, "pos": FieldGrid.center(triple_cell)})
+	var geometry: Dictionary = _item_polygons(game, rows, floor_image.get_size())
+	if _failed:
+		return
+	var item_image: Image = await _capture(tag + "_items.jpg")
+	if item_image == null:
+		return
+	if item_image.get_size() != floor_image.get_size():
+		_fail(tag + ": viewport size changed within pair")
+		return
+	var polygons: Array = geometry["polygons"]
+	var measurements: Array[Dictionary] = _measure(floor_image, item_image, polygons, rows)
+	var summary: Dictionary = summarize(measurements)
+	if summary.is_empty():
+		_fail(tag + ": no drawn rows in final geometry")
+		return
+	var triple_summary: Dictionary = summarize(measurements.slice(THINGS.size()))
+	var boxes: Array[Rect2i] = []
+	for polygon: PackedVector2Array in polygons:
+		boxes.append(polygon_bounds(polygon))
+	var update_ms: float = float(geometry["update_ms"])
 	var metrics: Dictionary = _metrics(game, update_ms)
 	(_report["scenes"] as Array).append({"name": tag, "hour": hour, "cold": scene["cold"], "side": scene["side"],
 		"cell": [centre.x, centre.y], "items": measurements, "summary": summary, "metrics": metrics,
-		"moved_from_hidden_cells": moved, "still_hidden": still_hidden,
+		"moved_from_hidden_cells": [], "still_hidden": [],
+		"triple_summary": triple_summary, "vertex_counts": geometry["counts"],
+		"selected_cells": {"singles": selected_singles, "triple": [triple_cell.x, triple_cell.y]},
+		"probes": {"captures": _probe_captures, "threshold": PROBE_VISIBLE,
+			"singles": single_probes["rows"], "triple": triple_probes["rows"]},
 		"overlapping_boxes": _overlaps(boxes), "render_size": [item_image.get_width(), item_image.get_height()]})
 	print("GROUND_SHOT %s contrast_min=%.6f update_ms=%.3f" % [tag, summary["weakest"]["mean_abs_luma"], update_ms])
 	if String(scene["name"]) == "yard_autumn":
@@ -262,6 +252,7 @@ func _clothes_cell(game: FieldGame, cell: Vector2i, tag: String) -> void:
 	if _ground_shape_hashes(game) != first_three:
 		_fail(tag + ": the fourth clothes row changed the ground geometry")
 		return
+	var drawn_rows: int = _drawn_rows(game)
 	_aim(game, cell, CLOSE_ZOOM)
 	_hide_people(game)
 	var filename: String = tag + "_clothes_cell_zoom18.jpg"
@@ -273,38 +264,52 @@ func _clothes_cell(game: FieldGame, cell: Vector2i, tag: String) -> void:
 		return
 	(_report["closeups"] as Array).append({"name": tag, "kind": "clothes_cell", "shot": filename,
 		"zoom": CLOSE_ZOOM, "cell": [cell.x, cell.y], "items": CLOTHES_CELL, "crop": crop,
-		"submitted": 4, "drawn": 3, "fourth_keeps_geometry": true})
+		"submitted": 4, "drawable": 3, "drawn": drawn_rows, "omitted": 3 - drawn_rows, "fourth_keeps_geometry": true})
 
 
-## Every measured box as a row of the report (contrast() plus which thing).
-static func _measure(floor_image: Image, item_image: Image, boxes: Array[Rect2i], rows: Array[Dictionary]) -> Array[Dictionary]:
+## Rows drawn on the ground now, counted the same way in both versions: every
+## drawn thing lays one rim quad (six vertices) on its floor's Rim mesh, whatever
+## its own shape. A thing left undrawn (a fourth on a cell, or no clear room)
+## adds none.
+static func _drawn_rows(game: FieldGame) -> int:
+	var rim_vertices: int = 0
+	for level: Variant in game.view.ground_nodes:
+		var rim := (game.view.ground_nodes[level] as Node).get_node_or_null("Rim") as MeshInstance3D
+		if rim != null:
+			rim_vertices += _vertices(rim.mesh).size()
+	return floori(float(rim_vertices) / 6.0)
+
+
+## Measure each final hull independently, excluding every shared pixel.
+static func _measure(floor_image: Image, item_image: Image, polygons: Array, rows: Array[Dictionary]) -> Array[Dictionary]:
 	var measurements: Array[Dictionary] = []
+	var masks: Array[Dictionary] = exclusive_pixels(polygons, floor_image.get_size())
 	for index: int in rows.size():
-		var measured: Dictionary = contrast(floor_image, item_image, boxes[index])
+		var polygon: PackedVector2Array = polygons[index]
+		var pixels: Array[Vector2i] = []
+		pixels.assign(masks[index]["pixels"])
+		var measured: Dictionary = contrast_pixels(floor_image, item_image, pixels)
+		var rect: Rect2i = polygon_bounds(polygon)
+		measured["box"] = [rect.position.x, rect.position.y, rect.size.x, rect.size.y]
+		var coordinates: Array = []
+		for point: Vector2 in polygon:
+			coordinates.append([point.x, point.y])
+		measured["polygon"] = coordinates
+		measured["polygon_area_px"] = polygon_area(polygon)
+		measured["polygon_pixels"] = masks[index]["polygon_pixels"]
+		measured["shared_pixels"] = masks[index]["shared_pixels"]
+		measured["exclusive_pixels"] = pixels.size()
+		measured["drawn"] = not polygon.is_empty()
+		measured.merge(visibility(int(measured["changed_pixels"]), float(measured["polygon_area_px"]),
+			int(measured["shared_pixels"]), bool(measured["drawn"])))
+		if polygon.is_empty():
+			measured["status"] = "not_drawn"
 		measured["id"] = rows[index]["id"]
 		measured["slot"] = index
 		measured["group"] = "triple" if index >= THINGS.size() else "single"
 		measured["cell"] = [FieldGrid.cell_of(rows[index]["pos"]).x, FieldGrid.cell_of(rows[index]["pos"]).y]
 		measurements.append(measured)
 	return measurements
-
-
-## Slots to move: each single under MIN_VISIBLE_PIXELS, and the first of the
-## three (`singles` and on) once all three are — they share a cell and move as one.
-static func hidden_slots(measurements: Array[Dictionary], singles: int) -> Array[int]:
-	var hidden: Array[int] = []
-	var triple_seen: int = 0
-	for measured: Dictionary in measurements:
-		var slot: int = int(measured["slot"])
-		var seen: int = int(measured["changed_pixels"])
-		if slot < singles:
-			if seen < MIN_VISIBLE_PIXELS:
-				hidden.append(slot)
-		else:
-			triple_seen += seen
-	if measurements.size() > singles and triple_seen < MIN_VISIBLE_PIXELS:
-		hidden.append(singles)
-	return hidden
 
 
 ## The first of `cells` (nearest first) CLOSE_MIN_DISTANCE or more from
@@ -461,43 +466,349 @@ func _put(game: FieldGame, rows: Array) -> float:
 	return float(Time.get_ticks_usec() - started) / 1000.0
 
 
-func _item_boxes(game: FieldGame, rows: Array[Dictionary], image_size: Vector2i) -> Array[Rect2i]:
-	var result: Array[Rect2i] = []
+## Read only common mesh APIs; retain both vertex streams and their transforms.
+func _ground_geometry(game: FieldGame) -> Dictionary:
+	var result: Dictionary = {}
+	for level: Variant in game.view.ground_nodes:
+		var node: MeshInstance3D = game.view.ground_nodes[level]
+		var rim := node.get_node_or_null("Rim") as MeshInstance3D
+		if rim == null:
+			_fail("missing Rim mesh at level " + str(level))
+			return {}
+		result[level] = {"body": _vertices(node.mesh), "rim": _vertices(rim.mesh),
+			"body_transform": node.global_transform, "rim_transform": rim.global_transform}
+	return result
+
+
+## Flatten surfaces in their original order, without interpreting model data.
+static func _vertices(mesh: Mesh) -> PackedVector3Array:
+	var result := PackedVector3Array()
+	if mesh != null:
+		for surface: int in mesh.get_surface_count():
+			result.append_array(mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX])
+	return result
+
+
+## Return the two stream sizes, including an absent or empty floor.
+static func _vertex_count(geometry: Dictionary, level: Variant) -> Vector2i:
+	if not geometry.has(level):
+		return Vector2i.ZERO
+	return Vector2i((geometry[level]["body"] as PackedVector3Array).size(),
+		(geometry[level]["rim"] as PackedVector3Array).size())
+
+
+## Prefixes determine counts only; every projected position comes from the final rebuild.
+func _item_polygons(game: FieldGame, rows: Array[Dictionary], image_size: Vector2i) -> Dictionary:
 	var prefix: Array[Dictionary] = []
 	var previous: Dictionary = {}
+	var counts: Array[Dictionary] = []
+	_put(game, [])
 	for row: Dictionary in rows:
+		if not _alive():
+			return {}
 		prefix.append(row)
 		_put(game, prefix)
-		var points: Array[Vector2] = []
-		for level: Variant in game.view.ground_nodes:
-			var node: MeshInstance3D = game.view.ground_nodes[level]
-			if node.mesh == null:
-				continue
-			var vertices: PackedVector3Array = node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
-			var first: int = int(previous.get(level, 0))
-			for index: int in range(first, vertices.size()):
-				var world_at: Vector3 = node.global_transform * vertices[index]
-				points.append(game.camera.unproject_position(world_at))
-			previous[level] = vertices.size()
-		if points.is_empty():
-			_fail("ground row produced no geometry: " + String(row["id"]))
-			return []
-		var screen_size: Vector2 = game.camera.get_viewport().get_visible_rect().size
-		var scale: Vector2 = Vector2(image_size) / screen_size
-		var lo: Vector2 = points[0] * scale
-		var hi: Vector2 = lo
-		for point: Vector2 in points:
-			lo = lo.min(point * scale)
-			hi = hi.max(point * scale)
-		# Four pixels include the contact rim on thin clothing and paper.
-		var rect := Rect2i(Vector2i(floori(lo.x), floori(lo.y)) - Vector2i(4, 4),
-			Vector2i(ceili(hi.x), ceili(hi.y)) - Vector2i(floori(lo.x), floori(lo.y)) + Vector2i(9, 9))
-		var clipped: Rect2i = rect.intersection(Rect2i(Vector2i.ZERO, image_size))
-		if clipped != rect or not rect.has_area():
-			_fail("item screen box was clipped: " + String(row["id"]))
-			return []
-		result.append(rect)
+		var geometry: Dictionary = _ground_geometry(game)
+		if _failed:
+			return {}
+		var levels: Dictionary = previous.duplicate()
+		for level: Variant in geometry:
+			levels[level] = true
+		var added: Dictionary = {}
+		for level: Variant in levels:
+			var before: Vector2i = previous.get(level, Vector2i.ZERO)
+			var after: Vector2i = _vertex_count(geometry, level)
+			var delta: Vector2i = after - before
+			if delta.x < 0 or delta.y < 0:
+				_fail("prefix vertex count decreased at level %s, row %s: %s -> %s (body, rim)" %
+					[level, row["id"], before, after])
+				return {}
+			added[level] = delta
+			previous[level] = after
+		counts.append(added)
+	_put(game, [])
+	var update_ms: float = _put(game, rows)
+	var final_geometry: Dictionary = _ground_geometry(game)
+	if _failed:
+		return {}
+	var final_levels: Dictionary = previous.duplicate()
+	for level: Variant in final_geometry:
+		final_levels[level] = true
+	for level: Variant in final_levels:
+		var expected: Vector2i = previous.get(level, Vector2i.ZERO)
+		var actual: Vector2i = _vertex_count(final_geometry, level)
+		if actual != expected:
+			_fail("final vertex count mismatch at level %s: expected %s, got %s (body, rim)" %
+				[level, expected, actual])
+			return {}
+	var offsets: Dictionary = {}
+	var polygons: Array = []
+	var count_report: Array = []
+	for index: int in rows.size():
+		var world_points: Array[Vector3] = []
+		var row_counts: Dictionary = {}
+		for level: Variant in counts[index]:
+			var count: Vector2i = counts[index][level]
+			var offset: Vector2i = offsets.get(level, Vector2i.ZERO)
+			row_counts[str(level)] = {"vertices": count.x, "rim_vertices": count.y}
+			if count != Vector2i.ZERO:
+				var streams: Dictionary = final_geometry[level]
+				var body: PackedVector3Array = streams["body"]
+				var rim: PackedVector3Array = streams["rim"]
+				var body_transform: Transform3D = streams["body_transform"]
+				var rim_transform: Transform3D = streams["rim_transform"]
+				for at: int in range(offset.x, offset.x + count.x):
+					world_points.append(body_transform * body[at])
+				for at: int in range(offset.y, offset.y + count.y):
+					world_points.append(rim_transform * rim[at])
+			offsets[level] = offset + count
+		count_report.append({"slot": index, "levels": row_counts, "drawn": not world_points.is_empty()})
+		if world_points.is_empty():
+			polygons.append(PackedVector2Array())
+			continue
+		var polygon: PackedVector2Array = _project_polygon(game, world_points, image_size, 1.0,
+			"item " + str(index) + ": " + String(rows[index]["id"]))
+		if _failed:
+			return {}
+		polygons.append(polygon)
+	return {"polygons": polygons, "counts": count_report, "update_ms": update_ms}
+
+
+## Project a world hull in raw image pixels and reject empty or clipped geometry.
+func _project_polygon(game: FieldGame, points: Array[Vector3], image_size: Vector2i, padding: float, label: String) -> PackedVector2Array:
+	var screen_size: Vector2 = game.camera.get_viewport().get_visible_rect().size
+	if screen_size.x <= 0.0 or screen_size.y <= 0.0:
+		_fail(label + ": empty viewport")
+		return PackedVector2Array()
+	var scale: Vector2 = Vector2(image_size) / screen_size
+	var projected: Array[Vector2] = []
+	for point: Vector3 in points:
+		if not point.is_finite() or game.camera.is_position_behind(point):
+			_fail(label + ": invalid or behind-camera vertex")
+			return PackedVector2Array()
+		projected.append(game.camera.unproject_position(point) * scale)
+	var polygon: PackedVector2Array = expand_hull(convex_hull(projected), padding)
+	if polygon.is_empty():
+		_fail(label + ": empty projected polygon")
+		return polygon
+	for point: Vector2 in polygon:
+		if not point.is_finite() or point.x < 0.0 or point.y < 0.0 or point.x > image_size.x or point.y > image_size.y:
+			_fail(label + ": screen polygon was clipped")
+			return PackedVector2Array()
+	return polygon
+
+
+## Compute a counterclockwise hull; duplicate, collinear or invalid input is safe.
+static func convex_hull(points: Array[Vector2]) -> PackedVector2Array:
+	var sorted: Array[Vector2] = points.duplicate()
+	for point: Vector2 in sorted:
+		if not point.is_finite():
+			return PackedVector2Array()
+	sorted.sort_custom(func(a: Vector2, b: Vector2) -> bool:
+		return a.x < b.x if a.x != b.x else a.y < b.y)
+	var unique: Array[Vector2] = []
+	for point: Vector2 in sorted:
+		if unique.is_empty() or point != unique.back():
+			unique.append(point)
+	if unique.size() < 3:
+		return PackedVector2Array()
+	var lower: Array[Vector2] = []
+	for point: Vector2 in unique:
+		while lower.size() >= 2 and (lower[-1] - lower[-2]).cross(point - lower[-1]) <= 0.0:
+			lower.pop_back()
+		lower.append(point)
+	var upper: Array[Vector2] = []
+	for index: int in range(unique.size() - 1, -1, -1):
+		var point: Vector2 = unique[index]
+		while upper.size() >= 2 and (upper[-1] - upper[-2]).cross(point - upper[-1]) <= 0.0:
+			upper.pop_back()
+		upper.append(point)
+	lower.pop_back()
+	upper.pop_back()
+	lower.append_array(upper)
+	return PackedVector2Array(lower) if lower.size() >= 3 else PackedVector2Array()
+
+
+## Offset a counterclockwise convex hull by intersecting adjacent offset edges.
+static func expand_hull(hull: PackedVector2Array, padding: float = 1.0) -> PackedVector2Array:
+	if hull.size() < 3 or not is_finite(padding) or padding < 0.0:
+		return PackedVector2Array()
+	var result := PackedVector2Array()
+	for index: int in hull.size():
+		var before: Vector2 = (hull[index] - hull[(index + hull.size() - 1) % hull.size()]).normalized()
+		var after: Vector2 = (hull[(index + 1) % hull.size()] - hull[index]).normalized()
+		var normal_before := Vector2(before.y, -before.x)
+		var normal_after := Vector2(after.y, -after.x)
+		var denominator: float = 1.0 + normal_before.dot(normal_after)
+		if denominator <= 0.000001:
+			return PackedVector2Array()
+		result.append(hull[index] + (normal_before + normal_after) * padding / denominator)
 	return result
+
+
+## Return the continuous polygon area in square pixels.
+static func polygon_area(polygon: PackedVector2Array) -> float:
+	var twice: float = 0.0
+	for index: int in polygon.size():
+		twice += polygon[index].cross(polygon[(index + 1) % polygon.size()])
+	return absf(twice) * 0.5
+
+
+## Return integer scan bounds; empty polygons have empty bounds.
+static func polygon_bounds(polygon: PackedVector2Array) -> Rect2i:
+	if polygon.is_empty():
+		return Rect2i()
+	var lo: Vector2 = polygon[0]
+	var hi: Vector2 = lo
+	for point: Vector2 in polygon:
+		lo = lo.min(point)
+		hi = hi.max(point)
+	var corner := Vector2i(floori(lo.x), floori(lo.y))
+	return Rect2i(corner, Vector2i(ceili(hi.x), ceili(hi.y)) - corner)
+
+
+## Enumerate pixel centres inside a polygon, within the supplied image.
+static func polygon_pixels(polygon: PackedVector2Array, image_size: Vector2i) -> Array[Vector2i]:
+	var result: Array[Vector2i] = []
+	if polygon.size() < 3 or polygon_area(polygon) <= 0.0:
+		return result
+	var rect: Rect2i = polygon_bounds(polygon).intersection(Rect2i(Vector2i.ZERO, image_size))
+	for y: int in range(rect.position.y, rect.end.y):
+		for x: int in range(rect.position.x, rect.end.x):
+			if Geometry2D.is_point_in_polygon(Vector2(x + 0.5, y + 0.5), polygon):
+				result.append(Vector2i(x, y))
+	return result
+
+
+## Exclude multiply owned pixels from every row, recording each row's loss.
+static func exclusive_pixels(polygons: Array, image_size: Vector2i) -> Array[Dictionary]:
+	var masks: Array = []
+	var owners: Dictionary = {}
+	for polygon: PackedVector2Array in polygons:
+		var pixels: Array[Vector2i] = polygon_pixels(polygon, image_size)
+		masks.append(pixels)
+		for pixel: Vector2i in pixels:
+			owners[pixel] = int(owners.get(pixel, 0)) + 1
+	var result: Array[Dictionary] = []
+	for mask: Array in masks:
+		var pixels: Array[Vector2i] = []
+		var shared: int = 0
+		for pixel: Vector2i in mask:
+			if int(owners[pixel]) == 1:
+				pixels.append(pixel)
+			else:
+				shared += 1
+		result.append({"pixels": pixels, "shared_pixels": shared, "polygon_pixels": mask.size()})
+	return result
+
+
+## Decide probe visibility from depth-tested and unrestricted changed counts.
+static func probe_visibility(depth_pixels: int, unrestricted_pixels: int) -> Dictionary:
+	var valid: bool = depth_pixels >= 0 and unrestricted_pixels > 0
+	var ratio: float = float(depth_pixels) / float(unrestricted_pixels) if valid else 0.0
+	return {"visible": valid and ratio >= PROBE_VISIBLE, "ratio": ratio,
+		"depth_pixels": depth_pixels, "unrestricted_pixels": unrestricted_pixels,
+		"reason": "no_reference_pixels" if unrestricted_pixels <= 0 else ("invalid_count" if depth_pixels < 0 else "")}
+
+
+## Flag low visibility without guessing occlusion or dropping a drawn row.
+static func visibility(changed_pixels: int, area_px: float, shared_pixels: int, drawn: bool = true) -> Dictionary:
+	var low: bool = drawn and changed_pixels < MIN_VISIBLE_PIXELS
+	return {"low_visibility": low, "low_visibility_reason":
+		{"changed_pixels": changed_pixels, "polygon_area_px": area_px, "shared_pixels": shared_pixels} if low else {}}
+
+
+## Test plates in disjoint screen batches, with two raw captures per batch.
+func _probe_cells(game: FieldGame, cells: Array[Vector2i], side: float, floor_image: Image) -> Dictionary:
+	var plates: Array[MeshInstance3D] = []
+	var polygons: Array = []
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.disable_fog = true
+	material.albedo_color = Color(1.0, 0.0, 1.0, 1.0)
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var half: float = side * 0.5
+	for cell: Vector2i in cells:
+		var level: int = game.level_of(FieldGrid.center(cell))
+		if not game.view.level_roots.has(level):
+			_fail("probe has no level root: " + str(level))
+			break
+		var plate := MeshInstance3D.new()
+		var mesh := PlaneMesh.new()
+		mesh.size = Vector2(side, side)
+		plate.mesh = mesh
+		plate.material_override = material
+		plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		plate.visible = false
+		game.view.level_roots[level].add_child(plate)
+		plate.position = FieldGrid.center(cell) + Vector3(0.0, 0.01, 0.0)
+		plates.append(plate)
+		var points: Array[Vector3] = []
+		for corner: Vector3 in [Vector3(-half, 0.0, -half), Vector3(half, 0.0, -half),
+				Vector3(half, 0.0, half), Vector3(-half, 0.0, half)]:
+			points.append(plate.global_transform * corner)
+		polygons.append(_project_polygon(game, points, floor_image.get_size(), 0.0, "probe " + str(cell)))
+		if _failed:
+			break
+	var pending: Array[int] = []
+	for index: int in plates.size():
+		pending.append(index)
+	var results: Dictionary = {}
+	while not pending.is_empty() and not _failed:
+		var batch: Array[int] = []
+		for index: int in pending:
+			var disjoint: bool = true
+			for chosen: int in batch:
+				if polygon_bounds(polygons[index]).intersects(polygon_bounds(polygons[chosen])):
+					disjoint = false
+					break
+			if disjoint:
+				batch.append(index)
+		for index: int in batch:
+			plates[index].visible = true
+		material.no_depth_test = false
+		var depth_image: Image = await _capture("")
+		if depth_image == null:
+			break
+		_probe_captures += 1
+		material.no_depth_test = true
+		var unrestricted_image: Image = await _capture("")
+		if unrestricted_image == null:
+			break
+		_probe_captures += 1
+		if depth_image.get_size() != floor_image.get_size() or unrestricted_image.get_size() != floor_image.get_size():
+			_fail("probe viewport size changed")
+			break
+		for index: int in batch:
+			var pixels: Array[Vector2i] = polygon_pixels(polygons[index], floor_image.get_size())
+			var tested: Dictionary = contrast_pixels(floor_image, depth_image, pixels)
+			var unrestricted: Dictionary = contrast_pixels(floor_image, unrestricted_image, pixels)
+			var measured: Dictionary = probe_visibility(int(tested["changed_pixels"]), int(unrestricted["changed_pixels"]))
+			measured["cell"] = [cells[index].x, cells[index].y]
+			measured["side_m"] = side
+			measured["polygon_area_px"] = polygon_area(polygons[index])
+			results[index] = measured
+			plates[index].visible = false
+			pending.erase(index)
+	# Immediate removal also covers readback, timeout and projection failures.
+	for plate: MeshInstance3D in plates:
+		plate.free()
+	if _failed:
+		return {}
+	var accepted: Array[Vector2i] = []
+	var report_rows: Array = []
+	var reference_pixels: int = 0
+	for index: int in cells.size():
+		var measured: Dictionary = results[index]
+		report_rows.append(measured)
+		reference_pixels += int(measured["unrestricted_pixels"])
+		if bool(measured["visible"]):
+			accepted.append(cells[index])
+	if cells.is_empty() or reference_pixels == 0:
+		_fail("no visible reference probe pixels for %.1f m plates (%d candidates)" % [side, cells.size()])
+	elif accepted.is_empty():
+		_fail("all %.1f m candidate plates are occluded (%d candidates)" % [side, cells.size()])
+	return {"cells": accepted, "rows": report_rows}
 
 
 func _capture(filename: String) -> Image:
@@ -513,6 +824,9 @@ func _capture(filename: String) -> Image:
 	if image == null or image.is_empty():
 		_fail("viewport readback failed: " + filename)
 		return null
+	# Raw probe readbacks never create files or count toward EXPECTED_SHOTS.
+	if filename.is_empty():
+		return image
 	var path: String = _out.path_join(filename)
 	var saved: Error = image.save_jpg(path, 0.95)
 	if saved != OK:
@@ -523,7 +837,6 @@ func _capture(filename: String) -> Image:
 	if loaded != OK or check.get_size() != image.get_size():
 		_fail("cannot read saved JPG: " + filename)
 		return null
-	# A pair taken again after moving hidden things writes the same file.
 	if not _shots.has(filename):
 		_shots.append(filename)
 	return image
@@ -533,46 +846,70 @@ static func luma(color: Color) -> float:
 	return color.r * 0.2126 + color.g * 0.7152 + color.b * 0.0722
 
 
+## Retain the rectangle API for callers; captures use hull masks.
 static func contrast(floor_image: Image, item_image: Image, rect: Rect2i) -> Dictionary:
+	var pixels: Array[Vector2i] = []
+	for y: int in range(rect.position.y, rect.end.y):
+		for x: int in range(rect.position.x, rect.end.x):
+			pixels.append(Vector2i(x, y))
+	var result: Dictionary = contrast_pixels(floor_image, item_image, pixels)
+	result["box"] = [rect.position.x, rect.position.y, rect.size.x, rect.size.y]
+	return result
+
+
+## Measure only supplied pixels, retaining zero-change rows as zero contrast.
+static func contrast_pixels(floor_image: Image, item_image: Image, pixels: Array[Vector2i]) -> Dictionary:
 	var changed: int = 0
 	var difference: float = 0.0
 	var signed_difference: float = 0.0
 	var object_luma: float = 0.0
 	var floor_luma: float = 0.0
-	for y: int in range(rect.position.y, rect.end.y):
-		for x: int in range(rect.position.x, rect.end.x):
-			var a: Color = floor_image.get_pixel(x, y)
-			var b: Color = item_image.get_pixel(x, y)
-			if maxf(absf(a.r - b.r), maxf(absf(a.g - b.g), absf(a.b - b.b))) <= CHANGE:
-				continue
-			var delta: float = luma(b) - luma(a)
-			difference += absf(delta)
-			signed_difference += delta
-			object_luma += luma(b)
-			floor_luma += luma(a)
-			changed += 1
+	for pixel: Vector2i in pixels:
+		var a: Color = floor_image.get_pixelv(pixel)
+		var b: Color = item_image.get_pixelv(pixel)
+		if maxf(absf(a.r - b.r), maxf(absf(a.g - b.g), absf(a.b - b.b))) <= CHANGE:
+			continue
+		var delta: float = luma(b) - luma(a)
+		difference += absf(delta)
+		signed_difference += delta
+		object_luma += luma(b)
+		floor_luma += luma(a)
+		changed += 1
 	var divisor: float = float(maxi(changed, 1))
-	return {"box": [rect.position.x, rect.position.y, rect.size.x, rect.size.y], "changed_pixels": changed,
+	return {"changed_pixels": changed,
 		"mean_abs_luma": difference / divisor, "mean_signed_luma": signed_difference / divisor,
 		"object_luma": object_luma / divisor, "floor_luma": floor_luma / divisor,
 		"status": "measured" if changed > 0 else "no_changed_pixels"}
 
 
+## Rank every drawn row and list low-visibility rows without excluding them.
 static func summarize(rows: Array) -> Dictionary:
-	if rows.is_empty():
-		return {}
-	var sorted: Array = rows.duplicate()
-	sorted.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["mean_abs_luma"]) < float(b["mean_abs_luma"]))
-	var darkest: Dictionary = rows[0]
+	var sorted: Array = []
+	var low_names: Array[String] = []
+	var low_rows: Array = []
+	var not_drawn: Array = []
 	for row: Dictionary in rows:
+		if not bool(row.get("drawn", true)):
+			not_drawn.append({"id": row["id"], "slot": row.get("slot", -1)})
+			continue
+		sorted.append(row)
+		if bool(row.get("low_visibility", int(row.get("changed_pixels", MIN_VISIBLE_PIXELS)) < MIN_VISIBLE_PIXELS)):
+			low_names.append(String(row["id"]))
+			low_rows.append({"id": row["id"], "slot": row.get("slot", -1), "group": row.get("group", "")})
+	if sorted.is_empty():
+		return {}
+	sorted.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["mean_abs_luma"]) < float(b["mean_abs_luma"]))
+	var darkest: Dictionary = sorted[0]
+	for row: Dictionary in sorted:
 		if float(row["object_luma"]) < float(darkest["object_luma"]):
 			darkest = row
-	# The middle two values are both kept: the median of 16 is their mean.
 	var middle: int = sorted.size() >> 1
 	var median: float = float(sorted[middle]["mean_abs_luma"])
 	if sorted.size() % 2 == 0:
 		median = (median + float(sorted[middle - 1]["mean_abs_luma"])) * 0.5
-	return {"weakest": sorted[0], "median": median, "middle_items": [sorted[maxi(0, middle - 1)]["id"], sorted[middle]["id"]], "darkest": darkest}
+	return {"weakest": sorted[0], "median": median, "middle_items": [sorted[maxi(0, middle - 1)]["id"], sorted[middle]["id"]], "darkest": darkest,
+		"low_visibility_count": low_names.size(), "low_visibility_names": low_names,
+		"low_visibility_rows": low_rows, "not_drawn": not_drawn, "drawn_count": sorted.size()}
 
 
 static func _overlaps(boxes: Array[Rect2i]) -> Array:
@@ -628,7 +965,9 @@ func _worst(game: FieldGame, grid: FieldGrid, centre: Vector2i) -> void:
 	var image: Image = await _capture("yard_autumn_day_worst300.jpg")
 	if image == null:
 		return
-	_report["worst"] = {"items": 300, "cells": 100, "per_cell": 3, "zoom": ZOOM, "hour": 12.0, "cold": 0.0, "metrics": _metrics(game, update_ms)}
+	var drawn_rows: int = _drawn_rows(game)
+	_report["worst"] = {"items": 300, "cells": 100, "per_cell": 3, "zoom": ZOOM, "hour": 12.0, "cold": 0.0,
+		"drawn": drawn_rows, "omitted": 300 - drawn_rows, "metrics": _metrics(game, update_ms)}
 
 
 func _write_reports() -> bool:
@@ -636,17 +975,28 @@ func _write_reports() -> bool:
 	var markdown: PackedStringArray = [
 		"# 땅 물건 촬영·측정", "", "첫 정차 · K1 · seed 5 · 가림 끔 · 줌 24. 낮 12:00은 규칙 맑음/그림 흐림, 밤 22:00은 맑음.",
 		"대비는 저장 전 원본 화면의 sRGB Rec.709 루마(0~1)로 잰다. 채널 차가 2/255를 넘는 화소만 포함한다.",
-		"가장 어두운 물건은 해당 화소의 물건 루마 평균이 가장 낮은 것. 겹친 화면 상자는 JSON에 따로 적는다.", "",
-		"| 장면 | 가장 약한 물건 / 대비 | 가운데 대비 | 가장 어두운 물건 / 대비 | 그리기 호출 | 기본 도형 | 비디오 / 버퍼(bytes) | 재구성(ms) |",
-		"|---|---|---:|---|---:|---:|---:|---:|",
+		"최종 물건·테 정점의 볼록 껍질을 1px 넓혀 재며, 겹친 화소는 모든 줄에서 제외한다. 면적·공유 화소·선택한 칸·시험판 비율은 JSON에 적는다.",
+		"바뀐 화소가 40 미만이어도 그려진 줄은 요약에 포함한다. 낮은 보임은 가림 확정이 아니다. 기존 moved_from_hidden_cells·still_hidden은 빈 배열로 유지한다.",
+		"가장 어두운 물건은 해당 화소의 물건 루마 평균이 가장 낮은 것. 요약에는 단독 물건과 셋의 각 구성원을 모두 포함한다.", "",
+		"| 장면 | 가장 약한 물건 / 대비 | 가운데 대비 | 가장 어두운 물건 / 대비 | 그리기 호출 | 기본 도형 | 비디오 / 버퍼(bytes) | 재구성(ms) | 낮은 보임 수 / 이름 |",
+		"|---|---|---:|---|---:|---:|---:|---:|---|",
 	]
 	for scene: Dictionary in _report["scenes"]:
 		var summary: Dictionary = scene["summary"]
 		var metrics: Dictionary = scene["metrics"]
-		markdown.append("| %s | %s / %.6f | %.6f | %s / %.6f | %d | %d | %d / %d | %.3f |" % [
+		markdown.append("| %s | %s / %.6f | %.6f | %s / %.6f | %d | %d | %d / %d | %.3f | %d / %s |" % [
 			scene["name"], summary["weakest"]["id"], summary["weakest"]["mean_abs_luma"], summary["median"],
 			summary["darkest"]["id"], summary["darkest"]["mean_abs_luma"], metrics["draw_calls"], metrics["primitives"],
-			metrics["video_bytes"], metrics["buffer_bytes"], metrics["update_ground_ms"]])
+			metrics["video_bytes"], metrics["buffer_bytes"], metrics["update_ground_ms"],
+			summary["low_visibility_count"], ", ".join(summary["low_visibility_names"])])
+		var triple: Dictionary = scene["triple_summary"]
+		if triple.is_empty():
+			markdown.append("| %s 셋 | 안 그려짐 | — | — | — | — | — | — | 0 / — |" % scene["name"])
+		else:
+			markdown.append("| %s 셋 | %s / %.6f | %.6f | %s / %.6f | — | — | — | — | %d / %s |" % [
+				scene["name"], triple["weakest"]["id"], triple["weakest"]["mean_abs_luma"], triple["median"],
+				triple["darkest"]["id"], triple["darkest"]["mean_abs_luma"], triple["low_visibility_count"],
+				", ".join(triple["low_visibility_names"])])
 	markdown.append_array(["", "| 장면 / 층 | 물건 정점 | 물건 삼각형 | 물건 표면 | 테 정점 | 테 삼각형 |", "|---|---:|---:|---:|---:|---:|"])
 	var all_metrics: Array = (_report["scenes"] as Array).duplicate()
 	all_metrics.append({"name": "worst300", "metrics": _report["worst"]["metrics"]})
@@ -656,7 +1006,10 @@ func _write_reports() -> bool:
 			markdown.append("| %s / %s | %d | %d | %d | %d | %d |" % [scene["name"], level,
 				floor_row["items"]["vertices"], floor_row["items"]["triangles"], floor_row["items"]["surfaces"], floor_row["rim"]["vertices"], floor_row["rim"]["triangles"]])
 	var worst: Dictionary = _report["worst"]["metrics"]
-	markdown.append("\n300개(100칸, 칸마다 셋): 호출 %d, 기본 도형 %d, 비디오 %d bytes, 버퍼 %d bytes, 재구성 %.3f ms." % [worst["draw_calls"], worst["primitives"], worst["video_bytes"], worst["buffer_bytes"], worst["update_ground_ms"]])
+	markdown.append("\n300개(100칸, 칸마다 셋): 그려짐 %d · 안 그려짐 %d, 호출 %d, 기본 도형 %d, 비디오 %d bytes, 버퍼 %d bytes, 재구성 %.3f ms." % [_report["worst"]["drawn"], _report["worst"]["omitted"], worst["draw_calls"], worst["primitives"], worst["video_bytes"], worst["buffer_bytes"], worst["update_ground_ms"]])
+	for closeup: Dictionary in _report["closeups"]:
+		if closeup.get("kind", "") == "clothes_cell":
+			markdown.append("\nclothes_cell %s: 넷 중 그릴 수 있는 셋에서 그려짐 %d · 안 그려짐 %d." % [closeup["name"], closeup["drawn"], closeup["omitted"]])
 	markdown.append("\n재구성 시간은 빈 목록 뒤 전체 목록으로 한 번 다시 만든 값이며 템플릿 캐시는 데워진 상태다. 한 칸 셋의 낮·밤 사진은 줌 18이다.")
 	markdown.append("\nclothes_cell 낮·밤 사진(줌 18)은 한 칸에 coat_long·shirt_flannel·trousers_work·boots_work 넷을 넣는다. 첫 셋과 넷을 넣은 뒤의 메시를 대조해 넷째가 그림을 더하지 않는지 확인한다.")
 	if not _write_text("ground_shots.json", json_text) or not _write_text("ground_shots.md", "\n".join(markdown) + "\n"):
