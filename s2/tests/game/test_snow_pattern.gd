@@ -573,12 +573,24 @@ func _snow_contract_errors(source: String) -> PackedStringArray:
 	return errors
 
 
+func _grass_base_contract_errors(source: String) -> PackedStringArray:
+	var code := _compact(_strip_comments(source))
+	var errors: PackedStringArray = []
+	for expression: String in [
+		"constfloatTHIN_SNOW_GRASS_BASE=0.11;",
+		"floatgrass_holes=grass_share*thin_snow*mix(THIN_SNOW_GRASS_BASE,1.0,grass_cut);",
+	]:
+		if code.count(expression) != 1:
+			errors.append("얇은 눈 바탕 풀빛 식 누락·중복: " + expression)
+	return errors
+
+
 func _grass_order_errors(source: String) -> PackedStringArray:
 	var code := _compact(_strip_comments(source))
 	var expressions := [
 		"bare_ground(kind,ground_detail,base,world_pos.xz,grain,ground_dx,ground_dy,grass_share)",
 		"grass_share*=bare_k;",
-		"floatgrass_holes=grass_share*thin_snow*grass_cut;",
+		"floatgrass_holes=grass_share*thin_snow*mix(THIN_SNOW_GRASS_BASE,1.0,grass_cut);",
 		"grass_holes*=1.0-smoothstep(0.0,0.25,max(pile,bank));",
 		"cover*=1.0-grass_holes;",
 	]
@@ -647,7 +659,7 @@ func _single_assignment_errors(source: String) -> PackedStringArray:
 			"floatthin_snow=smoothstep(0.25,0.4,local_snow)*(1.0-smoothstep(0.5,0.65,local_snow));",
 		],
 		"grass_holes": [
-			"floatgrass_holes=grass_share*thin_snow*grass_cut;",
+			"floatgrass_holes=grass_share*thin_snow*mix(THIN_SNOW_GRASS_BASE,1.0,grass_cut);",
 			"grass_holes*=1.0-smoothstep(0.0,0.25,max(pile,bank));",
 		],
 		"cover": [
@@ -667,7 +679,7 @@ func _single_assignment_errors(source: String) -> PackedStringArray:
 	var body := "".join(PackedStringArray(tokens.slice(opening + 1, closing)))
 	if not body.contains("cover=is_ground?0.97*ground_cover:prop_cover;"):
 		errors.append("두 눈 덮임 값을 최종 cover에서 사용하지 않음")
-	if not body.contains("floatgrass_holes=grass_share*thin_snow*grass_cut;"):
+	if not body.contains("floatgrass_holes=grass_share*thin_snow*mix(THIN_SNOW_GRASS_BASE,1.0,grass_cut);"):
 		errors.append("덤불 마스크를 grass_holes에서 사용하지 않음")
 	return errors
 
@@ -847,7 +859,7 @@ func test_grass_holes_only_open_in_the_thin_snow_window() -> void:
 		assert_gt(opened, 0.25, "눈이 조금 쌓이며 연속으로 열림")
 		assert_lte(opened, closing)
 		assert_lt(closing, 0.65, "깊은 눈 전에 연속으로 닫힘")
-	assert_true(code.contains("floatgrass_holes=grass_share*thin_snow*grass_cut;"), "풀 몫이 0이면 구멍도 0")
+	assert_true(code.contains("floatgrass_holes=grass_share*thin_snow*mix(THIN_SNOW_GRASS_BASE,1.0,grass_cut);"), "풀 몫이 0이면 구멍도 0")
 	assert_true(code.contains("cover*=1.0-grass_holes;"))
 
 
@@ -1187,3 +1199,60 @@ func test_local_const_condition_has_an_explicit_unsupported_reason() -> void:
 	]:
 		var source := "varying float sky; void fragment() { " + body + " }"
 		assert_true(_derivative_errors(source).has(UNSUPPORTED_PREFIX + "지역 const 조건"), body)
+
+
+func test_thin_snow_grass_base_is_one_fraction_constant() -> void:
+	# 0af097d3 셰이더에서는 실패 예상: 바탕 풀빛 상수가 없다.
+	var code := _compact(_code())
+	var found := _match(code, "constfloatTHIN_SNOW_GRASS_BASE=([0-9.]+);")
+	if found == null:
+		return
+	var value := float(found.get_string(1))
+	assert_gt(value, 0.0)
+	assert_lt(value, 1.0)
+	assert_almost_eq(value, 0.11, 0.000001, "코디 11-07의 바탕 풀빛 몫")
+	assert_eq(code.count("constfloatTHIN_SNOW_GRASS_BASE="), 1)
+	assert_eq(code.count("THIN_SNOW_GRASS_BASE"), 2, "선언과 구멍 식에서만 사용")
+	var before := code.substr(0, found.get_start())
+	assert_eq(before.count("{") - before.count("}"), 0, "맨 바깥 상수")
+
+
+func test_grass_base_uses_the_thin_window_and_keeps_full_tufts() -> void:
+	# 0af097d3 셰이더에서는 실패 예상: 덤불 밖의 얇은 눈에 바탕 몫을 더하지 않는다.
+	var source := _code()
+	var errors := _grass_base_contract_errors(source)
+	assert_eq(errors.size(), 0, "\n".join(errors))
+	var found := _match(_compact(source), "constfloatTHIN_SNOW_GRASS_BASE=([0-9.]+);")
+	if found == null:
+		return
+	var value := float(found.get_string(1))
+	assert_eq(lerpf(value, 1.0, 1.0), 1.0, "덤불 자리의 최대 구멍은 그대로")
+	assert_eq(lerpf(value, 1.0, 0.0), value, "덤불 밖에만 바탕 몫")
+	for depth: float in [0.0, 0.25, 0.65, 1.0]:
+		var thin := smoothstep(0.25, 0.4, depth) * (1.0 - smoothstep(0.5, 0.65, depth))
+		assert_eq(thin * lerpf(value, 1.0, 0.0), 0.0, "얇은 눈 창 밖에서 바탕도 0")
+		assert_eq(thin * lerpf(value, 1.0, 1.0), 0.0, "얇은 눈 창 밖에서 덤불도 0")
+
+
+func test_grass_base_contract_rejects_distance_coupling() -> void:
+	# 0af097d3 셰이더에서는 정상 식 선행 조건부터 실패한다.
+	var source := _code()
+	assert_eq(_grass_base_contract_errors(source).size(), 0)
+	var line := "float grass_holes = grass_share * thin_snow * mix(THIN_SNOW_GRASS_BASE, 1.0, grass_cut);"
+	for distance: String in ["grass_far", "grass_px"]:
+		var replacement := line.replace("mix(THIN_SNOW_GRASS_BASE,", "mix(THIN_SNOW_GRASS_BASE * " + distance + ",")
+		var prefix := "float grass_far = smoothstep(0.05, 0.1, grass_px);\n" if distance == "grass_far" else ""
+		var changed := source.replace(line, prefix + replacement)
+		assert_ne(changed, source)
+		assert_gt(_grass_base_contract_errors(changed).size(), 0, distance)
+
+
+func test_grass_base_contract_rejects_a_base_outside_thin_snow() -> void:
+	# 0af097d3 셰이더에서는 정상 식 선행 조건부터 실패한다.
+	var source := _code()
+	assert_eq(_grass_base_contract_errors(source).size(), 0)
+	var line := "float grass_holes = grass_share * thin_snow * mix(THIN_SNOW_GRASS_BASE, 1.0, grass_cut);"
+	var changed := source.replace(line, "float grass_holes = grass_share * (THIN_SNOW_GRASS_BASE + thin_snow * (1.0 - THIN_SNOW_GRASS_BASE) * grass_cut);")
+	assert_ne(changed, source)
+	assert_gt(_grass_base_contract_errors(changed).size(), 0)
+

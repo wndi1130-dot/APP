@@ -93,6 +93,11 @@ const vec3 GRAVEL = vec3(0.55, 0.52, 0.47);
 // at the dry grass's lightness (linear 0.215 to its 0.22).
 const vec3 LATE_GREEN = vec3(0.46, 0.52, 0.40);
 
+// 코디 2026-11-07: 얇은 눈이 두꺼운 눈과 갈려 보이도록 바탕 풀빛을 약 절반 되살린다.
+// 근거: 35c73dc8은 먼 거리에서 얇은 눈에 PNG 알파 면적만큼 풀빛을 섞었다 — 문턱 0.65에서 0.188,
+// 7.7 m 흔들림 0.59~0.71에서 0.286~0.113. 그 가운데 0.19~0.22의 절반 안팎.
+const float THIN_SNOW_GRASS_BASE = 0.11;
+
 // Decision 496: metres per layer; the K1 row is road, patch, pavement, grass.
 // Later bands add rows here. Until then every band uses the K1 materials.
 // The two asphalt photos hold their pattern three times over each way, so one
@@ -780,9 +785,10 @@ void fragment() {
 	// 지름은 등가원 2*sqrt(area/pi), 표본 테두리에 닿은 성분만 지름 집계에서 제외.
 	// grass_edge>0 면적 1.652014%, 중앙 지름 0.2317m, 구멍 면적의 99.8488%가 0.10..0.30m.
 	// 잔 톱니를 빼고 본체만 재면 지름 P10/P50/P90 = 0.2193/0.2343/0.2483m.
-	// local_snow 0.4..0.5, grass_share=1, pile/bank/tracks=0의 기본 20m 줌 CPU 표본:
+	// 바탕 풀빛을 제외한 덤불 마스크만의 기본 20m 줌 CPU 표본(렌더 아님):
+	// local_snow 0.4..0.5, grass_share=1, pile/bank/tracks=0.
 	// 512x512점/phase, 중심 (64,64), PNG trilinear mip + 2x2 fwidth 모사에서 마스크 1.743%(H780),
-	// 1.771%(H1080). 기존 눈 덮임을 실제 줄이는 몫은 각각 0.102..0.446, 0.099..0.343 %p.
+	// 1.771%(H1080). 바탕 풀빛 없이 줄어든 눈 덮임은 각각 0.102..0.446, 0.099..0.343 %p.
 	float grass_threshold = 0.30 + clamp((wander - 1.0) * (0.02 / 0.45), -0.02, 0.02);
 	float grass_cell_edge = 0.13 - length(fract(snow_fine_p + vec2(0.5)) - vec2(0.5));
 	float grass_edge = min(grass_threshold - snow_fine, grass_cell_edge) + (grain.a - 0.5) * 0.01;
@@ -890,7 +896,7 @@ void fragment() {
 	base *= 1.0 - 0.3 * trodden * clamp(fx_snow, 0.0, 1.0);
 	// Grass shows only through thin snow, never through soil, paving or a snow bank.
 	float thin_snow = smoothstep(0.25, 0.4, local_snow) * (1.0 - smoothstep(0.5, 0.65, local_snow));
-	float grass_holes = grass_share * thin_snow * grass_cut;
+	float grass_holes = grass_share * thin_snow * mix(THIN_SNOW_GRASS_BASE, 1.0, grass_cut);
 	grass_holes *= 1.0 - smoothstep(0.0, 0.25, max(pile, bank));
 	cover *= 1.0 - grass_holes;
 	// The ground before the snow: what a frozen pool shows through its ice.
