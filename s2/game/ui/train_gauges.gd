@@ -1427,7 +1427,11 @@ func _meter_why(key: String) -> Control:
 	# METER_WHY_SHARE of the screen, so it stays clear of the car pane at the right.
 	var natural: float = 0.0
 	for i in texts.size():
-		natural = maxf(natural, _text_w(_label(String(texts[i]), UiFonts.NUMBER, 600 if i == 0 else 500, 12.0, WHY_INK, 0.48)))
+		# A label only to measure: never put in the tree, so free it here (it leaked one per
+		# line every time a meter slip went up — Label, shaped text and font RIDs).
+		var probe := _label(String(texts[i]), UiFonts.NUMBER, 600 if i == 0 else 500, 12.0, WHY_INK, 0.48)
+		natural = maxf(natural, _text_w(probe))
+		probe.free()
 	var room: float = minf(size.x, get_viewport_rect().size.x)
 	var width: float = minf(clampf(natural + 49.0, 160.0, 440.0) * k, minf(room * METER_WHY_SHARE, room - 32.0 * k))
 	width = maxf(1.0, width)
