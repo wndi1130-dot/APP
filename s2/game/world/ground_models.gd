@@ -10,7 +10,9 @@ extends RefCounted
 const ItemArt = preload("res://game/ui/item_art.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const PATH: String = "res://assets/ground_items/%s.res"
-## Pending the coordinator's answer: one policy shared by baking and drawing.
+## Packs, boxes and bags keep their crate on the ground (금지선: no case, bundle
+## or bag shapes; 11-07 08:12 ㉠, put to the user as 3-1-129); one list for baking
+## and drawing alike.
 const BOX_ONLY_IDS: Dictionary = {
 	"food_pack": true, "med_box": true, "luxury_pack": true, "medkit": true, "ammo_box": true,
 }
