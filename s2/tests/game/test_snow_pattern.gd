@@ -8,6 +8,8 @@ const UNSUPPORTED_PREFIX := "검사기가 지원하지 않는 구문: "
 const UNSUPPORTED_SHADER_WORDS := ["discard", "while", "for", "do", "break", "continue", "inout", "switch"]
 const WRITE_OPERATORS := ["=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", "&=", "|=", "^=", "++", "--"]
 const SNOW_FLOW_VALUES := ["thin_snow", "grass_holes", "cover", "grass_share", "local_snow"]
+# Godot 셰이더 내장 함수 가운데 out 인자로 값을 쓰는 것들(modf·frexp 등) — 대입 토큰 없이도 계약 값을 바꾼다.
+const BUILTIN_OUT_CALLS := ["modf", "frexp", "uaddCarry", "usubBorrow", "umulExtended", "imulExtended"]
 const GRASS_OUTPUT_CALL := "bare_ground(kind,ground_detail,base,world_pos.xz,grain,ground_dx,ground_dy,grass_share)"
 const DECLARATION_QUALIFIERS := ["const", "in", "out", "lowp", "mediump", "highp"]
 const DECLARATION_TYPES := [
@@ -675,6 +677,13 @@ func _snow_flow_errors(tokens: Array[String], pairs: Dictionary, opening: int, c
 			continue
 		if i + 4 < closing and tokens[i] == "mix" and tokens[i + 2] == "base" and tokens[i + 3] == "," and tokens[i + 4] == "FX_SNOW":
 			snow_paints += 1
+		if tokens[i] in BUILTIN_OUT_CALLS:
+			# 어느 인자가 out인지 따지지 않고, 계약 값이 인자에 들면 거절한다(6.1 Sol 44eee868 Medium 1).
+			for argument in range(i + 2, int(pairs[i + 1])):
+				if tokens[argument] in SNOW_FLOW_VALUES:
+					_unsupported_error(errors, "눈 계약 값을 out 내장 함수에 전달: " + tokens[i])
+					break
+			continue
 		if not functions.has(tokens[i]):
 			continue
 		var call_end: int = pairs[i + 1]
@@ -1240,6 +1249,17 @@ func test_snow_flow_rejects_out_helper_calls() -> void:
 		var with_call := changed.replace(paint, "reset_snow(" + name + ");\n" + paint)
 		assert_ne(with_call, changed)
 		assert_true(_single_assignment_errors(with_call).has(UNSUPPORTED_PREFIX + "눈 계약 값을 사용자 함수에 전달: reset_snow"), name)
+
+
+func test_snow_flow_rejects_builtin_out_calls() -> void:
+	# 검사기 시험: modf 같은 내장 함수의 out 인자도 대입 토큰 없이 최종 값·상류 입력을 바꾼다.
+	var source := _code()
+	assert_eq(_single_assignment_errors(source).size(), 0)
+	var paint := "base = mix(base, FX_SNOW"
+	for name: String in ["cover", "thin_snow", "grass_holes", "grass_share", "local_snow"]:
+		var changed := source.replace(paint, "float ignored_part = modf(0.0, " + name + ");\n" + paint)
+		assert_ne(changed, source)
+		assert_true(_single_assignment_errors(changed).has(UNSUPPORTED_PREFIX + "눈 계약 값을 out 내장 함수에 전달: modf"), name)
 
 
 func test_snow_flow_rejects_input_helper_calls() -> void:
