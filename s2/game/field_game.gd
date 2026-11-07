@@ -11,6 +11,7 @@ signal built
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const DoorWalk = preload("res://game/sim/door_walk.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
+const MapRing = preload("res://game/world/map_ring.gd")
 const StopGround = preload("res://game/world/stop_ground.gd")
 const StoryMaps = preload("res://game/world/story_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
@@ -509,7 +510,10 @@ func _ready() -> void:
 		stop_map = shape_view(stop_map, int(opts.get("stop_view_rows", StopGround.VIEW_ASK)), int(opts.get("stop_view_cols", StopGround.VIEW_ASK)),
 			ground_form, rng.seed, ground_m, fresh_map, end_gap)
 	stop_map = with_side_path(stop_map, rng.seed, side_path_rule)
-	_take_map(MapBounds.apply(stop_map, int(opts.get("bounds_rule", -1))))
+	stop_map = MapBounds.apply(stop_map, int(opts.get("bounds_rule", -1)))
+	# 넘겨받은 옛 자료도 모든 확장 뒤의 격자에서 출구를 확정한다.
+	MapRing.finish_flee_exit(stop_map)
+	_take_map(stop_map)
 	set_stop_form(StopForm.resolve(opts, String(data["place_kind"])))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
 	# no fire at the first leg's fifth stop), before anything is put on the map.

@@ -144,8 +144,11 @@ static func build_from(script: Script, band: String = "") -> Dictionary:
 		# The lights people left: the grown map's share by its whole area, the
 		# ones planned on the stop map kept where they are (T0-9).
 		NightLights.extend(grown)
+		MapRing.finish_flee_exit(grown)
 		return grown
 	var data: Dictionary = _build_plain(script, band)
+	if not MapRing.skip_paths:
+		MapRing.finish_flee_exit(data)
 	_build_lock.unlock()
 	return data
 
@@ -226,6 +229,7 @@ static func _build_plain(script: Script, band: String) -> Dictionary:
 		NightLights.plan(data)
 	# Cells the field steers by. What the map names is kept; the rest is worked
 	# out from its train and its edges.
+	data["flee_exit_set"] = data.get("anchors", {}).has("flee_exit")
 	var worked: Dictionary = anchors(data)
 	worked.merge(data.get("anchors", {}), true)
 	data["anchors"] = worked
@@ -275,31 +279,13 @@ static func cars_of(train: Rect2i) -> Array:
 ## has "horde_home_upper" too: what comes from above the train heads there.
 static func anchors(d: Dictionary) -> Dictionary:
 	var g = d["grid"]
-	var doors: Array = d.get("train_doors", {}).get("lower", [])
-	if doors.is_empty():
-		doors = d.get("train_doors", {}).get("upper", [])
-	if doors.is_empty():
-		doors = d.get("spawns", {}).get("train_door", [])
-	if doors.is_empty():
-		doors = d.get("spawns", {}).get("squad", [])
-	var home := Vector2i(g.width / 2, g.height / 2)
-	if not doors.is_empty():
-		home = doors[doors.size() / 2]
+	var home: Vector2i = MapRing.anchor_home(d)
 	var whistle: Vector2i = home
 	if d.has("train"):
 		var train: Rect2i = d["train"]
 		whistle = Vector2i(clampi(train.end.x - 6, 0, g.width - 1), clampi(train.end.y, 0, g.height - 1))
-	var exit: Vector2i = home
-	var far := -1
-	for y in range(g.height):
-		for x in range(g.width):
-			if x > 0 and x < g.width - 1 and y > 0 and y < g.height - 1:
-				continue
-			var c := Vector2i(x, y)
-			var dist: int = (c - home).length_squared()
-			if dist > far and g.people_can_walk(c):
-				far = dist
-				exit = c
+	var edge: Variant = MapRing.farthest_walkable_edge(g, home)
+	var exit: Vector2i = edge if edge is Vector2i else home
 	# The engine is heard from the cab, a little in from the whistle's end.
 	var engine: Vector2i = whistle
 	if d.has("train"):

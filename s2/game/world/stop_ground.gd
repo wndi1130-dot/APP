@@ -5,6 +5,7 @@ extends RefCounted
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapShift = preload("res://game/world/map_shift.gd")
+const MapRing = preload("res://game/world/map_ring.gd")
 const NightLights = preload("res://game/world/night_lights.gd")
 const WorkSpots = preload("res://game/world/work_spots.gd")
 const StoryMaps = preload("res://game/world/story_maps.gd")
@@ -165,6 +166,7 @@ static func widen_view(data: Dictionary, rows: int = -1, cols: int = -1) -> Dict
 	out["stop_view_rows"] = rows
 	out["stop_view_cols"] = cols
 	out["stop_view_rule"] = VIEW_RULE
+	MapRing.finish_flee_exit(out, Rect2i(cols, rows, old.width, old.height))
 	return out
 
 
@@ -331,6 +333,9 @@ static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_
 	var was_anchors: Dictionary = data.get("anchors", {})
 	for key: String in was_anchors:
 		own[key] = not was_worked.has(key) or was_anchors[key] != was_worked[key]
+	# 출구 값이 우연히 같아도 출처는 원본에서 남긴 표시를 따른다.
+	if data.has("flee_exit_set"):
+		own["flee_exit"] = bool(data["flee_exit_set"])
 	# A finished map's paths are right: grow carries every floor's over (map_shift.gd), and
 	# after the train moves only the cells whose solid changed are refreshed (_move_train,
 	# _add_trees).
@@ -351,7 +356,7 @@ static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_
 	var strip: Rect2i = Rect2i()
 	if band > 0:
 		strip = _remote_strip(out, old, added, 0 if left > 0 else old.width - 1, band)
-	var moved_out: Dictionary = _move_entries_out(out, old_border, new_border, strip)
+	_move_entries_out(out, old_border, new_border, strip)
 	var floored: Array = _move_train(out, Vector2i(dx, 0))
 	if band > 0:
 		_remote_band(out, added, strip)
@@ -380,16 +385,8 @@ static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_
 			anchors[key] = worked[key]
 		else:
 			anchors.erase(key)
-	# A way out the map set goes out with its entry; a worked-out one is worked out again.
-	if own.get("flee_exit", false):
-		var flee: Vector2i = anchors["flee_exit"]
-		if moved_out.has(flee):
-			anchors["flee_exit"] = moved_out[flee]
-		elif flee.x == old_border and (band == 0 or (flee.y >= strip.position.y and flee.y < strip.end.y)):
-			anchors["flee_exit"] = Vector2i(new_border, flee.y)
-	elif worked.has("flee_exit"):
-		anchors["flee_exit"] = worked["flee_exit"]
 	out["anchors"] = anchors
+	MapRing.finish_flee_exit(out, Rect2i(left, 0, old.width, old.height), bool(own.get("flee_exit", false)))
 	return out
 
 

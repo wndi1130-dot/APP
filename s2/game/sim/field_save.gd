@@ -24,6 +24,7 @@ const EatRules = preload("res://game/sim/eat_rules.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const MapRing = preload("res://game/world/map_ring.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
 const FieldWork = preload("res://game/field_work.gd")
 const Sled = preload("res://game/sim/sled.gd")
@@ -603,6 +604,7 @@ static func apply(game, save: Dictionary) -> void:
 	if exact(save):
 		if _grid_sizes_match(game, save):
 			_apply_exact(game, save)
+			MapRing.finish_flee_exit(game.data)
 			game.set_stop_form(form)
 			return
 		push_warning("field save grid size changed; restoring legacy state")
@@ -628,6 +630,7 @@ static func apply(game, save: Dictionary) -> void:
 	game._update_camera(1.0)
 	Sled.reconcile(game)
 	_refresh_restored_view(game)
+	MapRing.finish_flee_exit(game.data)
 	game.set_stop_form(form)
 
 
