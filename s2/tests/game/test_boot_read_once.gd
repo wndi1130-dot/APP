@@ -6,12 +6,17 @@ const SliceSave = preload("res://game/sim/slice_save.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
 const FieldReturn = preload("res://game/politics/field_return.gd")
+const TrainSave = preload("res://game/politics/save_slot.gd")
+const TrainDom = preload("res://game/train/train_dom.gd")
 
 var folder: String = "user://test_boot_read_once_%d" % OS.get_process_id()
 var slice_path: String = folder + "/slice.json"
 var train_path: String = folder + "/train.json"
 var field_path: String = folder + "/field.json"
 var roots: Array[Node] = []
+## The machine's own autostart must not open a stop where a menu is expected.
+var had_auto: bool = false
+var old_auto: String = ""
 
 
 class FlowProbe extends SliceFlow:
@@ -58,6 +63,10 @@ func before_each() -> void:
 	DirAccess.make_dir_recursive_absolute(folder)
 	_clear_slots()
 	FieldSave._test_reads = 0
+	SliceSave._test_train_parses = 0
+	had_auto = OS.has_environment("S2_AUTOSTART")
+	old_auto = OS.get_environment("S2_AUTOSTART")
+	OS.unset_environment("S2_AUTOSTART")
 
 
 func after_each() -> void:
@@ -65,8 +74,12 @@ func after_each() -> void:
 		if is_instance_valid(node):
 			node.free()
 	roots.clear()
+	OS.unset_environment("S2_AUTOSTART")
+	if had_auto:
+		OS.set_environment("S2_AUTOSTART", old_auto)
 	_clear_slots()
 	FieldSave._test_reads = 0
+	SliceSave._test_train_parses = 0
 	await get_tree().process_frame
 
 
@@ -74,6 +87,23 @@ func _clear_slots() -> void:
 	for path: String in [slice_path, train_path, field_path, field_path + ".bak", field_path + ".other"]:
 		SliceSave.clear(path)
 		FieldSave.clear(path)
+
+
+## The train's own slot (the board a new run starts on) carrying what it took in.
+func _write_train(applied: Dictionary) -> void:
+	var board: Array = SliceFlow.start_board()
+	var g: Dictionary = (board[0] as Dictionary).duplicate(true)
+	if g.get("dom") == null:
+		g["dom"] = TrainDom.start()
+	TrainDom.ensure(g)
+	TrainSave.fill_defaults(g)
+	g["fieldReturns"] = {"applied": applied, "records": []}
+	assert_true(SliceSave.write_train(g, train_path))
+
+
+## The board boot_choice decides over, the same one boot reads.
+func _choice() -> Dictionary:
+	return SliceSave.boot_choice(slice_path, train_path, SliceFlow.start_board()[1], field_path)
 
 
 func _boot(before_slice: Callable = Callable()) -> BootProbe:
@@ -193,7 +223,10 @@ func test_slice_field_boot_keeps_its_single_parse_and_same_return() -> void:
 
 func test_standalone_boot_keeps_its_single_parse_and_resume_options() -> void:
 	var saved: Dictionary = _left_standalone()
-	var expected: Dictionary = FieldSave.pick_start(field_path, train_path)
+	_write_train({})
+	var choice: Dictionary = _choice()
+	assert_eq(String(choice["kind"]), "field")
+	var expected: Dictionary = choice["resume"]
 	var boot: BootProbe = _boot()
 	assert_null(boot.opened)
 	assert_null(boot.menu)
@@ -280,16 +313,28 @@ func test_backup_and_path_changes_invalidate_the_boot_read() -> void:
 
 func test_default_callers_still_read_each_time() -> void:
 	_left_standalone()
+	_write_train({})
 	FieldSave._test_reads = 0
-	var first: Dictionary = FieldSave.pick_start(field_path, train_path)
-	assert_eq(FieldSave.pick_start(field_path, train_path), first)
-	assert_eq(FieldSave._test_reads, 2)
+	SliceSave._test_train_parses = 0
+	var first: Dictionary = _choice()
+	var reads: int = FieldSave._test_reads
+	var parses: int = SliceSave._test_train_parses
+	assert_gt(reads, 0)
+	assert_gt(parses, 0)
+	assert_eq(_choice(), first)
+	assert_eq(FieldSave._test_reads, reads * 2, "each boot_choice reads the field slot again")
+	assert_eq(SliceSave._test_train_parses, parses * 2, "and each train candidate again")
 	_clear_slots()
 	_left_slice(true)
 	FieldSave._test_reads = 0
+	SliceSave._test_train_parses = 0
 	var picked: Dictionary = _pick()
+	reads = FieldSave._test_reads
+	parses = SliceSave._test_train_parses
+	assert_gt(parses, 0)
 	assert_eq(_pick(), picked)
-	assert_eq(FieldSave._test_reads, 2)
+	assert_eq(FieldSave._test_reads, reads * 2)
+	assert_eq(SliceSave._test_train_parses, parses * 2, "the legacy pick reads each time too")
 
 
 func test_orphan_slice_field_still_opens_the_menu() -> void:
@@ -308,3 +353,20 @@ func test_empty_slots_do_not_parse_a_field() -> void:
 	assert_null(boot.opened)
 	assert_null(boot.field)
 	assert_not_null(boot.menu)
+
+
+func test_boot_parses_each_train_candidate_once() -> void:
+	_write_train({})
+	SliceSave._test_train_parses = 0
+	_boot()
+	assert_eq(SliceSave._test_train_parses, 1, "the slot alone is one parse")
+	assert_eq(FieldSave._test_reads, 0, "the menu path reads no field")
+	_write_train({})  # the second write keeps the first as the backup
+	assert_true(FileAccess.file_exists(train_path + ".bak"))
+	SliceSave._test_train_parses = 0
+	_boot()
+	assert_eq(SliceSave._test_train_parses, 2, "the slot and its backup, both read")
+	SliceSave.clear(train_path)
+	SliceSave._test_train_parses = 0
+	_boot()
+	assert_eq(SliceSave._test_train_parses, 0, "no train file, nothing parsed")

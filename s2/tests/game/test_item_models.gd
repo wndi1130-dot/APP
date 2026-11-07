@@ -2,25 +2,32 @@ extends "res://addons/gut/test.gd"
 ## Primitive loot pictures can be checked without a viewport or a rendered frame.
 
 const ItemModels = preload("res://tools/item_models.gd")
+## The clothes' and the food bundle's shared pictures (it_shirt … it_hood, food,
+## it_herbs) gave way to each thing's own (item_models_wear.gd, item_models_goods.gd).
 const NEW_KEYS: Array[String] = [
-	"it_shirt", "it_trousers", "it_gloves", "it_undershirt", "it_drawers",
-	"it_sweater", "it_overalls", "it_socks", "it_scarf", "it_cap", "it_mask", "it_dress",
 	"it_apple", "it_apple_wilted", "it_meat", "it_meat_bad", "it_hare",
-	"it_bread_moldy", "food", "it_tube", "it_herbs", "it_toilet_paper", "it_soap",
+	"it_bread_moldy", "it_tube", "it_toilet_paper", "it_soap",
 	"it_child_clothes", "it_old_clothes", "it_razor", "gear", "it_nails", "it_opener",
 	"it_fuel", "it_spring", "it_record", "it_violin", "ammo_pistol", "ammo_shell",
 	"it_bottle_broken", "it_stake",
-	"it_coat", "it_jacket", "it_vest", "it_hat", "it_hood", "pack", "it_wire",
+	"pack", "it_wire",
 	"it_syrup", "clock", "it_pocket_watch", "it_sewing_kit", "it_needle",
 	"it_doctor_box", "herbal_book", "it_saline", "it_toy",
 ]
+const GONE_KEYS: Array[String] = [
+	"it_shirt", "it_trousers", "it_gloves", "it_undershirt", "it_drawers", "it_sweater",
+	"it_overalls", "it_socks", "it_scarf", "it_cap", "it_mask", "it_dress", "food",
+	"it_herbs", "it_coat", "it_jacket", "it_vest", "it_hat", "it_hood",
+]
 
 
-func test_ids_include_all_53_new_picture_keys() -> void:
-	assert_eq(NEW_KEYS.size(), 53)
+func test_ids_include_all_34_picture_keys_and_none_of_the_shared_clothes() -> void:
+	assert_eq(NEW_KEYS.size(), 34)
 	var available: Array = ItemModels.ids()
 	for key: String in NEW_KEYS:
 		assert_has(available, key, key + " has a recipe")
+	for gone: String in GONE_KEYS:
+		assert_does_not_have(available, gone, gone + " gave way to each thing's own picture")
 
 
 func test_empty_or_unregistered_picture_keys_return_null() -> void:
@@ -108,16 +115,48 @@ func test_largest_mesh_parts_are_not_brighter_than_point_eight() -> void:
 		model.free()
 
 
+func test_a_missing_colour_map_gives_no_material() -> void:
+	const NO_MAP: String = "res://models/props_field/Textures/colormap.png"
+	assert_false(FileAccess.file_exists(ProjectSettings.globalize_path(NO_MAP)), "this folder has no colour map")
+	assert_null(ItemModels._tinted(NO_MAP, []), "no half-painted material from a map that is not there")
+
+
+func test_hidden_parts_are_not_measured() -> void:
+	var root: Node3D = Node3D.new()
+	var shown_part: MeshInstance3D = MeshInstance3D.new()
+	shown_part.mesh = BoxMesh.new()
+	root.add_child(shown_part)
+	var hidden_frame: Node3D = Node3D.new()
+	hidden_frame.visible = false
+	root.add_child(hidden_frame)
+	var under_hidden: MeshInstance3D = MeshInstance3D.new()
+	under_hidden.mesh = BoxMesh.new()
+	hidden_frame.add_child(under_hidden)
+	var hidden_part: MeshInstance3D = MeshInstance3D.new()
+	hidden_part.mesh = BoxMesh.new()
+	hidden_part.visible = false
+	root.add_child(hidden_part)
+	var parts: Array[Dictionary] = []
+	_collect_meshes(root, Transform3D.IDENTITY, parts)
+	assert_eq(parts.size(), 1, "a hidden part and one under a hidden frame are left out, as the bake does")
+	if parts.size() == 1:
+		assert_eq(parts[0]["instance"], shown_part)
+	root.free()
+
+
 ## Local transforms work on detached nodes, including nested rotated/scaled parts.
-func _collect_meshes(node: Node, parent_pose: Transform3D, parts: Array[Dictionary]) -> void:
+## Only what is drawn: a hidden node hides what is under it, as the bake tool
+## (icon_bake._copy_meshes) leaves it out.
+func _collect_meshes(node: Node, parent_pose: Transform3D, parts: Array[Dictionary], shown: bool = true) -> void:
 	var pose: Transform3D = parent_pose
 	if node is Node3D:
 		var spatial: Node3D = node as Node3D
 		pose = spatial.transform if spatial.top_level else parent_pose * spatial.transform
-	if node is MeshInstance3D:
+		shown = shown and spatial.visible
+	if node is MeshInstance3D and shown:
 		parts.append({"instance": node, "pose": pose})
 	for child: Node in node.get_children():
-		_collect_meshes(child, pose, parts)
+		_collect_meshes(child, pose, parts, shown)
 
 
 ## The bake tool reads a model's vertex colours only when its file defines no

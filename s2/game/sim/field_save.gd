@@ -17,7 +17,7 @@ const VERSION := 3
 const READ_VERSIONS: Array[int] = [1, 2, 3]
 const KIND := "s2_field"
 const PATH := "user://field_save.json"
-## The train's own save (politics/save_slot.gd DEFAULT_PATH): read here only for what it applied.
+## The train's own save (politics/save_slot.gd DEFAULT_PATH), boot's default train slot.
 const TRAIN_PATH := "user://s1a_game_v2.json"
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 const EatRules = preload("res://game/sim/eat_rules.gd")
@@ -501,29 +501,15 @@ static func should_resume(save: Dictionary, applied = {}) -> bool:
 	return not (applied as Array).has(id)
 
 
-## Where the app starts (S3 spec 4, user decision 296): the field save and the
-## train save are read, and a stop still being played whose return the train has
-## not taken in comes back. Returns the start options for it, or {} to start fresh.
-static func pick_start(field_path: String = PATH, train_path: String = TRAIN_PATH, read_context: Variant = null) -> Dictionary:
-	var save: Dictionary = read_for_start(field_path, read_context) if read_context is Dictionary else read(field_path)
-	if not should_resume(save, train_applied(train_path)):
+## Where a stop still being played comes back (S3 spec 4, user decision 296): a pure decision
+## over a save the caller already read and the receipt ids the train applied. Returns the start
+## options for it, or {} to start fresh.
+static func pick_start_with(save: Dictionary, applied: Dictionary, field_path: String) -> Dictionary:
+	if not should_resume(save, applied):
 		return {}
 	var opts := resume_opts(save)
 	opts["field_save_path"] = field_path
 	return opts
-
-
-## The receipt ids the train save has taken in (its fieldReturns.applied), {} when none.
-static func train_applied(train_path: String = TRAIN_PATH) -> Dictionary:
-	if not FileAccess.file_exists(train_path):
-		return {}
-	var json := JSON.new()
-	if json.parse(FileAccess.get_file_as_string(train_path)) != OK or not json.data is Dictionary:
-		return {}
-	var returns = (json.data as Dictionary).get("fieldReturns")
-	if not returns is Dictionary or not returns.get("applied") is Dictionary:
-		return {}
-	return returns["applied"]
 
 
 ## The options that build the same stop again and then put the save on it.
