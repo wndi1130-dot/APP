@@ -203,7 +203,7 @@ func _scene(scene: Dictionary, hour: float) -> void:
 	for polygon: PackedVector2Array in polygons:
 		boxes.append(polygon_bounds(polygon))
 	var update_ms: float = float(geometry["update_ms"])
-	var metrics: Dictionary = _metrics(game, update_ms)
+	var metrics: Dictionary = _metrics(game, update_ms, geometry["update_samples_ms"])
 	(_report["scenes"] as Array).append({"name": tag, "hour": hour, "cold": scene["cold"], "side": scene["side"],
 		"cell": [centre.x, centre.y], "items": measurements, "summary": summary, "metrics": metrics,
 		"moved_from_hidden_cells": [], "still_hidden": [],
@@ -466,6 +466,32 @@ func _put(game: FieldGame, rows: Array) -> float:
 	return float(Time.get_ticks_usec() - started) / 1000.0
 
 
+## Rebuilds timed per scene (empty list, then the whole list, each time): one
+## sample on a busy PC swung 1.2-2.9 ms in the box version and 7-11 ms after.
+const REBUILD_SAMPLES: int = 5
+
+
+## The whole list put down REBUILD_SAMPLES times after an empty one (template
+## cache warm): {"median_ms", "samples_ms"}; the list is left drawn.
+func _rebuild_times(game: FieldGame, rows: Array) -> Dictionary:
+	var samples: Array[float] = []
+	for _sample: int in REBUILD_SAMPLES:
+		_put(game, [])
+		samples.append(_put(game, rows))
+	return {"median_ms": median(samples), "samples_ms": samples}
+
+
+## The middle of `values` (the mean of the two middle ones for an even count),
+## 0 for none.
+static func median(values: Array[float]) -> float:
+	if values.is_empty():
+		return 0.0
+	var sorted: Array[float] = values.duplicate()
+	sorted.sort()
+	var middle: int = sorted.size() >> 1
+	return sorted[middle] if sorted.size() % 2 == 1 else (sorted[middle - 1] + sorted[middle]) * 0.5
+
+
 ## Read only common mesh APIs; retain both vertex streams and their transforms.
 func _ground_geometry(game: FieldGame) -> Dictionary:
 	var result: Dictionary = {}
@@ -563,8 +589,8 @@ func _item_polygons(game: FieldGame, rows: Array[Dictionary], image_size: Vector
 		_fail("row %d (%s) added %s but draws %s alone at level %s (body, rim): the drawn set changed (a row displaced or left undrawn), so rows cannot be told apart" %
 			[index, rows[index]["id"], consistent["added"], consistent["alone"], consistent["level"]])
 		return {}
-	_put(game, [])
-	var update_ms: float = _put(game, rows)
+	var rebuild: Dictionary = _rebuild_times(game, rows)
+	var update_ms: float = rebuild["median_ms"]
 	var final_geometry: Dictionary = _ground_geometry(game)
 	if _failed:
 		return {}
@@ -608,7 +634,7 @@ func _item_polygons(game: FieldGame, rows: Array[Dictionary], image_size: Vector
 		if _failed:
 			return {}
 		polygons.append(polygon)
-	return {"polygons": polygons, "counts": count_report, "update_ms": update_ms}
+	return {"polygons": polygons, "counts": count_report, "update_ms": update_ms, "update_samples_ms": rebuild["samples_ms"]}
 
 
 ## Project a world hull in raw image pixels and reject empty or clipped geometry.
@@ -958,7 +984,7 @@ static func _overlaps(boxes: Array[Rect2i]) -> Array:
 	return overlaps
 
 
-func _metrics(game: FieldGame, update_ms: float) -> Dictionary:
+func _metrics(game: FieldGame, update_ms: float, samples_ms: Array) -> Dictionary:
 	var floors: Dictionary = {}
 	for level: Variant in game.view.ground_nodes:
 		var node: MeshInstance3D = game.view.ground_nodes[level]
@@ -968,7 +994,8 @@ func _metrics(game: FieldGame, update_ms: float) -> Dictionary:
 		"primitives": RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME),
 		"video_bytes": RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_VIDEO_MEM_USED),
 		"buffer_bytes": RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_BUFFER_MEM_USED),
-		"update_ground_ms": update_ms, "timing": "one rebuild after clearing; template cache warm", "floors": floors,
+		"update_ground_ms": update_ms, "update_ground_samples_ms": samples_ms,
+		"timing": "median of %d rebuilds, each after clearing; template cache warm" % samples_ms.size(), "floors": floors,
 	}
 
 
@@ -997,14 +1024,14 @@ func _worst(game: FieldGame, grid: FieldGrid, centre: Vector2i) -> void:
 	var rows: Array[Dictionary] = []
 	for index: int in range(300):
 		rows.append({"id": THINGS[index % THINGS.size()], "n": 1, "pos": FieldGrid.center(cells[floori(float(index) / 3.0)])})
-	_put(game, [])
-	var update_ms: float = _put(game, rows)
+	var rebuild: Dictionary = _rebuild_times(game, rows)
+	var update_ms: float = rebuild["median_ms"]
 	var image: Image = await _capture("yard_autumn_day_worst300.jpg")
 	if image == null:
 		return
 	var drawn_rows: int = _drawn_rows(game)
 	_report["worst"] = {"items": 300, "cells": 100, "per_cell": 3, "zoom": ZOOM, "hour": 12.0, "cold": 0.0,
-		"drawn": drawn_rows, "omitted": 300 - drawn_rows, "metrics": _metrics(game, update_ms)}
+		"drawn": drawn_rows, "omitted": 300 - drawn_rows, "metrics": _metrics(game, update_ms, rebuild["samples_ms"])}
 
 
 func _write_reports() -> bool:
@@ -1015,7 +1042,7 @@ func _write_reports() -> bool:
 		"최종 물건·테 정점의 볼록 껍질을 1px 넓혀 재며, 겹친 화소는 모든 줄에서 제외한다. 면적·공유 화소·선택한 칸·시험판 비율은 JSON에 적는다.",
 		"바뀐 화소가 40 미만이어도 그려진 줄은 요약에 포함한다. 낮은 보임은 가림 확정이 아니다. 기존 moved_from_hidden_cells·still_hidden은 빈 배열로 유지한다.",
 		"가장 어두운 물건은 해당 화소의 물건 루마 평균이 가장 낮은 것. 요약에는 단독 물건과 셋의 각 구성원을 모두 포함한다.", "",
-		"| 장면 | 가장 약한 물건 / 대비 | 가운데 대비 | 가장 어두운 물건 / 대비 | 그리기 호출 | 기본 도형 | 비디오 / 버퍼(bytes) | 재구성(ms) | 낮은 보임 수 / 이름 |",
+		"| 장면 | 가장 약한 물건 / 대비 | 가운데 대비 | 가장 어두운 물건 / 대비 | 그리기 호출 | 기본 도형 | 비디오 / 버퍼(bytes) | 재구성(ms, %d번 중앙값) | 낮은 보임 수 / 이름 |" % REBUILD_SAMPLES,
 		"|---|---|---:|---|---:|---:|---:|---:|---|",
 	]
 	for scene: Dictionary in _report["scenes"]:
@@ -1043,7 +1070,7 @@ func _write_reports() -> bool:
 			markdown.append("| %s / %s | %d | %d | %d | %d | %d |" % [scene["name"], level,
 				floor_row["items"]["vertices"], floor_row["items"]["triangles"], floor_row["items"]["surfaces"], floor_row["rim"]["vertices"], floor_row["rim"]["triangles"]])
 	var worst: Dictionary = _report["worst"]["metrics"]
-	markdown.append("\n300개(100칸, 칸마다 셋): 그려짐 %d · 안 그려짐 %d, 호출 %d, 기본 도형 %d, 비디오 %d bytes, 버퍼 %d bytes, 재구성 %.3f ms." % [_report["worst"]["drawn"], _report["worst"]["omitted"], worst["draw_calls"], worst["primitives"], worst["video_bytes"], worst["buffer_bytes"], worst["update_ground_ms"]])
+	markdown.append("\n300개(100칸, 칸마다 셋): 그려짐 %d · 안 그려짐 %d, 호출 %d, 기본 도형 %d, 비디오 %d bytes, 버퍼 %d bytes, 재구성 %.3f ms(%d번 중앙값)." % [_report["worst"]["drawn"], _report["worst"]["omitted"], worst["draw_calls"], worst["primitives"], worst["video_bytes"], worst["buffer_bytes"], worst["update_ground_ms"], REBUILD_SAMPLES])
 	for closeup: Dictionary in _report["closeups"]:
 		if closeup.get("kind", "") == "clothes_cell":
 			markdown.append("\nclothes_cell %s: 넷 중 그릴 수 있는 셋에서 그려짐 %d · 안 그려짐 %d." % [closeup["name"], closeup["drawn"], closeup["omitted"]])

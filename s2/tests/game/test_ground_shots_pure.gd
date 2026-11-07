@@ -63,6 +63,16 @@ func test_low_visibility_is_marked_not_left_out() -> void:
 	assert_eq((summary["not_drawn"] as Array).size(), 1)
 
 
+func test_rebuild_time_is_the_middle_of_its_samples() -> void:
+	var odd: Array[float] = [9.0, 2.0, 30.0, 4.0, 3.0]
+	assert_eq(Shots.median(odd), 4.0, "one slow sample on a busy PC does not move it")
+	var even: Array[float] = [1.0, 5.0, 3.0, 7.0]
+	assert_eq(Shots.median(even), 4.0)
+	var none: Array[float] = []
+	assert_eq(Shots.median(none), 0.0)
+	assert_gte(Shots.REBUILD_SAMPLES, 3, "three samples at least")
+
+
 ## Each row must add exactly what it draws alone; a row that pushes another off
 ## (or is itself left undrawn) stops the measuring instead of mixing two things.
 func test_rows_must_add_what_they_draw_alone() -> void:
