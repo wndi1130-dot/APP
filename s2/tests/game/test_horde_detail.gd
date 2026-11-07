@@ -10,6 +10,7 @@ class HerdGrid extends RefCounted:
 
 class HerdWorld extends RefCounted:
 	var rng := RandomNumberGenerator.new()
+	var opts := {}   # spawn reads the run's options like the field's (look code seed falls back to rng)
 	var grid := HerdGrid.new()
 	func level_of(at: Vector3) -> int: return roundi(at.y / 3.0)
 	func level_y(level_id: int) -> float: return level_id * 3.0
