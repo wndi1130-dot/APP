@@ -42,6 +42,7 @@ const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const GrabRules = preload("res://game/sim/grab_rules.gd")
 const Sled = preload("res://game/sim/sled.gd")
+const GroundLook = preload("res://game/world/ground_look.gd")
 
 const PANEL_BG := Color(0.07, 0.075, 0.08, 0.78)
 const INK := Color(0.93, 0.91, 0.86)
@@ -5175,15 +5176,29 @@ func _pick_ally(world: Vector3):
 	return best
 
 
+## The ground thing the finger is on: the model drawn there, not the list's first
+## at that spot (three on one cell are spread up to 0.7 m, ground_look.gd). The
+## drawn ones and the shining ones are what is seen; a thing not drawn (a fourth on
+## its cell, or one with no clear room) is taken only when nothing seen is in
+## reach. Without a drawn table (no view yet) every row is read at its own spot.
 func _pick_item(world: Vector3) -> int:
-	var best := -1
-	var best_d := 0.9
+	var drawn: Dictionary = game.view.drawn_ground(game.ground_items) if game.view != null else {}
+	var cands: Array = []
 	for i in range(game.ground_items.size()):
-		var d := _finger_off(world, game.ground_items[i]["pos"], ITEM_H)
-		if d < best_d:
-			best_d = d
-			best = i
-	return best
+		var row: Dictionary = game.ground_items[i]
+		if drawn.has(i):
+			var piece: Dictionary = drawn[i]
+			var at: Vector3 = piece["at"]
+			var size: Vector3 = piece["size"]
+			var low: Vector3 = game.shift_to_height(world, at.y)
+			var high: Vector3 = game.shift_to_height(world, at.y + size.y)
+			cands.append({"item": i, "off": GroundLook.press_off(piece, Vector2(low.x, low.z), Vector2(high.x, high.z)),
+				"reach": _finger_off(world, at, size.y), "order": piece["order"]})
+		else:
+			var reach: float = _finger_off(world, row["pos"], ITEM_H)
+			var order: int = drawn.size() + i if not drawn.is_empty() and bool(row.get("glint", false)) else -1
+			cands.append({"item": i, "off": reach, "reach": reach, "order": order})
+	return GroundLook.pick(cands)
 
 
 func _tap(pos: Vector2) -> void:

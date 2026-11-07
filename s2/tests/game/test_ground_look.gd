@@ -87,7 +87,9 @@ func test_clothes_and_a_knife_on_one_cell_lie_clear_of_one_another() -> void:
 		for id: String in ids:
 			items.append({"pos": at, "id": id, "n": 1})
 		var out: Array = GroundLook.pieces(items)
-		assert_eq(out.size(), mini(ids.size(), GroundLook.PER_CELL))
+		# Open floor and nothing else near: there is room for all three, so none is
+		# left undrawn (omitting is only for a spot with no clear room at all).
+		assert_eq(out.size(), mini(ids.size(), GroundLook.PER_CELL), "all three drawn on open floor")
 		for i: int in out.size():
 			var a: Dictionary = out[i]
 			var flat_a := Vector2(a["at"].x, a["at"].z)
@@ -96,7 +98,7 @@ func test_clothes_and_a_knife_on_one_cell_lie_clear_of_one_another() -> void:
 				var b: Dictionary = out[j]
 				var gap: float = GroundLook.footprint_gap(flat_a, Vector2(a["size"].x, a["size"].z), a["yaw"],
 					Vector2(b["at"].x, b["at"].z), Vector2(b["size"].x, b["size"].z), b["yaw"])
-				assert_gte(gap, 0.0, "%s and %s do not lie on one another" % [ids[i], ids[j]])
+				assert_gte(gap, GroundLook.SPREAD_GAP - 0.000001, "%s and %s keep their rims apart" % [ids[i], ids[j]])
 		assert_eq(GroundLook.pieces(items), out, "the same list lies the same")
 
 
@@ -149,27 +151,154 @@ func _plain_gap(ca: Vector2, sa: Vector2, ya: float, cb: Vector2, sb: Vector2, y
 	return best
 
 
-## A spot is sought out along the thing's own angle from SPREAD on; when nothing
-## by SPREAD_MAX is clear, it takes the roomiest of eight angles there, the
-## first of equals, and is left at the spot it was given.
-func test_a_clear_spot_is_the_first_out_along_its_angle_else_the_roomiest() -> void:
+## Start at half a metre; never keep a spot that overlaps another thing.
+func test_a_clear_spot_starts_far_and_omits_overlap() -> void:
 	var laid: Array[GroundLook.Footprint] = [GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.2, 0.2), 0.0)]
 	var small := GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.2, 0.2), 0.0)
-	var spot: Vector2 = GroundLook._clear_spot(small, 0.0, laid)
-	assert_almost_eq(spot.x, GroundLook.SPREAD, 0.0001, "clear at the first try")
-	assert_almost_eq(spot.y, 0.0, 0.0001)
-	assert_eq(small.centre, spot, "left where it goes")
-	var down: Vector2 = GroundLook._clear_spot(GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.2, 0.2), PI * 0.5), PI * 0.5, laid)
-	assert_almost_eq(down.y, GroundLook.SPREAD, 0.0001, "out along its own angle")
-	# Under a 2 m square nothing by SPREAD_MAX is clear: straight out on x and z is
-	# roomier than the diagonals, and of those four the first, along its own angle.
+	assert_true(GroundLook._clear_spot(small, 0.0, laid))
+	assert_almost_eq(small.centre.x, 0.5, 0.0001, "clear at the first far try")
+	assert_almost_eq(small.centre.y, 0.0, 0.0001)
+	var down := GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.2, 0.2), PI * 0.5)
+	assert_true(GroundLook._clear_spot(down, PI * 0.5, laid))
+	assert_almost_eq(down.centre.y, 0.5, 0.0001, "out along its own angle")
 	var under: Array[GroundLook.Footprint] = [GroundLook.Footprint.new(Vector2.ZERO, Vector2(2, 2), 0.0)]
 	var lost := GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.5, 0.5), 0.0)
-	var best: Vector2 = GroundLook._clear_spot(lost, 0.0, under)
-	assert_almost_eq(best.x, GroundLook.SPREAD_MAX, 0.0001)
-	assert_almost_eq(best.y, 0.0, 0.0001)
-	assert_eq(lost.centre, best, "left at the roomiest")
-	assert_lt(GroundLook._room_among(lost, under), 0.0, "still under it, but no farther than reach")
+	assert_false(GroundLook._clear_spot(lost, 0.0, under), "no clear candidate means no drawing")
+	var crowded: Array = [_piece(0, Vector3.ZERO, Vector3(2, 0.1, 2)), _piece(1, Vector3.ZERO, Vector3(0.5, 0.1, 0.5))]
+	assert_eq(GroundLook._lay_apart(crowded, {Vector3i.ZERO: [0, 1]}, Callable()).size(), 1)
+	# The review's 22 degree counterexample: the eight angles round 22 degrees miss
+	# the clear spot straight along x (0.05 m of room) and the old search laid it
+	# overlapping; the wide search finds a spot SPREAD_GAP clear.
+	var square := GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.65, 0.65), 0.0)
+	var squares: Array[GroundLook.Footprint] = [GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.65, 0.65), 0.0)]
+	assert_true(GroundLook._clear_spot(square, deg_to_rad(22.0), squares))
+	assert_gte(square.gap_to(squares[0]), GroundLook.SPREAD_GAP - 0.000001)
+	assert_lte(square.centre.length(), GroundLook.SPREAD_MAX + 0.0001)
+
+
+## A long thing that fits no spot at its own yaw lies a quarter turned: a 1.2 m
+## plank dropped in a one-metre corridor running along x stays on its spot, along
+## the corridor, instead of being left undrawn or buried in the wall.
+func test_a_quarter_turn_is_tried_before_giving_up() -> void:
+	var walls: Array[GroundLook.Footprint] = []
+	for x: int in range(-3, 4):
+		walls.append(GroundLook.Footprint.new(Vector2(x + 0.5, -0.5), Vector2.ONE, 0.0))
+		walls.append(GroundLook.Footprint.new(Vector2(x + 0.5, 1.5), Vector2.ONE, 0.0))
+	var none: Array[GroundLook.Footprint] = []
+	var plank := GroundLook.Footprint.new(Vector2(0.5, 0.5), Vector2(0.1, 1.2), 0.0)
+	assert_true(GroundLook._clear_spot(plank, 0.3, none, walls, true))
+	assert_almost_eq(plank.yaw, PI * 0.5, 0.0001, "turned along the corridor")
+	assert_eq(plank.centre, Vector2(0.5, 0.5), "on its own spot")
+	assert_gte(GroundLook._room_among(plank, walls), 0.0, "off both walls")
+	var pieces: Array = GroundLook.pieces([{"id": "no_art_550", "pos": Vector3(0.5, 0, 0.5)}])
+	assert_eq(pieces.size(), 1)
+	assert_true(pieces[0].has("yaw"), "the piece carries the yaw it was laid at")
+
+
+func _piece(item: int, at: Vector3, size: Vector3, turn: float = 0.0) -> Dictionary:
+	return {"item": item, "lv": roundi(at.y / 3.0), "at": at, "size": size, "yaw": 0.0, "turn": turn}
+
+
+func test_far_then_near_then_ring_and_wall_fallback() -> void:
+	var none: Array[GroundLook.Footprint] = []
+	var foot := GroundLook.Footprint.new(Vector2(0.5, 0.5), Vector2(0.2, 0.2), 0.0)
+	var wall: Array[GroundLook.Footprint] = [GroundLook.Footprint.new(Vector2(1.5, 0.5), Vector2.ONE, 0.0)]
+	assert_true(GroundLook._clear_spot(foot, 0.0, none, wall))
+	assert_almost_eq(foot.centre.x, 0.8, 0.00001, "only after all far tries touch the wall")
+	var other: Array[GroundLook.Footprint] = [GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.9, 0.1), 0.0)]
+	foot = GroundLook.Footprint.new(Vector2.ZERO, Vector2(0.5, 0.1), 0.0)
+	assert_true(GroundLook._clear_spot(foot, 0.0, other))
+	assert_almost_eq(foot.centre.distance_to(Vector2.ZERO), 0.7, 0.00001, "turn round only after both straight ranges")
+	assert_gt(foot.centre.y, 0.0)
+	var coat: Array = [_piece(0, Vector3(0.5, 0, 0.5), Vector3(1.2, 0.1, 0.6))]
+	var corridor := func(c: Vector2i, _lv: int) -> bool: return c.x != 0
+	var out: Array = GroundLook._lay_apart(coat, {Vector3i.ZERO: [0]}, corridor)
+	assert_eq(out.size(), 1, "a wide coat still lies in a one metre corridor")
+	assert_eq(out[0]["at"], Vector3(0.5, 0, 0.5), "the least buried candidate wins, first of equals")
+
+
+func test_cell_order_cross_cell_gap_and_blocked_cells() -> void:
+	var items := [{"id": "no_art_550", "pos": Vector3(0.9, 0, 0.5)}, {"id": "no_art_550", "pos": Vector3(1.1, 0, 0.5)}]
+	var out: Array = GroundLook.pieces(items)
+	assert_eq(out.size(), 2)
+	_assert_gaps(out)
+	var pieces: Array = [_piece(0, Vector3(1.1, 0, 0.5), Vector3(0.3, 0.1, 0.3)), _piece(1, Vector3(0.9, 0, 0.5), Vector3(0.3, 0.1, 0.3)), _piece(2, Vector3(0.9, 0, 0.5), Vector3(0.2, 0.1, 0.2))]
+	out = GroundLook._lay_apart(pieces, {Vector3i(1, 0, 0): [0], Vector3i.ZERO: [2, 1]}, Callable())
+	assert_eq(out[1]["at"], Vector3(0.9, 0, 0.5), "left cell's biggest is placed before the right cell")
+	_assert_gaps(out)
+	var blocked := func(c: Vector2i, lv: int) -> bool: return lv == 0 and c == Vector2i.ZERO
+	out = GroundLook.pieces([{"id": "no_art_550", "pos": Vector3(0.9, 0, 0.5)}], blocked)
+	assert_eq(out.size(), 1)
+	var p: Dictionary = out[0]
+	assert_gte(GroundLook.footprint_gap(Vector2(p["at"].x, p["at"].z), Vector2(p["size"].x, p["size"].z), p["yaw"], Vector2(0.5, 0.5), Vector2.ONE, 0.0), 0.0)
+	assert_eq(GroundLook.pieces(items), GroundLook.pieces(items), "same list, same positions")
+
+
+func _assert_gaps(out: Array) -> void:
+	for i: int in out.size():
+		for j: int in range(i + 1, out.size()):
+			var a: Dictionary = out[i]
+			var b: Dictionary = out[j]
+			if a["lv"] == b["lv"]:
+				assert_gte(GroundLook.footprint_gap(Vector2(a["at"].x, a["at"].z), Vector2(a["size"].x, a["size"].z), a["yaw"], Vector2(b["at"].x, b["at"].z), Vector2(b["size"].x, b["size"].z), b["yaw"]), GroundLook.SPREAD_GAP - 0.000001)
+
+
+func test_item_numbers_far_spread_empty_glints_and_floors() -> void:
+	var at := Vector3(5.5, 0, 5.5)
+	var items: Array = [{"id": "no_art_550", "pos": at, "glint": true}]
+	assert_eq(GroundLook.pieces([]), [])
+	assert_eq(GroundLook.pieces(items), [])
+	for i: int in 4:
+		items.append({"id": "no_art_550", "pos": at})
+	var out: Array = GroundLook.pieces(items)
+	assert_eq(out.size(), 3)
+	for i: int in out.size():
+		assert_eq(out[i]["item"], i + 1)
+		if i > 0:
+			assert_gte((out[i]["at"] as Vector3).distance_to(at), 0.5 - 0.000001)
+	_assert_gaps(out)
+	items.append({"id": "no_art_550", "pos": at + Vector3(0, 3, 0)})
+	out = GroundLook.pieces(items, func(_c: Vector2i, _lv: int) -> bool: return true)
+	assert_gt(out.size(), 0, "blocked everywhere still keeps nonoverlapping things")
+	_assert_gaps(out)
+	assert_eq(out.back()["item"], 5, "another floor has its own space")
+	assert_eq(out.back()["lv"], 1)
+	assert_eq((out.back()["at"] as Vector3).y, 3.0)
+
+
+func test_press_off_rectangle_segment_and_rotation() -> void:
+	var piece := _piece(0, Vector3.ZERO, Vector3(2, 0.2, 1))
+	assert_eq(GroundLook.press_off(piece, Vector2.ZERO, Vector2.ZERO), 0.0)
+	assert_almost_eq(GroundLook.press_off(piece, Vector2(2, 0), Vector2(2, 0)), 1.0, 0.00001)
+	assert_almost_eq(GroundLook.press_off(piece, Vector2(2, 1.5), Vector2(2, 1.5)), sqrt(2.0), 0.00001)
+	assert_eq(GroundLook.press_off(piece, Vector2(-2, 0), Vector2(2, 0)), 0.0)
+	assert_almost_eq(GroundLook.press_off(piece, Vector2(-2, 1), Vector2(2, 1)), 0.5, 0.00001)
+	assert_eq(GroundLook.press_off(piece, Vector2(-2, 0.5), Vector2(2, 0.5)), 0.0)
+	piece["yaw"] = PI * 0.5
+	assert_almost_eq(GroundLook.press_off(piece, Vector2(1, 0), Vector2(1, 0)), 0.5, 0.00001)
+
+
+func test_pick_visible_order_reach_glint_and_hidden() -> void:
+	var a := {"item": 0, "off": 0.0, "reach": 0.2, "order": 0}
+	var b := {"item": 1, "off": 0.00005, "reach": 0.4, "order": 1}
+	assert_eq(GroundLook.pick([a, b]), 1, "later drawn wins a footprint tie")
+	b["order"] = 0
+	assert_eq(GroundLook.pick([b, a]), 0, "equal drawing order uses reach")
+	a["reach"] = 0.9
+	b["reach"] = 1.0
+	assert_eq(GroundLook.pick([a, b]), -1)
+	assert_eq(GroundLook.pick([]), -1)
+	a.merge({"off": 0.6, "reach": 0.7}, true)
+	b.merge({"off": 0.2, "reach": 0.2, "order": 2}, true)
+	var hidden := {"item": 2, "off": 0.0, "reach": 0.01, "order": -1}
+	assert_eq(GroundLook.pick([a, b, hidden]), 1, "a glint point beats a more distant footprint")
+	assert_eq(GroundLook.pick([a, hidden]), 0, "hidden cannot beat visible")
+	assert_eq(GroundLook.pick([hidden]), 2)
+	assert_eq(GroundLook.pick([hidden, {"item": 3, "off": 0.0, "reach": 0.005, "order": -1}]), 3)
+	var chain := [{"item": 0, "off": 0.0, "reach": 0.1, "order": 0}, {"item": 1, "off": 0.00008, "reach": 0.1, "order": 1}, {"item": 2, "off": 0.00016, "reach": 0.1, "order": 2}]
+	assert_eq(GroundLook.pick(chain), 1, "ties stay within tolerance of the nearest")
+	chain.reverse()
+	assert_eq(GroundLook.pick(chain), 1)
 
 
 func test_it_lies_on_its_own_floor() -> void:

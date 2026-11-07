@@ -914,14 +914,24 @@ static func _sled_rope(surface: SurfaceTool, from: Vector3, to: Vector3) -> void
 		surface.add_vertex(corners[index])
 
 
+var _drawn_ground: Dictionary = {}
+var _drawn_ground_sig: int = -1
+
+
 func update_ground(items: Array) -> void:
 	var sig := items.hash()
-	if sig == _ground_sig or level_roots.is_empty():
+	if level_roots.is_empty():
+		_drawn_ground.clear()
+		_drawn_ground_sig = -1
+		_ground_sig = -1
+		return
+	if sig == _ground_sig and sig == _drawn_ground_sig:
 		return
 	_ground_sig = sig
+	_drawn_ground.clear()
 	var tools: Dictionary = {}
 	var rims: Dictionary = {}
-	for piece: Dictionary in GroundLook.pieces(items):
+	for piece: Dictionary in GroundLook.pieces(items, _ground_blocked):
 		var lv: int = piece["lv"]
 		if not level_roots.has(lv):
 			continue
@@ -929,6 +939,9 @@ func update_ground(items: Array) -> void:
 			tools[lv] = GroundModels.begin()
 			rims[lv] = _begin()
 		_append_ground(tools[lv], piece)
+		var drawn: Dictionary = piece.duplicate()
+		drawn["order"] = _drawn_ground.size()
+		_drawn_ground[int(piece["item"])] = drawn
 		var rim: Dictionary = GroundLook.rim(piece)
 		rim["sky"] = sky_alpha(grid, FieldGrid.cell_of(piece["at"])) if lv == 0 else 0.0
 		_rim_quad(rims[lv], rim)
@@ -945,6 +958,20 @@ func update_ground(items: Array) -> void:
 			ground_nodes[lv].add_child(rim_node)
 		ground_nodes[lv].mesh = GroundModels.commit(tools[lv])
 		(ground_nodes[lv].get_node("Rim") as MeshInstance3D).mesh = rims[lv].commit()
+	_drawn_ground_sig = sig
+
+
+## Refresh before picking if a removal changed the row numbers this frame.
+func drawn_ground(items: Array) -> Dictionary:
+	var sig := items.hash()
+	if sig != _drawn_ground_sig or sig != _ground_sig or level_roots.is_empty():
+		update_ground(items)
+	return _drawn_ground if sig == _drawn_ground_sig else {}
+
+
+func _ground_blocked(cell: Vector2i, lv: int) -> bool:
+	var floor_grid: FieldGrid = levels.get(lv, grid if lv == 0 else null)
+	return floor_grid != null and floor_grid.solid_at(cell) != FieldGrid.Solid.NONE
 
 
 static func _append_ground(batch: GroundModels.Batch, piece: Dictionary) -> void:

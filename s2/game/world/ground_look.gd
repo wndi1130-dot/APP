@@ -21,15 +21,22 @@ const GroundModels = preload("res://game/world/ground_models.gd")
 const LEVEL_H: float = 3.0
 ## Drawn on one cell at most.
 const PER_CELL: int = 3
-## How far the second and third things on a cell lie from their spot at least
-## (metres), and at most: laid at real size a coat is 0.6-0.8 m, so three on one
-## cell would lie on one another and read as a heap (금지선) with a knife lost
-## under a shirt (11-07 shots). Each is pushed out, round its own angle, until
-## its footprint is clear of those already laid (the biggest lies on its spot),
-## never past SPREAD_MAX — inside the 0.9 a tap reaches (field_hud.gd _tap_thing).
-const SPREAD: float = 0.3
+## How far the second and third things on a cell lie from their spot: laid at real
+## size a coat is 0.6-0.8 m, so three on one cell lay on one another and read as a
+## heap (금지선) with a knife lost under a shirt (11-07 shots); a third of a metre
+## apart they still read as one pile. So each goes out along its own angle from
+## SPREAD to SPREAD_MAX first, only then SPREAD_NEAR to SPREAD_NEAR_MAX, then the
+## eight angles at SPREAD_MAX (코디 11-07 11:2x) — never past the 0.9 m a tap
+## reaches (field_hud.gd _pick_item). A spot must keep SPREAD_GAP from every thing
+## already laid on that floor, a neighbouring cell's too, and stay off walls and
+## furniture (blocked cells); walls alone may be given way to when nothing else is
+## left (a coat in a one-metre corridor), other things never: a thing with no
+## clear spot is not drawn, still on the pick-up list like a fourth on a cell.
+const SPREAD: float = 0.5
 const SPREAD_MAX: float = 0.7
 const SPREAD_STEP: float = 0.05
+const SPREAD_NEAR: float = 0.3
+const SPREAD_NEAR_MAX: float = 0.45
 ## Room left between two footprints so their dark rims (RIM) do not merge either.
 const SPREAD_GAP: float = 0.04
 
@@ -85,10 +92,11 @@ static func kind_of(g: Dictionary) -> String:
 
 
 ## [{"lv", "model", "yaw", "size", "at" (footprint centre on floor), "color"}].
-static func pieces(items: Array) -> Array:
+static func pieces(items: Array, blocked: Callable = Callable()) -> Array:
 	var out: Array = []
 	var on_cell: Dictionary = {}  # Vector3i(x, y, lv) -> indexes into out drawn there
-	for g: Dictionary in items:
+	for item: int in items.size():
+		var g: Dictionary = items[item]
 		if bool(g.get("glint", false)):
 			continue
 		var pos: Vector3 = g["pos"]
@@ -117,63 +125,148 @@ static func pieces(items: Array) -> Array:
 		# vanish (what lies buried shines instead, decision 423 (11)).
 		var color: Color = look[1]
 		color.a = 0.0
-		out.append({"lv": lv, "model": model, "yaw": yaw, "size": size, "at": at, "color": color,
+		out.append({"item": item, "lv": lv, "model": model, "yaw": yaw, "size": size, "at": at, "color": color,
 			"turn": deg_to_rad(float(posmod(h, 360)))})
-	for key: Vector3i in on_cell:
-		_lay_apart(out, on_cell[key])
+	out = _lay_apart(out, on_cell, blocked)
 	for piece: Dictionary in out:
 		piece.erase("turn")
 	return out
 
 
-## The things on one cell (indexes into `out`, list order) laid so their
-## footprints keep clear of one another: the biggest stays on its spot, then each
-## next biggest goes out from its own spot along its own angle ("turn"), SPREAD
-## and on by SPREAD_STEP, to the first place clear of all laid before; when none
-## is by SPREAD_MAX, eight angles round its own are tried there and the one with
-## the most room taken. Deterministic: the same list lays the same.
-static func _lay_apart(out: Array, slots: Array) -> void:
-	var order: Array = slots.duplicate()
-	order.sort_custom(func(a: int, b: int) -> bool:
-		var area_a: float = _footprint_area(out[a])
-		var area_b: float = _footprint_area(out[b])
-		return area_a > area_b if not is_equal_approx(area_a, area_b) else a < b)
-	var laid: Array[Footprint] = []
-	for slot: int in order:
-		var piece: Dictionary = out[slot]
-		var origin: Vector3 = piece["at"]
-		var size: Vector3 = piece["size"]
-		var foot := Footprint.new(Vector2(origin.x, origin.z), Vector2(size.x, size.z), float(piece["yaw"]))
-		if not laid.is_empty():
-			var spot: Vector2 = _clear_spot(foot, float(piece["turn"]), laid)
-			piece["at"] = Vector3(spot.x, origin.y, spot.y)
-		laid.append(foot)
+## Lay each cell's biggest first, then its second and third, in floor/y/x order.
+## Buckets cover the full footprint, including large models across cell edges.
+## Gather neighbours and walls once per thing, never once per candidate.
+static func _lay_apart(out: Array, on_cell: Dictionary, blocked: Callable) -> Array:
+	var cells: Array = on_cell.keys()
+	cells.sort_custom(func(a: Vector3i, b: Vector3i) -> bool:
+		if a.z != b.z:
+			return a.z < b.z
+		return a.y < b.y if a.y != b.y else a.x < b.x)
+	for cell: Vector3i in cells:
+		on_cell[cell].sort_custom(func(a: int, b: int) -> bool:
+			var area_a: float = _footprint_area(out[a])
+			var area_b: float = _footprint_area(out[b])
+			return area_a > area_b if area_a != area_b else int(out[a]["item"]) < int(out[b]["item"]))
+	var buckets: Dictionary = {}
+	var wall_cache: Dictionary = {}
+	var kept: Dictionary = {}
+	for rank: int in PER_CELL:
+		for cell: Vector3i in cells:
+			if rank >= on_cell[cell].size():
+				continue
+			var slot: int = on_cell[cell][rank]
+			var piece: Dictionary = out[slot]
+			var origin: Vector3 = piece["at"]
+			var size: Vector3 = piece["size"]
+			var foot := Footprint.new(Vector2(origin.x, origin.z), Vector2(size.x, size.z), float(piece["yaw"]))
+			var neighbours: Array[Footprint] = []
+			var walls: Array[Footprint] = []
+			var seen: Dictionary = {}
+			var bounds: Rect2i = foot.cells(SPREAD_MAX + SPREAD_GAP)
+			for y: int in range(bounds.position.y, bounds.end.y):
+				for x: int in range(bounds.position.x, bounds.end.x):
+					var key := Vector3i(x, y, cell.z)
+					if buckets.has(key):
+						for other: Footprint in buckets[key]:
+							if not seen.has(other):
+								seen[other] = true
+								neighbours.append(other)
+					if blocked.is_valid():
+						if not wall_cache.has(key):
+							wall_cache[key] = Footprint.new(Vector2(x + 0.5, y + 0.5), Vector2.ONE, 0.0) if blocked.call(Vector2i(x, y), cell.z) else null
+						if wall_cache[key] != null:
+							walls.append(wall_cache[key])
+			if not _clear_spot(foot, float(piece["turn"]), neighbours, walls, rank == 0):
+				continue
+			piece["at"] = Vector3(foot.centre.x, origin.y, foot.centre.y)
+			piece["yaw"] = foot.yaw
+			kept[slot] = true
+			bounds = foot.cells()
+			for y: int in range(bounds.position.y, bounds.end.y):
+				for x: int in range(bounds.position.x, bounds.end.x):
+					var key := Vector3i(x, y, cell.z)
+					if not buckets.has(key):
+						buckets[key] = []
+					buckets[key].append(foot)
+	var drawn: Array = []
+	for slot: int in out.size():
+		if kept.has(slot):
+			drawn.append(out[slot])
+	return drawn
 
 
-## Where `foot`, on its own spot, goes among `laid` (and leaves it there): out
-## along `turn` from SPREAD by SPREAD_STEP to the first spot SPREAD_GAP clear of
-## them all; when none is by SPREAD_MAX, the roomiest of eight angles round
-## `turn` at SPREAD_MAX.
-static func _clear_spot(foot: Footprint, turn: float, laid: Array[Footprint]) -> Vector2:
+## Directions round the wide search (WIDE_RINGS) and the distances it tries.
+const WIDE_ANGLES: int = 16
+const WIDE_RINGS: Array[float] = [0.7, 0.6, 0.5]
+
+
+## Where `foot` (on its spot, at its own yaw) goes among `laid`, leaving it there:
+## the first candidate SPREAD_GAP clear of every laid thing and off every wall
+## (`walls`, the blocked cells' squares). Candidates, in turn: its own spot (the
+## biggest on a cell only, `home`), then along its own angle SPREAD to SPREAD_MAX,
+## then SPREAD_NEAR to SPREAD_NEAR_MAX, the eight angles at SPREAD_MAX, and
+## WIDE_ANGLES angles on each of WIDE_RINGS — then all of it again a quarter turn
+## round (a knife across the gap two coats leave, a coat along a corridor; its
+## own yaw is only the drop's look, so turning it changes nothing played).
+## Before the wide search and the quarter turn, three on open floor had one left
+## undrawn (11-07 14:4x: a third with 0-4 cm of room at the best of eight).
+## If only walls stand in the way of every candidate, the least buried one still
+## clear of all laid things is taken (a coat in a one-metre corridor). False when
+## none is clear of the laid things: then it is not drawn — no path returns a spot
+## that overlaps another thing.
+static func _clear_spot(foot: Footprint, turn: float, laid: Array[Footprint], walls: Array[Footprint] = [], home: bool = false) -> bool:
 	var origin: Vector2 = foot.centre
-	var way := Vector2(cos(turn), sin(turn))
-	var distance: float = SPREAD
-	while distance <= SPREAD_MAX + 0.0001:
-		foot.centre = origin + way * distance
-		if _room_among(foot, laid) >= SPREAD_GAP:
-			return foot.centre
-		distance += SPREAD_STEP
+	var own_yaw: float = foot.yaw
+	var tries: PackedVector3Array = _tries(turn, home)
 	var best_at: Vector2 = origin
+	var best_yaw: float = own_yaw
 	var best_room: float = -INF
-	for step: int in 8:
-		var angle: float = turn + TAU * float(step) / 8.0
-		foot.centre = origin + Vector2(cos(angle), sin(angle)) * SPREAD_MAX
-		var room: float = _room_among(foot, laid)
+	var found := false
+	for tried: Vector3 in tries:
+		var yaw: float = own_yaw + PI * 0.5 * tried.z
+		if not is_equal_approx(foot.yaw, yaw):
+			foot.turn_to(yaw)
+		foot.centre = origin + Vector2(tried.x, tried.y)
+		if _room_among(foot, laid) < SPREAD_GAP:
+			continue
+		var room: float = _room_among(foot, walls)
+		if room >= 0.0:
+			return true
 		if room > best_room:
+			found = true
 			best_room = room
 			best_at = foot.centre
+			best_yaw = yaw
+	foot.turn_to(best_yaw)
 	foot.centre = best_at
-	return best_at
+	return found
+
+
+## The candidates of _clear_spot in order, as (offset x, offset z, quarter turns):
+## made once per thing, never per try.
+static func _tries(turn: float, home: bool) -> PackedVector3Array:
+	var tries := PackedVector3Array()
+	if home:
+		tries.append(Vector3(0.0, 0.0, 0.0))
+		tries.append(Vector3(0.0, 0.0, 1.0))
+	var way := Vector2(cos(turn), sin(turn))
+	for spin: int in 2:
+		var distance: float = SPREAD
+		while distance <= SPREAD_MAX + 0.0001:
+			tries.append(Vector3(way.x * distance, way.y * distance, spin))
+			distance += SPREAD_STEP
+		distance = SPREAD_NEAR
+		while distance <= SPREAD_NEAR_MAX + 0.0001:
+			tries.append(Vector3(way.x * distance, way.y * distance, spin))
+			distance += SPREAD_STEP
+		for step: int in 8:
+			var angle: float = turn + TAU * float(step) / 8.0
+			tries.append(Vector3(cos(angle) * SPREAD_MAX, sin(angle) * SPREAD_MAX, spin))
+		for ring: float in WIDE_RINGS:
+			for step: int in WIDE_ANGLES:
+				var angle: float = turn + TAU * float(step) / float(WIDE_ANGLES)
+				tries.append(Vector3(cos(angle) * ring, sin(angle) * ring, spin))
+	return tries
 
 
 static func _footprint_area(piece: Dictionary) -> float:
@@ -196,6 +289,60 @@ static func footprint_gap(centre_a: Vector2, size_a: Vector2, yaw_a: float, cent
 	return Footprint.new(centre_a, size_a, yaw_a).gap_to(Footprint.new(centre_b, size_b, yaw_b))
 
 
+## Distance from the finger's floor-to-top segment to the rotated footprint.
+static func press_off(piece: Dictionary, low: Vector2, high: Vector2) -> float:
+	var at: Vector3 = piece["at"]
+	var size: Vector3 = piece["size"]
+	var foot := Footprint.new(Vector2(at.x, at.z), Vector2(size.x, size.z), float(piece["yaw"]))
+	var a := Vector2((low - foot.centre).dot(foot.along_x), (low - foot.centre).dot(foot.along_z))
+	var b := Vector2((high - foot.centre).dot(foot.along_x), (high - foot.centre).dot(foot.along_z))
+	var delta: Vector2 = b - a
+	var lo := 0.0
+	var hi := 1.0
+	for axis: int in 2:
+		if absf(delta[axis]) < 0.0000001:
+			if absf(a[axis]) > foot.half[axis]:
+				hi = -1.0
+		else:
+			var enter: float = (-foot.half[axis] - a[axis]) / delta[axis]
+			var leave: float = (foot.half[axis] - a[axis]) / delta[axis]
+			lo = maxf(lo, minf(enter, leave))
+			hi = minf(hi, maxf(enter, leave))
+	if lo <= hi:
+		return 0.0
+	var distance: float = minf((a.abs() - foot.half).max(Vector2.ZERO).length_squared(), (b.abs() - foot.half).max(Vector2.ZERO).length_squared())
+	var length_sq: float = delta.length_squared()
+	for corner: int in 4:
+		var point := Vector2(foot.half.x if (corner & 1) != 0 else -foot.half.x, foot.half.y if (corner & 2) != 0 else -foot.half.y)
+		var t: float = clampf((point - a).dot(delta) / length_sq, 0.0, 1.0) if length_sq > 0.0 else 0.0
+		distance = minf(distance, point.distance_squared_to(a + delta * t))
+	return sqrt(distance)
+
+
+## Visible things win over hidden rows. Equal footprint distances follow draw
+## order, then centre reach; hidden rows keep the old nearest-centre rule.
+static func pick(cands: Array) -> int:
+	var visible: Dictionary = {}
+	var hidden: Dictionary = {}
+	var nearest_off: float = INF
+	for cand: Dictionary in cands:
+		var reach: float = cand["reach"]
+		if reach >= 0.9:
+			continue
+		if int(cand["order"]) < 0:
+			if hidden.is_empty() or reach < float(hidden["reach"]):
+				hidden = cand
+			continue
+		nearest_off = minf(nearest_off, float(cand["off"]))
+	# Anchor ties to the minimum, so a chain of near-equals cannot drift away.
+	for cand: Dictionary in cands:
+		if int(cand["order"]) < 0 or float(cand["reach"]) >= 0.9 or float(cand["off"]) > nearest_off + 0.0001:
+			continue
+		if visible.is_empty() or int(cand["order"]) > int(visible["order"]) or (int(cand["order"]) == int(visible["order"]) and float(cand["reach"]) < float(visible["reach"])):
+			visible = cand
+	return int(visible["item"]) if not visible.is_empty() else int(hidden.get("item", -1))
+
+
 ## One thing's footprint on the floor: a rectangle `half` its sides (x, z) out
 ## from `centre` each way, turned by yaw as the 3D piece is (Basis(UP, yaw)).
 ## Its own x and z directions are worked out once, so trying it at spot after
@@ -205,17 +352,30 @@ static func footprint_gap(centre_a: Vector2, size_a: Vector2, yaw_a: float, cent
 class Footprint:
 	var centre: Vector2
 	var half: Vector2
+	var yaw: float
 	var along_x: Vector2
 	var along_z: Vector2
 
-	func _init(at: Vector2, size: Vector2, yaw: float) -> void:
+	func _init(at: Vector2, size: Vector2, turn: float) -> void:
 		centre = at
 		half = size * 0.5
-		var turn := Basis(Vector3.UP, yaw)
-		var x3: Vector3 = turn * Vector3.RIGHT
-		var z3: Vector3 = turn * Vector3.BACK
+		turn_to(turn)
+
+	## Turn it to `turn` (radians, as Basis(UP, turn)): its side directions worked
+	## out again, only when the yaw really changes (_clear_spot's quarter turn).
+	func turn_to(turn: float) -> void:
+		yaw = turn
+		var basis := Basis(Vector3.UP, turn)
+		var x3: Vector3 = basis * Vector3.RIGHT
+		var z3: Vector3 = basis * Vector3.BACK
 		along_x = Vector2(x3.x, x3.z)
 		along_z = Vector2(z3.x, z3.z)
+
+	func cells(margin: float = 0.0) -> Rect2i:
+		var extent: Vector2 = along_x.abs() * half.x + along_z.abs() * half.y + Vector2.ONE * margin
+		var low := Vector2i((centre - extent).floor())
+		var high := Vector2i((centre + extent).floor())
+		return Rect2i(low, high - low + Vector2i.ONE)
 
 	## The gap to `other` along the side direction, of the four, that parts them
 	## most (SAT); negative when they overlap (then the least push that would part
