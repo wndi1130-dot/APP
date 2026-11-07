@@ -87,6 +87,8 @@ var lamp: Dictionary = {}              # {strength, reach} of the lantern carrie
 var lamp_on: bool = true               # put out by hand (weather_fx 12.3 stage 2)
 
 var path := PackedVector3Array()
+## Runtime issuance identity; consuming path points does not issue a new route.
+var path_issue: int = 0
 var running: bool = false
 var crouched: bool = false
 var facing: float = 0.0
@@ -412,6 +414,7 @@ func _free_busy() -> void:
 
 
 func go_to(p: PackedVector3Array, run: bool = false) -> void:
+	path_issue += 1
 	path = p
 	running = run
 	if action != "" and action != "aim":

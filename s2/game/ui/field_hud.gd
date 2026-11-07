@@ -34,6 +34,7 @@ const InventoryPane = preload("res://game/ui/inventory_pane.gd")
 const SoundRows = preload("res://game/ui/sound_rows.gd")
 const ScreenLift = preload("res://game/ui/screen_lift.gd")
 const FieldPrefs = preload("res://game/ui/field_prefs.gd")
+const MeleePress = preload("res://game/ui/melee_press.gd")
 const TypeLine = preload("res://game/ui/type_line.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
@@ -1617,8 +1618,9 @@ func tick(delta: float) -> void:
 		_bag_places_moved()
 	# Hold on an enemy with a melee weapon: keep swinging (field_unified 10).
 	if pressing and melee_pending != null and not melee_holding and Time.get_ticks_msec() - press_ms >= int(HOLD_TIME * 1000.0):
+		# 결정 564: 한 번씩이어도 이 누름은 처리했다. 계속 누르거나 떼면서 다시 치지 않는다.
 		melee_holding = true
-		_melee(melee_pending, true)
+		_melee(melee_pending, not MeleePress.enabled(game.opts), _hand_gesture())
 	_tick_auto_aim(delta)
 	_drop_stale_person()
 	_tick_context_hold()
@@ -1628,7 +1630,7 @@ func tick(delta: float) -> void:
 		if rim_run != was and p.stick != Vector2.ZERO:
 			_set_running(p)
 	# The attack pad stays lit while the fight goes on (one press, field_unified 10).
-	attack_button.button_pressed = fighting(p)
+	attack_button.button_pressed = _repeating_melee(p)
 	if p.sled_weapon_stowed:
 		auto_aim = false
 		aiming = false
@@ -2529,9 +2531,22 @@ func settings_panel() -> void:
 	cells.add_child(GlassPane.cell("스틱", "따라오기" if stick_floats() else "고정", _set_stick))
 	cells.add_child(GlassPane.cell("무전", String(game.RADIO_NAMES[game.radio_mode()]), _set_radio))
 	cells.add_child(GlassPane.cell("상태 아이콘", String(STATUS_SIZE_NAMES[status_diameter()]), _set_status_size))
+	var melee_cell := GlassPane.cell("근접", "한 번씩" if MeleePress.enabled(game.opts) else "연타", _set_melee_press)
+	melee_cell.name = "MeleePress"
+	cells.add_child(melee_cell)
 	pane.body.add_child(cells)
 	pane.body.add_child(SoundRows.make())   # 전체·음악·효과·목소리 (결정 448)
 	pane.body.add_child(ScreenLift.make(game))   # 밝기 (결정 471 B5)
+
+
+## 결정 564: 저장에 성공한 값만 현재 판과 다시 연 창에 함께 반영한다.
+func _set_melee_press() -> void:
+	var on: bool = not MeleePress.enabled(game.opts)
+	if MeleePress.save_enabled(on) != OK:
+		toast("설정을 저장하지 못했다", TOAST_WARN)
+		return
+	game.opts[MeleePress.OPTION] = on
+	settings_panel()
 
 
 func _set_status_size() -> void:
@@ -4132,15 +4147,11 @@ func _on_touch(event: InputEvent) -> void:
 ## first finger, pressed by hand for the others), the stick on the left
 ## half, or the right hand (aim in manual mode, an enemy, a thing to use).
 func finger_down(index: int, pos: Vector2) -> bool:
+	# A reused index lost its old lift: cancel that gesture before reading the new one.
+	if fingers.has(index):
+		finger_cancel(index)
 	if modal_open:
 		return true
-	# The same index again means its lift was lost (the app went away): let the
-	# old stick go before the new finger is read.
-	if fingers.has(index) and fingers[index]["kind"] == "stick":
-		fingers.erase(index)
-		stick_index = -1
-		stick_dash = false
-		_stick_release()
 	if offer_box.get_child_count() > 0:
 		# The last child is drawn on top; its full touch rect wins over every pad.
 		for choice_index: int in range(offer_box.get_child_count() - 1, -1, -1):
@@ -4157,7 +4168,7 @@ func finger_down(index: int, pos: Vector2) -> bool:
 			if _pad_blocked(b):
 				return true
 			fingers[index] = {"kind": "pad", "pad": b, "start": pos, "ms": Time.get_ticks_msec()}
-			_pad_down(b, pos)
+			_pad_down(b, pos, fingers[index])
 			return true
 	# The portrait: a tap opens the body picture (on the lift, if it never moved).
 	if portrait.get_global_rect().has_point(pos):
@@ -4186,7 +4197,7 @@ func finger_down(index: int, pos: Vector2) -> bool:
 			if _pad_blocked(near as Button):
 				return true
 			fingers[index] = {"kind": "pad", "pad": near, "start": pos, "ms": Time.get_ticks_msec()}
-			_pad_down(near as Button, pos)
+			_pad_down(near as Button, pos, fingers[index])
 		elif near == portrait:
 			fingers[index] = {"kind": "portrait", "start": pos}
 		elif near is Button:
@@ -4199,7 +4210,7 @@ func finger_down(index: int, pos: Vector2) -> bool:
 	if fingers.values().any(func(f): return f["kind"] == "hand"):
 		return false
 	fingers[index] = {"kind": "hand", "start": pos}
-	_press(pos)
+	_press(pos, fingers[index])
 	return true
 
 
@@ -4345,7 +4356,7 @@ func finger_move(index: int, pos: Vector2) -> bool:
 		"pad":
 			_pad_move(f["pad"], pos, f)
 		"hand":
-			_hand_move(pos)
+			_hand_move(pos, f)
 		"button":
 			# A finger on the bag pane drags its list once it goes past a tap.
 			var held_key: Variant = f.get("button")
@@ -4438,7 +4449,7 @@ func finger_up(index: int, pos: Vector2) -> bool:
 				b.pressed.emit()
 			_finger_key_up(f)
 		"hand":
-			_release(pos)
+			_release(pos, f)
 		"portrait":
 			if pos.distance_to(f["start"]) < DRAG_PX and touch_rect(portrait).has_point(pos):
 				body_panel()
@@ -4464,27 +4475,78 @@ func finger_cancel(index: int) -> bool:
 		"button":
 			_finger_key_up(f)
 		"pad":
-			if auto_aim:
-				aim_cancel = true
-				_auto_aim_end(Vector2.ZERO)
+			_cancel_owned_aim(f)
 			for b in [aim_button, context_button, depart_button, shove_button]:
 				if f["pad"] == b:
 					b.button_pressed = false
 			if f["pad"] == run_button and run_hold():
 				_run_key_up()
 		"hand":
-			if aiming and game.player.aim.active:
-				game.player.aim.stop()
+			_cancel_owned_aim(f)
 			pressing = false
-			aiming = false
-			aim_cancel = false
-			aim_armed = false
-			aim_target = null
+			press_ms = 0
 			melee_pending = null
-			if melee_holding:
-				game.combat.stop_holding(game.player)
+			_cancel_hand_melee(f)
 			melee_holding = false
 	return true
+
+
+## Only the gesture that most recently started the aim may end it.
+static func _owns_aim(f: Dictionary) -> bool:
+	return bool(f.get("aim_owner", false))
+
+
+## Whether this gesture may change or end the aim. Its owner may. An aim no finger owns (started by a
+## direct call, or its owner's record already gone) may be ended by any gesture that never lost the
+## aim, so no aim is left that nothing can end; a gesture whose aim was taken over (aim_owner false)
+## never may.
+func _may_end_aim(f: Dictionary) -> bool:
+	if _owns_aim(f):
+		return true
+	return not f.has("aim_owner") and not _aim_has_owner()
+
+
+func _aim_has_owner() -> bool:
+	for held: Dictionary in fingers.values():
+		if _owns_aim(held):
+			return true
+	return false
+
+
+func _claim_aim(f: Dictionary) -> void:
+	for held: Dictionary in fingers.values():
+		if _owns_aim(held):
+			# Keep the spent gesture marked, even after the new owner lets go.
+			held["aim_owner"] = false
+	if not f.is_empty():
+		f["aim_owner"] = true
+
+
+func _cancel_owned_aim(f: Dictionary) -> void:
+	if not _may_end_aim(f):
+		return
+	if auto_aim:
+		aim_cancel = true
+		_auto_aim_end(Vector2.ZERO)
+	elif game.player.aim.active:
+		game.player.aim.stop()
+	aiming = false
+	aim_cancel = false
+	aim_armed = false
+	aim_target = null
+	f.erase("aim_owner")
+
+
+func _hand_gesture() -> Dictionary:
+	for held: Dictionary in fingers.values():
+		if held.get("kind", "") == "hand":
+			return held
+	return {}
+
+
+func _cancel_hand_melee(f: Dictionary) -> void:
+	if game.player != null and game.combat.owns_melee_order(game.player, int(f.get("melee_order", 0))):
+		game.combat.stop_holding(game.player)
 
 
 ## The glass a tap folds or opens: the clock, or a goal or promise line that is
@@ -4679,7 +4741,7 @@ func _pad_blocked(b: Button) -> bool:
 	return b.disabled or (p.sled_weapon_stowed and b in [attack_button, aim_button, shove_button, manual_button])
 
 
-func _pad_down(b: Button, pos: Vector2) -> void:
+func _pad_down(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
 	if _pad_blocked(b):
 		return
 	var p = game.player
@@ -4702,11 +4764,11 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 		game.actions.self_bandage(p)
 	elif b == aim_button:
 		aim_button.button_pressed = true
-		_auto_aim_start()
+		_auto_aim_start(f)
 	elif b == attack_button:
 		# One press fights the one in reach until it is down, then the next
 		# within 2 m; a second press stops (field_unified 10, coordinator 18:10).
-		if fighting(p):
+		if _repeating_melee(p):
 			stop_fight(p)
 			return
 		var t = game.combat.melee_pick(p)
@@ -4714,8 +4776,9 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 			# Nobody in reach: swing at the air all the same (decision 405).
 			game.combat.swing_air(p)
 			return
-		_melee(t, true)
-		attack_button.button_pressed = true
+		# 결정 564: 공격 패드(주 행동의 근접 패드 포함)도 같은 누름 설정을 따른다.
+		_melee(t, not MeleePress.enabled(game.opts), f)
+		attack_button.button_pressed = _repeating_melee(p)
 	elif b == context_button:
 		context_button.button_pressed = true
 	elif b == depart_button:
@@ -4762,6 +4825,9 @@ func _pad_move(b: Button, pos: Vector2, f: Dictionary) -> void:
 		return
 	if b != aim_button or not auto_aim:
 		return
+	# The owner, or any never-superseded gesture while no finger owns the aim (direct calls included).
+	if not _may_end_aim(f):
+		return
 	var over := _over_player(pos)
 	aim_armed = aim_armed or not over
 	aim_cancel = aim_armed and over
@@ -4791,6 +4857,8 @@ func _pad_move(b: Button, pos: Vector2, f: Dictionary) -> void:
 
 
 func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
+	if b == aim_button and not f.is_empty() and not _may_end_aim(f) and not primary_melee(game.player):
+		return
 	if _pad_blocked(b):
 		if b in [attack_button, aim_button, shove_button]:
 			b.button_pressed = false
@@ -4799,7 +4867,8 @@ func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
 		return
 	if b == aim_button:
 		aim_button.button_pressed = false
-		_auto_aim_end(pos)
+		if f.is_empty() or _may_end_aim(f):
+			_auto_aim_end(pos)
 	elif b == context_button:
 		context_button.button_pressed = false
 		if not f.get("opened", false) and touch_rect(b).has_point(pos):
@@ -4820,13 +4889,14 @@ func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
 
 ## Hold the aim pad: the gun comes up and, after a moment that shortens with
 ## shooting skill, settles on the nearest threat ahead (field_unified 10).
-func _auto_aim_start() -> void:
+func _auto_aim_start(f: Dictionary = {}) -> void:
 	var p = game.player
 	if not W.is_ranged(p.weapon_id()):
 		toast("총 없음")
 		return
 	if not game.combat.start_aim(p):
 		return
+	_claim_aim(f)
 	auto_aim = true
 	aiming = true
 	aim_armed = true
@@ -4887,7 +4957,7 @@ func _target_ok(t) -> bool:
 	return game.combat.hostile(t) and t.visible
 
 
-func _press(pos: Vector2) -> void:
+func _press(pos: Vector2, f: Dictionary = {}) -> void:
 	pressing = true
 	press_pos = pos
 	press_ms = Time.get_ticks_msec()
@@ -4904,6 +4974,9 @@ func _press(pos: Vector2) -> void:
 		return
 	if gun:
 		if game.combat.start_aim(p):
+			_claim_aim(f)
+			auto_aim = false
+			auto_free = false
 			aiming = true
 			# An enemy at your feet: pressing on it must not count as letting go on yourself.
 			aim_armed = not _over_player(pos)
@@ -4914,10 +4987,13 @@ func _press(pos: Vector2) -> void:
 		melee_pending = target
 
 
-func _release(pos: Vector2) -> void:
+func _release(pos: Vector2, f: Dictionary = {}) -> void:
 	pressing = false
+	# A superseded aim gesture is consumed even if the new owner lifted first.
+	if f.has("aim_owner") and not _owns_aim(f):
+		return
 	var p = game.player
-	if aiming:
+	if aiming and (f.is_empty() or _may_end_aim(f)):
 		aiming = false
 		if p.aim.active:
 			if not (aim_cancel or (aim_armed and _over_player(pos))):
@@ -4926,13 +5002,17 @@ func _release(pos: Vector2) -> void:
 			p.aim.stop()
 		aim_cancel = false
 		aim_target = null
+		f.erase("aim_owner")
 		return
 	if melee_pending != null:
 		if not melee_holding:
 			# A tap keeps swinging until it is down (no tap per swing).
-			_melee(melee_pending, true)
+			# 결정 564: 한 번씩을 켰을 때만 hold=false, 기본 연타는 그대로다.
+			_melee(melee_pending, not MeleePress.enabled(game.opts), f)
 		melee_pending = null
 		melee_holding = false
+		return
+	if aiming:
 		return
 	if pos.distance_to(press_pos) > DRAG_PX:
 		return
@@ -4940,8 +5020,8 @@ func _release(pos: Vector2) -> void:
 
 
 ## The right thumb dragging the aim point (manual, or pressed on an enemy).
-func _hand_move(pos: Vector2) -> void:
-	if not (pressing and aiming):
+func _hand_move(pos: Vector2, f: Dictionary = {}) -> void:
+	if not (pressing and aiming) or (not f.is_empty() and not _may_end_aim(f)):
 		return
 	var over := _over_player(pos)
 	aim_armed = aim_armed or not over
@@ -4971,6 +5051,8 @@ func drop_touch() -> void:
 	for index: int in fingers:
 		if String(fingers[index].get("kind", "")) == "button":
 			_finger_key_up(fingers[index])
+		elif String(fingers[index].get("kind", "")) == "hand":
+			_cancel_hand_melee(fingers[index])
 		modal_fingers[index] = {"owner": null}
 	if fingers.has(0):
 		modal_fingers[-1] = {"owner": null}
@@ -4988,13 +5070,12 @@ func drop_touch() -> void:
 		if b != null:
 			b.button_pressed = false
 	pressing = false
+	press_ms = 0
 	aiming = false
 	aim_cancel = false
 	aim_armed = false
 	aim_target = null
 	melee_pending = null
-	if melee_holding and game.player != null:
-		game.combat.stop_holding(game.player)
 	melee_holding = false
 	if game.player != null:
 		game.player.aim.stop()
@@ -5035,12 +5116,17 @@ func _tick_primary(p) -> void:
 			_set_icon(aim_button, "aim", ATTACK_ICON)
 			_nudge(aim_button, 0.0)
 	if melee:
-		aim_button.button_pressed = fighting(p)
+		aim_button.button_pressed = _repeating_melee(p)
 
 
-## The player is in a one-press fight: still after someone, swinging on.
+## Still pursuing a melee order, whether it repeats or is waiting for its first blow.
 func fighting(p) -> bool:
 	return game.combat.fighting(p)
+
+
+## Only a repeating order lights the attack pad and makes a second press stop it.
+func _repeating_melee(p) -> bool:
+	return p.hold_attack and fighting(p)
 
 
 func stop_fight(p) -> void:
@@ -5055,8 +5141,12 @@ func _fight_dir(p) -> Vector2:
 	return d.normalized() if d.length() > 0.05 else Vector2.ZERO
 
 
-func _melee(target, hold: bool) -> void:
+func _melee(target, hold: bool, f: Dictionary = {}) -> void:
+	var before: int = game.combat.melee_order_id(game.player)
 	game.combat.fight(game.player, target, hold)
+	var order_id: int = game.combat.melee_order_id(game.player)
+	if not f.is_empty() and order_id > 0 and order_id != before:
+		f["melee_order"] = order_id
 
 
 ## The finger's point moved to the floor the target stands on (shooting
