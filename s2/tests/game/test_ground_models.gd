@@ -16,12 +16,15 @@ func after_each() -> void:
 	Models.restore_cache(_old_cache)
 
 
-func _triangle() -> ArrayMesh:
+## A one-triangle template as baked (vertex alpha 0, on the floor, round its
+## footprint's middle), or with its alpha, height or sideways place changed.
+func _triangle(alpha: float = 0.0, lift: float = 0.0, shift: float = 0.0) -> ArrayMesh:
 	var arrays: Array = []
 	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3(-0.4, 0, -0.2), Vector3(0.4, 0, -0.2), Vector3(0, 0.1, 0.2)])
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3(-0.4 + shift, lift, -0.2), Vector3(0.4 + shift, lift, -0.2), Vector3(shift, 0.1 + lift, 0.2)])
 	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.FORWARD, Vector3.FORWARD, Vector3.FORWARD])
-	arrays[Mesh.ARRAY_COLOR] = PackedColorArray([Color(0.5, 0.4, 0.3, 0), Color(0.5, 0.4, 0.3, 0), Color(0.5, 0.4, 0.3, 0)])
+	var colour := Color(0.5, 0.4, 0.3, alpha)
+	arrays[Mesh.ARRAY_COLOR] = PackedColorArray([colour, colour, colour])
 	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2])
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
@@ -42,6 +45,18 @@ func test_templates_and_misses_are_cached_and_can_be_restored() -> void:
 	assert_false(Models.cache_template("empty", ArrayMesh.new()))
 	assert_eq(Models.template("empty"), {})
 	assert_eq(Models.template("../escape"), {})
+
+
+## A template not as baked is a cached miss and its thing keeps a box: a vertex
+## alpha above 0 (world_vis.gdshader would lay snow and rain over it), lying
+## above its floor or off its footprint's middle (it would float or stand off
+## its spot and its rim).
+func test_a_template_not_as_baked_is_a_miss_and_keeps_a_box() -> void:
+	assert_true(Models.cache_template("as_baked", _triangle()), "the fixture itself passes")
+	for bad: Array in [["coloured_alpha", _triangle(1.0)], ["lifted", _triangle(0.0, 0.05)], ["off_middle", _triangle(0.0, 0.0, 0.1)]]:
+		assert_false(Models.cache_template(bad[0], bad[1]), bad[0])
+		assert_eq(Models.template(bad[0]), {}, "%s is a cached miss" % bad[0])
+		assert_eq(Models.resolve(bad[0]), "", "%s is drawn as a box" % bad[0])
 
 
 func test_candidate_priority_is_shared_with_the_pane() -> void:
