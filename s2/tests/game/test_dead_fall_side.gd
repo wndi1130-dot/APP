@@ -115,9 +115,12 @@ func _picture(z: Dictionary) -> Color:
 
 
 func test_pure_variant_covers_all_eight_cells() -> void:
-	# Dynamic call keeps this file loadable on 0841747c: it fails this assertion.
+	# Dynamic call keeps this file loadable on 0841747c: it fails this assertion. The calls go through a
+	# Script-typed value because the parser refuses Object methods (get_script_method_list, call) on a
+	# preloaded class constant ("Cannot call non-static function ... on the class directly").
+	var body_script: Script = DeadBody
 	var present := false
-	for method: Dictionary in DeadBody.get_script_method_list():
+	for method: Dictionary in body_script.get_script_method_list():
 		present = present or String(method["name"]) == "fall_variant"
 	assert_true(present, "the pure fall_variant function exists")
 	if not present:
@@ -125,7 +128,7 @@ func test_pure_variant_covers_all_eight_cells() -> void:
 	for by in WAYS:
 		for front in [false, true]:
 			for phase in [0.0, 0.1, 0.37, 0.99]:
-				assert_eq(int(DeadBody.call("fall_variant", by, front, phase)), _want(by, front, phase), "%s front=%s phase=%s" % [by, front, phase])
+				assert_eq(int(body_script.call("fall_variant", by, front, phase)), _want(by, front, phase), "%s front=%s phase=%s" % [by, front, phase])
 
 
 func test_fall_motion_uses_the_recorded_way_for_both_hash_halves() -> void:
