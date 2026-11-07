@@ -77,6 +77,7 @@ static func add(original: Dictionary, widths: Array[int] = [], inset: int = 0) -
 	var look: Dictionary = RegionLooks.of(String(original.get("region_band", "")), String(original.get("place_kind", "")))
 	var lot_step: int = int(look.get("lot_step", LOT_STEP))
 	var old: FieldGrid = original["grid"]
+	var legacy_owned: bool = _legacy_entry_exit(original)
 	var inner := Rect2i(left, top, old.width, old.height)
 	var data := MapShift.grow(original, left, top, right, bottom, false)
 	var g: FieldGrid = data["grid"]
@@ -247,6 +248,7 @@ static func add(original: Dictionary, widths: Array[int] = [], inset: int = 0) -
 	data["map_ring"] = {"width": width, "sides": edges, "inner": inner, "seed": seed_value,
 		"buildings": ring["buildings"].size(), "target": target, "roads": roads,
 		"fields": fields, "containers": ring["containers"].keys(), "rooms": ring["room_stats"]}
+	finish_flee_exit(data, inner, legacy_owned)
 	return data
 
 
@@ -400,32 +402,109 @@ static func _item_id(it: Variant) -> String:
 
 ## The dead still come from beyond the map: a ground entry on the old border moves
 ## straight out to the new edge. No lot, fence or tree stands on the outermost row, so
-## the dead walk in round the yards. The flee exit goes with it.
+## the dead walk in round the yards. An owned flee exit uses the same projection
+## after all ground and walking data are finished.
 static func _move_entries_out(data: Dictionary, inner: Rect2i) -> void:
 	var g: FieldGrid = data["grid"]
-	var moved := {}
 	for id in data.get("entries", {}):
 		if data.get("manholes", {}).has(id) or int(data.get("entry_levels", {}).get(id, 0)) != 0:
 			continue
 		var cells: Array = data["entries"][id]
 		for i in range(cells.size()):
 			var c: Vector2i = cells[i]
-			var out := c
-			if c.x == inner.position.x:
-				out = Vector2i(0, c.y)
-			elif c.x == inner.end.x - 1:
-				out = Vector2i(g.width - 1, c.y)
-			elif c.y == inner.position.y:
-				out = Vector2i(c.x, 0)
-			elif c.y == inner.end.y - 1:
-				out = Vector2i(c.x, g.height - 1)
-			if out == c:
-				continue
-			moved[c] = out
-			cells[i] = out
+			cells[i] = _outer_cell(g, c, inner)
+
+
+## 출처가 없는 옛 자료에서만, 실제로 옮길 지상 입구와 겹친 출구를 보존한다.
+## 원본 좌표로 판정하며 이 추정을 flee_exit_set으로 저장하지 않는다.
+static func _legacy_entry_exit(data: Dictionary) -> bool:
+	if data.has("flee_exit_set"):
+		return false
+	var g: FieldGrid = data.get("grid")
+	var cell: Variant = data.get("anchors", {}).get("flee_exit")
+	if g == null or not cell is Vector2i or not _on_edge(g, cell):
+		return false
+	for id in data.get("entries", {}):
+		if data.get("manholes", {}).has(id) or int(data.get("entry_levels", {}).get(id, 0)) != 0:
+			continue
+		if data["entries"][id].has(cell):
+			return true
+	return false
+
+
+## 공통 출구 확정. FieldMaps를 역으로 preload하지 않도록 격자/자료만 읽는다.
+## legacy_owned는 옛 자료의 입구 겹침과 StopGround의 값 비교 호환에만 쓴다.
+## 막힌 경계에서는 원래 값(없으면 없음)을 보존하며 다른 기준점은 건드리지 않는다.
+static func finish_flee_exit(data: Dictionary, inner: Rect2i = Rect2i(), legacy_owned: bool = false) -> void:
+	var g: FieldGrid = data.get("grid")
+	if g == null:
+		return
 	var anchors: Dictionary = data.get("anchors", {})
-	if anchors.get("flee_exit") is Vector2i and moved.has(anchors["flee_exit"]):
-		anchors["flee_exit"] = moved[anchors["flee_exit"]]
+	var cell: Variant = anchors.get("flee_exit")
+	var owned: bool = bool(data.get("flee_exit_set", legacy_owned))
+	if owned and cell is Vector2i:
+		var projected: Vector2i = _outer_cell(g, cell, inner)
+		if _on_edge(g, projected) and g.people_can_walk(projected):
+			anchors["flee_exit"] = projected
+			data["anchors"] = anchors
+			return
+	var chosen: Variant = farthest_walkable_edge(g, anchor_home(data))
+	if not chosen is Vector2i:
+		push_warning("달아날 바깥 칸이 없음: %s" % String(data.get("place_id", "<unknown>")))
+		return
+	# 새 끝이 막힌 직접 지정 출구는 숲 앞의 걸을 수 있는 원래 칸을 지킨다.
+	# 위의 전체 경계 검사는 이 예외에서도 '바깥 칸 없음' 경고를 유지한다.
+	if owned and cell is Vector2i and g.people_can_walk(cell):
+		return
+	anchors["flee_exit"] = chosen
+	data["anchors"] = anchors
+
+
+static func _on_edge(g: FieldGrid, cell: Vector2i) -> bool:
+	return g.inside(cell) and (cell.x == 0 or cell.x == g.width - 1 or cell.y == 0 or cell.y == g.height - 1)
+
+
+## 망자 입구의 기존 우선순위(왼쪽, 오른쪽, 위, 아래)를 모서리에도 그대로 쓴다.
+static func _outer_cell(g: FieldGrid, cell: Vector2i, inner: Rect2i) -> Vector2i:
+	if not inner.has_point(cell):
+		return cell
+	if cell.x == inner.position.x:
+		return Vector2i(0, cell.y)
+	if cell.x == inner.end.x - 1:
+		return Vector2i(g.width - 1, cell.y)
+	if cell.y == inner.position.y:
+		return Vector2i(cell.x, 0)
+	if cell.y == inner.end.y - 1:
+		return Vector2i(cell.x, g.height - 1)
+	return cell
+
+
+## FieldMaps.anchors와 출구 확정이 같은 집결지와 동률 순서를 사용한다.
+static func anchor_home(data: Dictionary) -> Vector2i:
+	var g: FieldGrid = data["grid"]
+	var doors: Array = data.get("train_doors", {}).get("lower", [])
+	if doors.is_empty():
+		doors = data.get("train_doors", {}).get("upper", [])
+	if doors.is_empty():
+		doors = data.get("spawns", {}).get("train_door", [])
+	if doors.is_empty():
+		doors = data.get("spawns", {}).get("squad", [])
+	return doors[doors.size() / 2] if not doors.is_empty() else Vector2i(g.width / 2, g.height / 2)
+
+
+## 순수 선택: 바깥 줄만 위에서 아래, 왼쪽에서 오른쪽으로 훑는다. 없으면 null.
+static func farthest_walkable_edge(g: FieldGrid, home: Vector2i) -> Variant:
+	var chosen: Variant = null
+	var far: int = -1
+	for y in range(g.height):
+		var step: int = 1 if y == 0 or y == g.height - 1 else maxi(1, g.width - 1)
+		for x in range(0, g.width, step):
+			var cell := Vector2i(x, y)
+			var distance: int = (cell - home).length_squared()
+			if distance > far and g.people_can_walk(cell):
+				far = distance
+				chosen = cell
+	return chosen
 
 
 static func _paint_floor(g: FieldGrid, r: Rect2i, floor_kind: int) -> void:

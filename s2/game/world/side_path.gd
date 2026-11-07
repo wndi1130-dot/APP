@@ -14,6 +14,7 @@ const BuildingRules = preload("res://game/sim/building_rules.gd")
 const LootRules = preload("res://game/sim/loot_rules.gd")
 const PropKinds = preload("res://game/world/prop_kinds.gd")
 const MapShift = preload("res://game/world/map_shift.gd")
+const MapRing = preload("res://game/world/map_ring.gd")
 const StoryMaps = preload("res://game/world/story_maps.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
@@ -343,9 +344,6 @@ static func _build(data: Dictionary, spot: Dictionary, rng: RandomNumberGenerato
 			if _v_of(g, side, c) == STRIP:
 				cells[i] = _at(g, side, _u_of(side, c), 0)
 				lanes[_u_of(side, c)] = true
-	var flee: Variant = data.get("anchors", {}).get("flee_exit")
-	if flee is Vector2i and _v_of(g, side, flee) == STRIP:
-		data["anchors"]["flee_exit"] = _at(g, side, _u_of(side, flee), 0)
 	# The belt is trees, a tree on every blocked cell; the rest of the strip is sparse woods,
 	# kept off the clearing, the cells either side of the gap and the lanes of the dead.
 	if not data.has("trees"):
@@ -459,6 +457,9 @@ static func _build(data: Dictionary, spot: Dictionary, rng: RandomNumberGenerato
 		dead.append(yard.pop_at(rng.randi_range(0, yard.size() - 1)))
 	data.get_or_add("spawns", {})["dead_rare_store"] = dead
 	g.refresh_paths()
+	var inner := Rect2i(STRIP if side == 3 else 0, STRIP if side == 0 else 0,
+		g.width - (STRIP if side % 2 == 1 else 0), g.height - (STRIP if side % 2 == 0 else 0))
+	MapRing.finish_flee_exit(data, inner)
 	# For the ground shade under the trees (mood, fx): the belt is darkest, the sparse woods less.
 	spot["belt"] = belt
 	spot["woods"] = woods
