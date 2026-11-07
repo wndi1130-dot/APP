@@ -62,7 +62,11 @@ func test_things_at_one_spot_are_spread_and_never_more_than_three_drawn() -> voi
 		items.append({"pos": at, "id": id, "n": 1})
 	var out: Array = GroundLook.pieces(items)
 	assert_eq(out.size(), GroundLook.PER_CELL)
-	assert_almost_eq(Vector2(out[0]["at"].x, out[0]["at"].z).distance_to(Vector2(at.x, at.z)), 0.0, 0.001, "the first lies where it was put")
+	var biggest: Dictionary = out[0]
+	for piece: Dictionary in out:
+		if (piece["size"] as Vector3).x * (piece["size"] as Vector3).z > (biggest["size"] as Vector3).x * (biggest["size"] as Vector3).z:
+			biggest = piece
+	assert_almost_eq(Vector2(biggest["at"].x, biggest["at"].z).distance_to(Vector2(at.x, at.z)), 0.0, 0.001, "the biggest lies where it was put")
 	var spots := {}
 	for piece: Dictionary in out:
 		var flat := Vector2(piece["at"].x, piece["at"].z)
@@ -72,6 +76,40 @@ func test_things_at_one_spot_are_spread_and_never_more_than_three_drawn() -> voi
 	# Another cell gets its own three.
 	items.append({"pos": at + Vector3(3, 0, 0), "id": "cloth", "n": 1})
 	assert_eq(GroundLook.pieces(items).size(), GroundLook.PER_CELL + 1)
+
+
+## 11-07 shots: three clothes at real size on one cell lay on one another (a heap,
+## the 금지선) and a knife was lost under a shirt. Now each lies clear of the rest.
+func test_clothes_and_a_knife_on_one_cell_lie_clear_of_one_another() -> void:
+	var at := Vector3(20.5, 0, 9.5)
+	for ids: Array in [["coat_long", "shirt_flannel", "trousers_work", "boots_work"], ["knife", "shirt_cotton", "can_beans"]]:
+		var items: Array = []
+		for id: String in ids:
+			items.append({"pos": at, "id": id, "n": 1})
+		var out: Array = GroundLook.pieces(items)
+		assert_eq(out.size(), mini(ids.size(), GroundLook.PER_CELL))
+		for i: int in out.size():
+			var a: Dictionary = out[i]
+			var flat_a := Vector2(a["at"].x, a["at"].z)
+			assert_lte(flat_a.distance_to(Vector2(at.x, at.z)), GroundLook.SPREAD_MAX + 0.0001, "%s within reach of its spot" % ids[i])
+			for j: int in range(i + 1, out.size()):
+				var b: Dictionary = out[j]
+				var gap: float = GroundLook.footprint_gap(flat_a, Vector2(a["size"].x, a["size"].z), a["yaw"],
+					Vector2(b["at"].x, b["at"].z), Vector2(b["size"].x, b["size"].z), b["yaw"])
+				assert_gte(gap, 0.0, "%s and %s do not lie on one another" % [ids[i], ids[j]])
+		assert_eq(GroundLook.pieces(items), out, "the same list lies the same")
+
+
+func test_footprint_gap_is_the_room_between_turned_rectangles() -> void:
+	assert_almost_eq(GroundLook.footprint_gap(Vector2.ZERO, Vector2.ONE, 0.0, Vector2(3, 0), Vector2.ONE, 0.0), 2.0, 0.0001, "side by side")
+	assert_almost_eq(GroundLook.footprint_gap(Vector2.ZERO, Vector2(2, 1), 0.0, Vector2(0, 2), Vector2(2, 1), 0.0), 1.0, 0.0001, "one above the other")
+	assert_lt(GroundLook.footprint_gap(Vector2.ZERO, Vector2.ONE, 0.0, Vector2(0.5, 0), Vector2.ONE, 0.0), 0.0, "overlapping")
+	# A long thin thing turned a quarter lies along z: it clears one beside it on x.
+	assert_gt(GroundLook.footprint_gap(Vector2.ZERO, Vector2(2, 0.2), PI * 0.5, Vector2(0.5, 0), Vector2(0.2, 0.2), 0.0), 0.0)
+	assert_lt(GroundLook.footprint_gap(Vector2.ZERO, Vector2(2, 0.2), 0.0, Vector2(0.5, 0), Vector2(0.2, 0.2), 0.0), 0.0, "unturned it covers it")
+	# Two squares turned 45 degrees, 2 m apart on x: measured along their own edge
+	# normals (the separating axes), 2·cos45 apart less a side each.
+	assert_almost_eq(GroundLook.footprint_gap(Vector2.ZERO, Vector2.ONE, PI * 0.25, Vector2(2, 0), Vector2.ONE, PI * 0.25), sqrt(2.0) - 1.0, 0.0001)
 
 
 func test_it_lies_on_its_own_floor() -> void:

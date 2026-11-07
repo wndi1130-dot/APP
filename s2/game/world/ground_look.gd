@@ -21,9 +21,17 @@ const GroundModels = preload("res://game/world/ground_models.gd")
 const LEVEL_H: float = 3.0
 ## Drawn on one cell at most.
 const PER_CELL: int = 3
-## How far the second and third things on a cell lie from the first (metres):
-## inside the 0.9 a tap reaches (field_hud.gd _tap_thing).
+## How far the second and third things on a cell lie from their spot at least
+## (metres), and at most: laid at real size a coat is 0.6-0.8 m, so three on one
+## cell would lie on one another and read as a heap (금지선) with a knife lost
+## under a shirt (11-07 shots). Each is pushed out, round its own angle, until
+## its footprint is clear of those already laid (the biggest lies on its spot),
+## never past SPREAD_MAX — inside the 0.9 a tap reaches (field_hud.gd _tap_thing).
 const SPREAD: float = 0.3
+const SPREAD_MAX: float = 0.7
+const SPREAD_STEP: float = 0.05
+## Room left between two footprints so their dark rims (RIM) do not merge either.
+const SPREAD_GAP: float = 0.04
 
 ## Kind -> [size (x, y, z: the long side along x), colour as seen (sRGB)].
 ## Dark, muted greys and browns and one pale paper, none at the floors' own
@@ -79,7 +87,7 @@ static func kind_of(g: Dictionary) -> String:
 ## [{"lv", "model", "yaw", "size", "at" (footprint centre on floor), "color"}].
 static func pieces(items: Array) -> Array:
 	var out: Array = []
-	var on_cell: Dictionary = {}  # Vector3i(x, y, lv) -> drawn there so far
+	var on_cell: Dictionary = {}  # Vector3i(x, y, lv) -> indexes into out drawn there
 	for g: Dictionary in items:
 		if bool(g.get("glint", false)):
 			continue
@@ -87,15 +95,14 @@ static func pieces(items: Array) -> Array:
 		var lv := clampi(roundi(pos.y / LEVEL_H), -1, 2)
 		var c := FieldGrid.cell_of(pos)
 		var key := Vector3i(c.x, c.y, lv)
-		var k := int(on_cell.get(key, 0))
+		var drawn: Array = on_cell.get(key, [])
+		var k: int = drawn.size()
 		if k >= PER_CELL:
 			continue
-		on_cell[key] = k + 1
+		drawn.append(out.size())
+		on_cell[key] = drawn
 		var h: int = hash(Vector4i(c.x, c.y, lv, k))
 		var at := Vector3(pos.x, lv * LEVEL_H, pos.z)
-		if k > 0:
-			var turn := deg_to_rad(float(posmod(h, 360)))
-			at += Vector3(cos(turn), 0, sin(turn)) * SPREAD
 		var look: Array = LOOKS[kind_of(g)]
 		var size: Vector3 = look[0]
 		var id: String = String(g.get("id", ""))
@@ -110,8 +117,97 @@ static func pieces(items: Array) -> Array:
 		# vanish (what lies buried shines instead, decision 423 (11)).
 		var color: Color = look[1]
 		color.a = 0.0
-		out.append({"lv": lv, "model": model, "yaw": yaw, "size": size, "at": at, "color": color})
+		out.append({"lv": lv, "model": model, "yaw": yaw, "size": size, "at": at, "color": color,
+			"turn": deg_to_rad(float(posmod(h, 360)))})
+	for key: Vector3i in on_cell:
+		_lay_apart(out, on_cell[key])
+	for piece: Dictionary in out:
+		piece.erase("turn")
 	return out
+
+
+## The things on one cell (indexes into `out`, list order) laid so their
+## footprints keep clear of one another: the biggest stays on its spot, then each
+## next biggest goes out from its own spot along its own angle ("turn"), SPREAD
+## and on by SPREAD_STEP, to the first place clear of all laid before; when none
+## is by SPREAD_MAX, eight angles round its own are tried there and the one with
+## the most room taken. Deterministic: the same list lays the same.
+static func _lay_apart(out: Array, slots: Array) -> void:
+	var order: Array = slots.duplicate()
+	order.sort_custom(func(a: int, b: int) -> bool:
+		var area_a: float = _footprint_area(out[a])
+		var area_b: float = _footprint_area(out[b])
+		return area_a > area_b if not is_equal_approx(area_a, area_b) else a < b)
+	var laid: Array[Dictionary] = []
+	for slot: int in order:
+		var piece: Dictionary = out[slot]
+		if laid.is_empty():
+			laid.append(piece)
+			continue
+		var origin: Vector3 = piece["at"]
+		var best_at: Vector3 = origin
+		var best_room: float = -INF
+		var placed: bool = false
+		var distance: float = SPREAD
+		while distance <= SPREAD_MAX + 0.0001 and not placed:
+			var at: Vector3 = origin + _towards(float(piece["turn"])) * distance
+			var room: float = _room_among(piece, at, laid)
+			if room >= SPREAD_GAP:
+				best_at = at
+				placed = true
+			distance += SPREAD_STEP
+		if not placed:
+			for step: int in 8:
+				var at: Vector3 = origin + _towards(float(piece["turn"]) + TAU * float(step) / 8.0) * SPREAD_MAX
+				var room: float = _room_among(piece, at, laid)
+				if room > best_room:
+					best_room = room
+					best_at = at
+		piece["at"] = best_at
+		laid.append(piece)
+
+
+static func _towards(angle: float) -> Vector3:
+	return Vector3(cos(angle), 0, sin(angle))
+
+
+static func _footprint_area(piece: Dictionary) -> float:
+	var size: Vector3 = piece["size"]
+	return size.x * size.z
+
+
+## The least clearance (metres, negative when they overlap) between `piece` set
+## at `at` and each of `laid`, footprint to footprint (oriented rectangles).
+static func _room_among(piece: Dictionary, at: Vector3, laid: Array[Dictionary]) -> float:
+	var room: float = INF
+	for other: Dictionary in laid:
+		room = minf(room, footprint_gap(
+			Vector2(at.x, at.z), Vector2((piece["size"] as Vector3).x, (piece["size"] as Vector3).z), float(piece["yaw"]),
+			Vector2((other["at"] as Vector3).x, (other["at"] as Vector3).z), Vector2((other["size"] as Vector3).x, (other["size"] as Vector3).z), float(other["yaw"])))
+	return room
+
+
+## The gap between two footprints on the floor — rectangles of `size` (x, z)
+## round `centre`, turned by `yaw` as the 3D pieces are (Basis(UP, yaw)) — along
+## the separating axis that parts them most (SAT); negative when they overlap
+## (then the least push that would part them, as a negative).
+static func footprint_gap(centre_a: Vector2, size_a: Vector2, yaw_a: float, centre_b: Vector2, size_b: Vector2, yaw_b: float) -> float:
+	var axes_a: Array[Vector2] = _footprint_axes(yaw_a)
+	var axes_b: Array[Vector2] = _footprint_axes(yaw_b)
+	var best: float = -INF
+	for axis: Vector2 in axes_a + axes_b:
+		var reach_a: float = absf(axis.dot(axes_a[0])) * size_a.x * 0.5 + absf(axis.dot(axes_a[1])) * size_a.y * 0.5
+		var reach_b: float = absf(axis.dot(axes_b[0])) * size_b.x * 0.5 + absf(axis.dot(axes_b[1])) * size_b.y * 0.5
+		best = maxf(best, absf(axis.dot(centre_b - centre_a)) - reach_a - reach_b)
+	return best
+
+
+## A footprint's own x and z directions on the floor (x, z of the turned 3D axes).
+static func _footprint_axes(yaw: float) -> Array[Vector2]:
+	var turn := Basis(Vector3.UP, yaw)
+	var along_x: Vector3 = turn * Vector3.RIGHT
+	var along_z: Vector3 = turn * Vector3.BACK
+	return [Vector2(along_x.x, along_x.z), Vector2(along_z.x, along_z.z)]
 
 
 ## A dark rim round each thing (T0-6): a quad flat on its floor, RIM wider than
