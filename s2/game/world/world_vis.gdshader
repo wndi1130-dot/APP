@@ -727,6 +727,8 @@ void fragment() {
 	// Vertex alpha: 1 open to the sky, 0 under a roof (map_view.sky_alpha).
 	float sky = COLOR.a;
 	float wet = clamp(fx_wet, 0.0, 1.0) * sky;
+	// Snow falling now (fx_fall.y): fresh snow dusts cleared paving and lies even (proposal).
+	float fresh = clamp(fx_fall.y, 0.0, 1.0);
 	vec2 uv = world_pos.xz / map_size;
 	vec4 cell = texture(vis, uv);
 	// A: how much of the cell's snow is untouched (1 fresh; lower where someone
@@ -857,12 +859,15 @@ void fragment() {
 	base *= 1.0 + (soil - 0.5) * 1.3 * ground_k * wander * mix(1.0, laid, bare_k);
 	// The wet soil above already darkens in blotches; this is the even rest
 	// (0.35 sank a rainy noon under V 0.36, decision 470).
-	base *= 1.0 - 0.2 * wet;
+	// Wet laid surfaces go darker than soil and grass (asphalt and concrete soak near-black,
+	// grass hardly changes): 0.26 paved, 0.17 else keeps a rainy noon and night's mean (proposal).
+	base *= 1.0 - (paved ? 0.26 : 0.17) * wet;
 	// Cleared paving keeps 25% of cover; exposed wet ground darkens up to 20%.
 	// Apply before the bank so sheltered piles and footsteps still read.
 	if (paved) {
-		cover *= 0.25;
-		base *= 1.0 - 0.2 * clamp(fx_snow, 0.0, 1.0) * bare_k;
+		// While snow falls it dusts the cleared paving again (0.25 kept dry, up to 0.7 in a blizzard).
+		cover *= mix(0.25, 0.7, fresh);
+		base *= 1.0 - 0.2 * clamp(fx_snow, 0.0, 1.0) * bare_k * (1.0 - 0.6 * fresh);
 	}
 	cover = max(cover, 0.8 * clamp(bank, 0.0, 1.0));
 	// Snow gathers at a wall's foot on every side and at a cleared street's kerbs (the wind
@@ -903,11 +908,42 @@ void fragment() {
 	cover *= 1.0 - grass_holes;
 	// The ground before the snow: what a frozen pool shows through its ice.
 	vec3 under_snow = base;
-	base = mix(base, FX_SNOW * mix(1.0, 0.75, wet) * (1.0 + (grain.r - 0.5) * 0.35 * wander), cover);
+	// Fresh snow while it falls lies even and a touch brighter; old snow under an open sky shows
+	// its crust and wind-scour more (fx_fall.y, the snow falling now; proposal).
+	base = mix(base, FX_SNOW * mix(1.0, 0.75, wet) * mix(0.97, 1.02, fresh) * (1.0 + (grain.r - 0.5) * 0.35 * mix(1.3, 0.5, fresh) * wander), cover);
+	// Blizzard: snow dust running over the ground along the wind, in lanes that gust by.
+	// Only the ground's upward faces (the pattern is xz only, it would stripe a wall or a prop's side),
+	// and thinner over a trodden track so the track still reads under the passing dust (6 Pro 782a61e1 2).
+	// The uniform prefix is unchanged; when it is zero all spatial work would contribute zero.
+	float blow_weather = fresh * smoothstep(0.5, 0.9, fx_wind.z);
+	if (blow_weather > 0.0) {
+		float blow = blow_weather * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
+		blow *= (is_ground ? 1.0 : 0.0) * smoothstep(0.6, 0.9, up) * (1.0 - 0.6 * trodden);
+		if (blow > 0.01) {
+			vec2 wd = normalize(fx_wind.xy + vec2(0.0001, 0.0));
+			float lane = smoothstep(0.55, 0.95, 0.5 + 0.5 * sin(dot(world_pos.xz, vec2(-wd.y, wd.x)) * 2.7 + drift * 7.0));
+			float gust = smoothstep(0.35, 0.9, 0.5 + 0.5 * sin(dot(world_pos.xz, wd) * 0.45 - TIME * 3.2 + drift * 4.0));
+			base = mix(base, FX_SNOW * 1.1, blow * lane * gust * 0.5);
+		}
+	}
 	// Rime on upright faces in hard cold: thin and patchy, never a white wall.
 	float rime = (1.0 - smoothstep(0.2, 0.6, up)) * sky * clamp(fx_frost, 0.0, 1.0);
 	rime *= 0.16 * smoothstep(0.3, 0.9, fx_fbm2(vec2((world_pos.x + world_pos.z) * 0.7, world_pos.y * 1.6)));
 	base = mix(base, FX_RIME, rime * (1.0 - smoothstep(0.08, 0.3, chroma)));
+	// Hoarfrost on open flat ground on a clear, cold, still day: a pale bloom on bare ground and
+	// grass where no snow lies; none under cloud (fx_cloud.x) nor while anything falls (proposal).
+	// Any fall at all puts it out (the largest of rain and snow past 0.05, not their sum), a wind
+	// past 0.5 thins it and past 0.8 clears it (6 Pro 782a61e1 4). Ground only, spared on coloured
+	// kinds as the snow is (0.08 to 0.3), and never on a trodden track (782a61e1 5).
+	// Keep the original multiply order; only uniform weather decides whether to do the mask.
+	float hoar_weather = smoothstep(0.0, 0.3, fx_frost) * (1.0 - smoothstep(0.5, 0.92, fx_cloud.x)) * (1.0 - smoothstep(0.0, 0.05, max(fx_fall.x, fx_fall.y)));
+	hoar_weather *= 1.0 - smoothstep(0.5, 0.8, fx_wind.z);
+	if (hoar_weather > 0.0) {
+		float hoar = hoar_weather;
+		// A single walk presses 0.5: clear its frost fully, rather than leave half a bloom.
+		hoar *= (is_ground ? 1.0 : 0.0) * smoothstep(0.6, 0.9, up) * sky * (1.0 - cover) * (1.0 - smoothstep(0.05, 0.3, trodden)) * (1.0 - smoothstep(0.08, 0.3, chroma)) * smoothstep(0.3, 0.7, 0.5 * grain.g + 0.5 * drift);
+		base = mix(base, FX_RIME, 0.6 * hoar);
+	}
 	// The atmosphere frame (fx_cold, fx_sky): standing water on open flat ground
 	// where the snow thins, open and ringed by rain above freezing, ice below;
 	// wet ground gives a little of the sky back (no specular here); dead leaf on
@@ -931,10 +967,30 @@ void fragment() {
 			float shape = dot(textureGrad(fx_sky_tex, suv, suv_dx, suv_dy).rgb, vec3(0.3, 0.59, 0.11));
 			float mean_l = max(dot(textureLod(fx_sky_tex, vec2(0.5), 10.0).rgb, vec3(0.3, 0.59, 0.11)), 0.02);
 			vec3 refl = fx_sky.rgb * clamp(shape / mean_l, 0.4, 1.8);
-			base = mix(base, fx_pool_color(base, under_snow, world_pos.xz, TIME, fx_cold.y, fx_wet * (1.0 - fx_cold.y), refl, max(room_px.x, room_px.y)), standing);
+			base = mix(base, fx_pool_color(base, under_snow, world_pos.xz, TIME, fx_cold.y, clamp(fx_fall.x, 0.0, 1.0) * (1.0 - fx_cold.y), refl, max(room_px.x, room_px.y)), standing);
 		}
 	}
-	base = mix(base, fx_sky.rgb * 0.5, wet * level_k * (1.0 - standing) * 0.18);
+	// The sky given back only lifts: a dark night sky does not sink wet ground further (proposal).
+	base = mix(base, max(base, fx_sky.rgb * 0.5), wet * level_k * (1.0 - standing) * (paved ? 0.32 : 0.1));
+	// Rain falling now rings the wet flat ground too, not only the pools: a small splash in some
+	// cells at a time (fx_fall.x), the pool's ring made smaller and sparser (proposal).
+	float splash_k = clamp(fx_fall.x, 0.0, 1.0) * wet * level_k * (1.0 - standing) * (1.0 - fx_cold.y);
+	if (splash_k > 0.01) {
+		vec2 sp = world_pos.xz * 2.0;
+		vec2 sc = floor(sp);
+		float ph = TIME * 1.3 + fx_hash(sc) * 7.0;
+		float slot = floor(ph);
+		float st = ph - slot;
+		// The ring grows to 0.3 of the cell with a 0.07 edge: its centre stays within 0.37 of the
+		// cell's sides so the ring never crosses into the next cell and gets cut (6 Pro 782a61e1 6).
+		// The same 0/1 selection first: an unpicked cell needs neither centre hashes nor distance.
+		float splash_cell = step(fx_hash(sc + slot * 1.3), 0.4 * fx_fall.x);
+		if (splash_cell > 0.5) {
+			vec2 so = vec2(fx_hash(sc + slot * 0.37 + 3.1), fx_hash(sc + slot * 0.71 + 7.7)) * 0.26 + 0.37;
+			float ring = (1.0 - smoothstep(0.0, 0.07, abs(length(fract(sp) - so) - st * 0.3))) * (1.0 - st);
+			base += vec3(ring * splash_k * 0.16);
+		}
+	}
 	if (fx_cold.w * level_k > 0.01) {
 		// Fallen leaf in drifts a few metres across (from this far a drift reads,
 		// a single leaf does not); the photo's leaves are the pattern inside,
@@ -982,7 +1038,7 @@ void fragment() {
 	vec3 dimmed = mix(vec3(grey), base, mix(1.0, keep, clamp(mask_on, 0.0, 1.0)));
 	// Tactical pause (fx_fade) fades the world before the sight mask darkens it.
 	ALBEDO = fx_photo(mix(dimmed, vec3(0.86, 0.88, 0.9), frost), fx_fade) * lit;
-	ROUGHNESS = mix(1.0, 0.4, wet * (1.0 - cover));
+	ROUGHNESS = mix(1.0, paved ? 0.22 : 0.45, wet * (1.0 - cover));
 	vec3 bank_normal = cross(dFdy(VERTEX), dFdx(VERTEX));
 	if (bank > 0.002) {
 		// The bank's own slope, so the light picks it out.

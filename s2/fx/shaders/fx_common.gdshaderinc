@@ -6,7 +6,9 @@ global uniform vec3 fx_fill_dir; // world space, surface toward light
 global uniform vec4 fx_fill; // rgb = linear colour * energy, w = enabled 0/1
 global uniform float fx_wet;    // 0 dry .. 1 soaked (rain, sleet, thaw)
 global uniform float fx_snow;   // 0 bare .. 1 deep snow lying on up-facing faces
+global uniform float fx_map_snow_base; // 0..1 this map's base snow, snow_shift applied once, before local melt
 global uniform float fx_frost;  // 0 none .. 1 hard rime (glass, metal edges)
+global uniform vec2 fx_fall;    // what falls now: x = rain 0..1, y = snow 0..1 (not what lies)
 global uniform vec3 fx_wind;    // xy = ground direction (x, z), z = strength 0..1
 global uniform vec4 fx_tint : source_color; // weather and hour colour for sky and haze
 global uniform float fx_flash;  // lightning, 0..1 for a few frames

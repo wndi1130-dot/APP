@@ -7,7 +7,7 @@ const SENSITIVE_CALLS := ["fwidth", "dFdx", "dFdy", "texture"]
 const UNSUPPORTED_PREFIX := "검사기가 지원하지 않는 구문: "
 const UNSUPPORTED_SHADER_WORDS := ["discard", "while", "for", "do", "break", "continue", "inout", "switch"]
 const WRITE_OPERATORS := ["=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", "&=", "|=", "^=", "++", "--"]
-const SNOW_FLOW_VALUES := ["thin_snow", "grass_holes", "cover", "grass_share", "local_snow"]
+const SNOW_FLOW_VALUES := ["thin_snow", "grass_holes", "cover", "grass_share", "local_snow", "fresh", "blow_weather", "blow"]
 # Godot 셰이더 내장 함수 가운데 out 인자로 값을 쓰는 것들(modf·frexp 등) — 대입 토큰 없이도 계약 값을 바꾼다.
 const BUILTIN_OUT_CALLS := ["modf", "frexp", "uaddCarry", "usubBorrow", "umulExtended", "imulExtended"]
 const GRASS_OUTPUT_CALL := "bare_ground(kind,ground_detail,base,world_pos.xz,grain,ground_dx,ground_dy,grass_share)"
@@ -24,6 +24,9 @@ const CONDITION_BUILTINS := [
 	"normalize", "any", "all", "isnan", "isinf", "true", "false", "const",
 ]
 enum CommentMode { CODE, LINE, BLOCK, QUOTED }
+
+# Per-checker include fixtures; empty for every normal source check.
+var include_sources: Dictionary = {}
 
 
 func _code() -> String:
@@ -147,7 +150,22 @@ func _condition_start(tokens: Array[String], pairs: Dictionary, at: int, lower: 
 	return lower
 
 
-func _unsupported_syntax(source: String, function_names: Dictionary, seen_includes: Dictionary) -> Dictionary:
+func _read_include(path: String) -> Dictionary:
+	# A reader seam keeps include mutation tests in memory; normal checks still read the real files.
+	if include_sources.has(path):
+		return {"source": include_sources[path]}
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return {"error": "읽지 못한 include"}
+	var source := file.get_as_text()
+	var read_error := file.get_error()
+	file.close()
+	if read_error != OK and read_error != ERR_FILE_EOF:
+		return {"error": "읽지 못한 include"}
+	return {"source": source}
+
+
+func _unsupported_syntax(source: String, function_names: Dictionary, seen_includes: Dictionary, allow_inout := false) -> Dictionary:
 	# 지원 경계는 여기서만 판정한다. include의 허용·식별·읽기도 같은 토큰과 원문 위치를 쓴다.
 	var errors: PackedStringArray = []
 	var includes: Array[Dictionary] = []
@@ -176,7 +194,7 @@ func _unsupported_syntax(source: String, function_names: Dictionary, seen_includ
 			bracket_depth += 1
 		elif token == "]":
 			bracket_depth -= 1
-		if token in UNSUPPORTED_SHADER_WORDS or token == "struct":
+		if (token in UNSUPPORTED_SHADER_WORDS and not (allow_inout and token == "inout")) or token == "struct":
 			_unsupported_error(errors, token)
 		if token in WRITE_OPERATORS and (paren_depth > 0 or bracket_depth > 0):
 			_unsupported_error(errors, "괄호 안 대입")
@@ -208,18 +226,12 @@ func _unsupported_syntax(source: String, function_names: Dictionary, seen_includ
 		if not valid:
 			_unsupported_error(errors, "include 꼴")
 		elif not seen_includes.has(path):
-			var file := FileAccess.open(path, FileAccess.READ)
-			if file == null:
-				_unsupported_error(errors, "읽지 못한 include")
+			var included := _read_include(path)
+			if included.has("error"):
+				_unsupported_error(errors, String(included["error"]))
 			else:
-				var included_text := file.get_as_text()
-				var read_error := file.get_error()
-				file.close()
-				if read_error != OK and read_error != ERR_FILE_EOF:
-					_unsupported_error(errors, "읽지 못한 include")
-				else:
-					seen_includes[path] = true
-					includes.append({"path": path, "source": included_text})
+				seen_includes[path] = true
+				includes.append({"path": path, "source": included["source"]})
 	var headers := _function_headers(tokens, pairs)
 	var parameter_tokens := {}
 	for info: Dictionary in headers:
@@ -232,7 +244,7 @@ func _unsupported_syntax(source: String, function_names: Dictionary, seen_includ
 		for i in range(at, parameter_end):
 			parameter_tokens[i] = true
 		while at < parameter_end:
-			while at < parameter_end and tokens[at] in DECLARATION_QUALIFIERS:
+			while at < parameter_end and (tokens[at] in DECLARATION_QUALIFIERS or (allow_inout and tokens[at] == "inout")):
 				at += 1
 			if at < parameter_end and tokens[at] not in DECLARATION_TYPES:
 				_unsupported_error(errors, "목록 밖 인자 타입: " + tokens[at])
@@ -301,7 +313,7 @@ func _unsupported_syntax(source: String, function_names: Dictionary, seen_includ
 	return {"errors": errors, "includes": includes}
 
 
-func _included_source(source: String) -> Dictionary:
+func _included_source(source: String, allow_inout := false) -> Dictionary:
 	var texts: PackedStringArray = []
 	var queue: Array[Dictionary] = [{"path": SHADER_PATH, "source": source}]
 	var seen := {SHADER_PATH: true}
@@ -311,7 +323,8 @@ func _included_source(source: String) -> Dictionary:
 		if queue.size() > 64:
 			return {"error": "include가 64개를 넘음"}
 		var unit: Dictionary = queue[at]
-		var checked := _unsupported_syntax(String(unit["source"]), function_names, seen)
+		# Snow keeps its existing unsupported boundary; weather checks out/inout argument slots.
+		var checked := _unsupported_syntax(String(unit["source"]), function_names, seen, allow_inout)
 		var errors: PackedStringArray = checked["errors"]
 		if not errors.is_empty():
 			return {"unsupported": errors}
@@ -608,13 +621,26 @@ func _grass_order_errors(source: String) -> PackedStringArray:
 	return errors
 
 
-func _write_statements(tokens: Array[String], pairs: Dictionary, start: int, end: int, name: String) -> Array[String]:
+func _write_statements(tokens: Array[String], pairs: Dictionary, start: int, end: int, name: String, write_errors: Array[String] = []) -> Array[String]:
 	var result: Array[String] = []
 	for i in range(start, end):
 		if tokens[i] != name:
 			continue
-		if tokens[i + 1] not in WRITE_OPERATORS and tokens[i - 1] not in ["++", "--"]:
+		# A component, swizzle or subscript still writes the protected root value.
+		var after := i + 1
+		while after < end:
+			if tokens[after] == "." and after + 1 < end and tokens[after + 1].is_valid_identifier():
+				after += 2
+			elif tokens[after] == "[" and pairs.has(after):
+				after = int(pairs[after]) + 1
+			else:
+				break
+		if (after >= end or tokens[after] not in WRITE_OPERATORS) and (i <= start or tokens[i - 1] not in ["++", "--"]):
 			continue
+		if after > i + 1:
+			var message := "보호 값 성분·첨자 쓰기: " + name
+			if not write_errors.has(message):
+				write_errors.append(message)
 		var first := i
 		while first > start and tokens[first - 1] not in [";", "{", "}"]:
 			first -= 1
@@ -628,6 +654,7 @@ func _snow_flow_steps() -> Array[Array]:
 	var ground := ["if(ground_kind>0.5&&bare_k>0.001)"]
 	var room := ["if(sky<0.5&&up>0.9&&abs(world_pos.y-3.0*round(world_pos.y/3.0))<0.003)", "if(rc>0)"]
 	return [
+		["fresh", "floatfresh=clamp(fx_fall.y,0.0,1.0);", []],
 		["cover", "floatcover=0.0;", []],
 		["local_snow", "floatlocal_snow=0.0;", []],
 		["local_snow", "local_snow=clamp(fx_snow*(1.0+snow_shift+1.4*snow_melt*melt),0.0,1.0);", ["if(fx_snow>0.01)"]],
@@ -637,7 +664,8 @@ func _snow_flow_steps() -> Array[Array]:
 		["", "base=mix(base," + GRASS_OUTPUT_CALL + ",bare_k);", ground],
 		["grass_share", "grass_share*=bare_k;", ground],
 		["grass_share", "grass_share=0.0;", room],
-		["cover", "cover*=0.25;", ["if(paved)"]],
+		# Fresh paving stays before banks and heaps; it must never thin a full pile.
+		["cover", "cover*=mix(0.25,0.7,fresh);", ["if(paved)"]],
 		["cover", "cover=max(cover,0.8*clamp(bank,0.0,1.0));", []],
 		["cover", "cover=max(cover,1.0*pile*heaped);", ["if(heaped>0.001)"]],
 		["cover", "cover*=1.0-0.9*trodden;", []],
@@ -645,11 +673,16 @@ func _snow_flow_steps() -> Array[Array]:
 		["grass_holes", "floatgrass_holes=grass_share*thin_snow*mix(THIN_SNOW_GRASS_BASE,1.0,grass_cut);", []],
 		["grass_holes", "grass_holes*=1.0-smoothstep(0.0,0.25,max(pile,bank));", []],
 		["cover", "cover*=1.0-grass_holes;", []],
-		["", "base=mix(base,FX_SNOW*mix(1.0,0.75,wet)*(1.0+(grain.r-0.5)*0.35*wander),cover);", []],
+		["", "base=mix(base,FX_SNOW*mix(1.0,0.75,wet)*mix(0.97,1.02,fresh)*(1.0+(grain.r-0.5)*0.35*mix(1.3,0.5,fresh)*wander),cover);", []],
+		# Same dust computation, now under its uniform-only zero guard.
+		["blow_weather", "floatblow_weather=fresh*smoothstep(0.5,0.9,fx_wind.z);", []],
+		["blow", "floatblow=blow_weather*sky*(1.0-smoothstep(0.08,0.3,chroma));", ["if(blow_weather>0.0)"]],
+		["blow", "blow*=(is_ground?1.0:0.0)*smoothstep(0.6,0.9,up)*(1.0-0.6*trodden);", ["if(blow_weather>0.0)"]],
+		["", "base=mix(base,FX_SNOW*1.1,blow*lane*gust*0.5);", ["if(blow_weather>0.0)", "if(blow>0.01)"]],
 	]
 
 
-func _snow_flow_errors(tokens: Array[String], pairs: Dictionary, opening: int, closing: int, steps: Array[Array]) -> PackedStringArray:
+func _snow_flow_errors(tokens: Array[String], pairs: Dictionary, opening: int, closing: int, steps: Array[Array], protected_names: Array = SNOW_FLOW_VALUES) -> PackedStringArray:
 	# 중괄호 경로까지 일치하는 독립 문장만 센다. 무괄호 분기·삼항 안의 식은 문장과 다르다.
 	var errors: PackedStringArray = []
 	var functions := {}
@@ -680,8 +713,9 @@ func _snow_flow_errors(tokens: Array[String], pairs: Dictionary, opening: int, c
 		if tokens[i] in BUILTIN_OUT_CALLS:
 			# 어느 인자가 out인지 따지지 않고, 계약 값이 인자에 들면 거절한다(6.1 Sol 44eee868 Medium 1).
 			for argument in range(i + 2, int(pairs[i + 1])):
-				if tokens[argument] in SNOW_FLOW_VALUES:
+				if tokens[argument] in protected_names:
 					_unsupported_error(errors, "눈 계약 값을 out 내장 함수에 전달: " + tokens[i])
+					_unsupported_error(errors, "보호 값 out 내장 함수 전달: " + tokens[argument] + " (" + tokens[i] + ")")
 					break
 			continue
 		if not functions.has(tokens[i]):
@@ -693,10 +727,13 @@ func _snow_flow_errors(tokens: Array[String], pairs: Dictionary, opening: int, c
 			continue
 		# bare_ground의 기존 출력 한 번만 허용한다. include에 정의된 함수도 같은 경계다.
 		for argument in range(i + 2, call_end):
-			if tokens[argument] in SNOW_FLOW_VALUES:
+			# Keep the existing conservative input-call boundary too: no alias analysis here.
+			if tokens[argument] in protected_names:
 				_unsupported_error(errors, "눈 계약 값을 사용자 함수에 전달: " + tokens[i])
+				_unsupported_error(errors, "보호 값 사용자 함수 전달: " + tokens[argument] + " (" + tokens[i] + ")")
 				break
-	if grass_calls != 1 or snow_paints != 1:
+	# Lying snow and airborne dust are two exact, separately guarded consumers below.
+	if grass_calls != 1 or snow_paints != 2:
 		_unsupported_error(errors, "풀 몫 출력·눈 색 소비 횟수")
 	var previous := -1
 	for step: Array in steps:
@@ -977,8 +1014,38 @@ func test_heaped_snow_reaches_full_cover_after_the_ground_cap() -> void:
 	var heap_at := fragment.find("cover = max(cover, 1.0 * pile * heaped);")
 	assert_gt(heap_at, fragment.find("cover = is_ground ? 0.97 * ground_cover : prop_cover;"), "평지 상한보다 더미가 우선")
 	if heap_at >= 0:
-		var after_heap := fragment.substr(heap_at)
-		assert_false(after_heap.contains("0.97"), "더미를 다시 평지 상한으로 제한하지 않음")
+		# 0.97 also colours fresh snow; inspect cover writes, not unrelated colour constants.
+		assert_gt(heap_at, fragment.find("cover *= mix(0.25, 0.7, fresh);"), "새 눈 포장 몫보다 더미가 우선")
+		# The full flow checker permits only tracks and protected grass holes after the heap.
+		assert_eq(_single_assignment_errors(_code()).size(), 0, "더미 뒤 덮임 쓰기·순서·조건 유지")
+
+
+func test_heap_contract_rejects_a_late_cap_or_fresh_paving_scale() -> void:
+	var source := _code()
+	assert_eq(_single_assignment_errors(source).size(), 0)
+	var heap := "cover = max(cover, 1.0 * pile * heaped);"
+	var paving := "cover *= mix(0.25, 0.7, fresh);"
+	for changed: String in [
+		source.replace(heap, heap + "\ncover *= 0.97;"),
+		source.replace(paving, "").replace(heap, heap + "\n" + paving),
+	]:
+		assert_ne(changed, source)
+		assert_gt(_single_assignment_errors(changed).size(), 0)
+
+
+func test_snow_flow_rejects_changed_duplicate_or_unguarded_dust() -> void:
+	var source := _code()
+	assert_eq(_single_assignment_errors(source).size(), 0)
+	var dust := "base = mix(base, FX_SNOW * 1.1, blow * lane * gust * 0.5);"
+	for changed: String in [
+		source.replace(dust, dust.replace("blow * lane", "lane")),
+		source.replace(dust, dust + "\n" + dust),
+		source.replace(dust, ""),
+		source.replace("if (blow > 0.01)", "if (true)"),
+		source.replace(dust, "blow = 1.0;\n" + dust),
+	]:
+		assert_ne(changed, source)
+		assert_gt(_single_assignment_errors(changed).size(), 0)
 
 
 func test_grass_holes_add_no_noise_or_texture_reads() -> void:
@@ -1227,7 +1294,8 @@ func test_final_snow_writes_reject_three_late_overwrites() -> void:
 func test_cover_write_sequence_rejects_missing_or_reordered_steps() -> void:
 	# 71be4d57에서는 실패 예상: 최종 선택 외의 cover 쓰기 목록·순서를 검사하지 않는다.
 	var source := _code()
-	var cleared := "cover *= 0.25;"
+	assert_eq(_single_assignment_errors(source).size(), 0)
+	var cleared := "cover *= mix(0.25, 0.7, fresh);"
 	var bank := "cover = max(cover, 0.8 * clamp(bank, 0.0, 1.0));"
 	var reordered := source.replace(cleared, "__swap_cover_write__").replace(bank, cleared).replace("__swap_cover_write__", bank)
 	var qualified := source.replace("float cover = 0.0;", "highp float cover = 0.0;")
@@ -1293,7 +1361,7 @@ func test_snow_flow_rejects_changed_or_duplicate_color_consumption() -> void:
 	# 검사기 시험: 쓰기를 그대로 두고 눈 색의 마지막 인자만 지우는 우회도 막는다.
 	var source := _code()
 	assert_eq(_single_assignment_errors(source).size(), 0)
-	var paint := "base = mix(base, FX_SNOW * mix(1.0, 0.75, wet) * (1.0 + (grain.r - 0.5) * 0.35 * wander), cover);"
+	var paint := "base = mix(base, FX_SNOW * mix(1.0, 0.75, wet) * mix(0.97, 1.02, fresh) * (1.0 + (grain.r - 0.5) * 0.35 * mix(1.3, 0.5, fresh) * wander), cover);"
 	for changed: String in [
 		source.replace(paint, paint.replace(", cover);", ", 0.0);")),
 		source.replace(paint, paint + "\n" + paint),
